@@ -4,7 +4,13 @@ Objectif : vérifier sur votre tapis, **à faible vitesse et sans personne dessu
 pour les étapes 1 à 4, que la séquence de démarrage, les consignes et l'arrêt
 fonctionnent comme prévu, puis valider une courte séance réelle.
 
-Durée : environ 20 minutes. Gardez la **clé de sécurité attachée** pendant tout
+Déjà établi par votre diagnostic FTMS (inutile de le refaire, mais l'étape 1
+le revérifie gratuitement) : plages 1–12 km/h / 0–9 %, inclinaison fonctionnelle,
+séquence `Request Control → Set Target Speed → Start` produisant un mouvement.
+**Reste à établir : pourquoi une consigne de vitesse peut être acquittée sans
+effet** — l'étape 2 bis est faite pour cela.
+
+Durée : environ 25 minutes. Gardez la **clé de sécurité attachée** pendant tout
 le test et restez à portée du bouton d'arrêt physique.
 
 ## Préparation
@@ -51,6 +57,25 @@ avec cette séquence. **Ne relancez pas en boucle** : exportez le journal (étap
 acquitte la commande sans l'appliquer — c'est le symptôme rapporté avec Kinni.
 L'app a fait **un seul** renvoi de la consigne, sans nouveau Start. Exportez le
 journal.
+
+## 2 bis. Test de réponse en vitesse (actif, hors du tapis)
+
+1. *Diagnostic › Test de réponse en vitesse (hors du tapis)* → confirmer.
+2. Le tapis démarre à 1,5 km/h (séquence du profil), attend une vitesse stable,
+   puis reçoit **en marche** trois consignes successives : 2,5, 3,5 puis
+   2,0 km/h. Pour chacune, l'écran affiche : atteinte ou non, délai, renvoi
+   nécessaire, consigne annoncée par le tapis, vitesse mesurée.
+3. Relancer une seconde fois avec l'option **Request Control avant chaque
+   consigne** activée.
+4. Lire la ligne « Lecture » en fin de test (indice, pas une certitude) :
+   - toutes atteintes du premier coup → le tapis applique les consignes en
+     marche ; le problème Kinni tient au moment ou à la forme des commandes ;
+   - atteintes seulement au renvoi → le tapis ignore parfois une consigne ;
+   - « tapis annonce » = cible mais mesure différente → le tapis accepte sans
+     appliquer ;
+   - « tapis annonce » ≈ 1,0 → la valeur reçue est ramenée au minimum :
+     vérifier les octets `[TX]`.
+5. Exporter le journal après chaque passage (étape 6).
 
 ## 3. Consignes manuelles à basse vitesse (actif, hors du tapis)
 
@@ -105,3 +130,20 @@ Points à relever pour ajuster le profil URTM047 :
   annonce-t-il la valeur demandée ?) ;
 - octets non interprétés (`[ALERTE] … octet(s) non interprété(s)`) ;
 - présence éventuelle du champ d'extension « Step Count ».
+
+## 7. (Facultatif, le plus décisif) Capturer le trafic de Treadmill Assistant
+
+Treadmill Assistant pilote correctement ce tapis : voir exactement quelles
+commandes il envoie lèverait le doute sur la cause du problème de vitesse.
+
+1. Sur le Mac : télécharger *Additional Tools for Xcode* (developer.apple.com ›
+   More downloads) et ouvrir **PacketLogger**.
+2. Sur l'iPhone : installer le profil de journalisation Bluetooth
+   (« Bluetooth for iOS » sur developer.apple.com/bug-reporting/profiles-and-logs),
+   puis redémarrer l'iPhone.
+3. Brancher l'iPhone au Mac, PacketLogger › File › New iOS Trace.
+4. Avec Treadmill Assistant, démarrer le tapis puis changer deux fois la
+   vitesse (hors du tapis), arrêter.
+5. Filtrer sur les écritures ATT vers la poignée du Control Point (0x2AD9) et
+   comparer avec les lignes `[TX]` de Foulée : ordre, délais, valeurs, présence
+   de Request Control ou de répétitions.

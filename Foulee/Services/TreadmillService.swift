@@ -40,6 +40,8 @@ final class TreadmillService {
     private(set) var speed = TargetTracking()
     private(set) var incline = TargetTracking()
     private(set) var hasControl = false
+    /// Démarrage : attente de la vitesse initiale stable avant la consigne du palier.
+    private(set) var settlingInitialSpeed = false
     private(set) var lastMessage: String?
     private(set) var capabilities: TreadmillCapabilities
     private(set) var profile: TreadmillProfile
@@ -184,6 +186,7 @@ final class TreadmillService {
         if speed != controller.speed { speed = controller.speed }
         if incline != controller.incline { incline = controller.incline }
         if hasControl != controller.hasControl { hasControl = controller.hasControl }
+        if settlingInitialSpeed != controller.isSettlingInitialSpeed { settlingInitialSpeed = controller.isSettlingInitialSpeed }
         if lastMessage != controller.lastMessage { lastMessage = controller.lastMessage }
         if capabilities != controller.capabilities { capabilities = controller.capabilities }
     }

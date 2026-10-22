@@ -8,7 +8,8 @@ struct DiagnosticView: View {
     @State private var entries: [DiagnosticLog.Entry] = []
     @State private var filter: DiagnosticLog.Category?
     @State private var exportDoc: ExportDocument?
-    @State private var confirmTest = false
+    @State private var pendingTest: AppModel.DiagnosticKind?
+    @State private var requestControlEachStep = false
     @State private var testError: String?
     @State private var listenUnknown = false
     private let refresh = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -46,16 +47,24 @@ struct DiagnosticView: View {
                 }
                 if let testError { Text(testError).foregroundStyle(Theme.danger) }
                 Button {
-                    confirmTest = true
+                    pendingTest = .startSequence
                 } label: {
                     Label("Test de démarrage (hors du tapis)", systemImage: "play.circle")
                 }
-                .disabled(!tm.connection.isReady || model.hasActiveSession || model.isDiagnosticRunning)
+                .disabled(!canRunActiveTest)
+                Button {
+                    pendingTest = .speedResponse(requestControlEachStep: requestControlEachStep)
+                } label: {
+                    Label("Test de réponse en vitesse (hors du tapis)", systemImage: "speedometer")
+                }
+                .disabled(!canRunActiveTest)
+                Toggle("Request Control avant chaque consigne", isOn: $requestControlEachStep)
+                    .font(.subheadline)
                 if model.isDiagnosticRunning {
                     Button("Arrêter le test", role: .destructive) { model.abortDiagnostic() }
                 }
             } header: { Text("Diagnostic actif") } footer: {
-                Text("Exécute la séquence du profil à basse vitesse, demande +1 km/h, observe la vitesse 8 s puis arrête. Personne sur le tapis, clé de sécurité en place.")
+                Text("Démarrage : séquence du profil, +1 km/h, observation 8 s, arrêt. Réponse en vitesse : départ à la vitesse initiale puis trois consignes en marche (+1, +2, +0,5 km/h), avec pour chacune résultat, consigne annoncée par le tapis, mesure et délai — pour départager les hypothèses sur les consignes ignorées. Personne sur le tapis, clé de sécurité en place.")
             }
             Section {
                 Picker("Filtre", selection: $filter) {
@@ -90,8 +99,13 @@ struct DiagnosticView: View {
                 } label: { Image(systemName: "square.and.arrow.up") }
             }
         }
-        .confirmationDialog("Test actif du tapis", isPresented: $confirmTest, titleVisibility: .visible) {
-            Button("Personne sur le tapis — lancer") { testError = model.startDiagnostic() }
+        .confirmationDialog("Test actif du tapis", isPresented: Binding(get: { pendingTest != nil },
+                                                                         set: { if !$0 { pendingTest = nil } }),
+                            titleVisibility: .visible) {
+            Button("Personne sur le tapis — lancer") {
+                if let k = pendingTest { testError = model.startDiagnostic(k) }
+                pendingTest = nil
+            }
             Button("Annuler", role: .cancel) {}
         } message: {
             Text("Le tapis va démarrer à basse vitesse. Vérifiez que personne n'est dessus et que la clé de sécurité est en place.")
@@ -110,9 +124,14 @@ struct DiagnosticView: View {
 
     private func reload() { entries = model.log.entries }
 
+    private var canRunActiveTest: Bool {
+        tm.connection.isReady && !model.hasActiveSession && !model.isDiagnosticRunning
+    }
+
     @ViewBuilder
-    private func diagnosticResults(_ d: StartSequenceDiagnostic) -> some View {
+    private func diagnosticResults(_ d: ActiveDiagnostic) -> some View {
         let _ = model.diagnosticRevision
+        Text(d.title).font(.headline)
         switch d.state {
         case let .running(step): Label(step, systemImage: "hourglass")
         case let .finished(ok):

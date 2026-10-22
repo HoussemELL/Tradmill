@@ -172,6 +172,12 @@ public final class TreadmillController {
     private var zeroObservedSinceHalt = true
     /// Type d'arrêt annoncé par le tapis pendant une pause/arrêt demandé.
     private var reportedHaltIsPause: Bool?
+    /// Échéance d'attente de la vitesse initiale avant d'appliquer la consigne du palier.
+    private var settleDeadline: TimeInterval?
+    /// Début de la période où la vitesse initiale est observée dans la tolérance.
+    private var settleStableSince: TimeInterval?
+    /// Durée pendant laquelle la vitesse initiale doit rester stable avant la consigne du palier.
+    public static let settleDwell: TimeInterval = 2
 
     public init(profile: TreadmillProfile, log: DiagnosticLog, clock: @escaping () -> TimeInterval) {
         self.profile = profile
@@ -222,6 +228,7 @@ public final class TreadmillController {
         let wasActive = state.isActive || state == .paused
         sequenceID += 1
         pendingFinal = nil
+        settleDeadline = nil
         hasControl = false
         queue.setLinkReady(false, now: clock())
         state = wasActive ? .linkLost : .disconnected
@@ -361,6 +368,7 @@ public final class TreadmillController {
         }
         sequenceID += 1
         pendingFinal = nil
+        settleDeadline = nil
         reportedHaltIsPause = nil
         state = .pausing
         queue.enqueue(.pause, origin: .safety, now: clock()) { [weak self] outcome in
@@ -385,6 +393,7 @@ public final class TreadmillController {
         guard queue.isLinkReady else { return .failure(.notReady) }
         sequenceID += 1
         pendingFinal = nil
+        settleDeadline = nil
         reportedHaltIsPause = nil
         state = .stopping
         queue.enqueue(.stop, origin: .safety, now: clock()) { [weak self] outcome in
@@ -410,6 +419,10 @@ public final class TreadmillController {
         if let e = checkSpeed(kmh) { return .failure(e) }
         let value = (kmh * 100).rounded() / 100
         switch state {
+        case .running where settleDeadline != nil:
+            pendingFinal = (value, pendingFinal?.incline)
+            speed.requested = value
+            speed.status = .deferred
         case .running, .startUnconfirmed:
             guard queue.isLinkReady else { return .failure(.notReady) }
             sendSpeed(value, origin: origin)
@@ -430,6 +443,10 @@ public final class TreadmillController {
         if let e = checkIncline(percent) { return .failure(e) }
         let value = (percent * 10).rounded() / 10
         switch state {
+        case .running where settleDeadline != nil:
+            pendingFinal = (pendingFinal?.speed, value)
+            incline.requested = value
+            incline.status = .deferred
         case .running, .startUnconfirmed:
             guard queue.isLinkReady else { return .failure(.notReady) }
             sendIncline(value, origin: origin)
@@ -480,6 +497,7 @@ public final class TreadmillController {
                                origin: CommandOrigin, alreadyMoving: Bool = false) {
         sequenceID += 1
         stateBeforeSequence = state
+        settleDeadline = nil
         pendingFinal = (finalSpeed, finalIncline)
         speed.requested = finalSpeed
         speed.status = .deferred
@@ -542,6 +560,7 @@ public final class TreadmillController {
         guard seq == sequenceID else { return }
         sequenceID += 1
         pendingFinal = nil
+        settleDeadline = nil
         lastMessage = "Démarrage interrompu : \(message)"
         log.log(.error, lastMessage!)
         speed.status = .failed(message)
@@ -550,9 +569,23 @@ public final class TreadmillController {
         emit(.startFailed(lastMessage!))
     }
 
+    private func beginSettleOrApply(now: TimeInterval) {
+        if profile.waitForInitialSpeedBeforeTarget, pendingFinal != nil, speed.acknowledged != nil {
+            settleDeadline = now + profile.initialSpeedSettleTimeout
+            settleStableSince = nil
+            log.log(.session, "Attente de la vitesse initiale avant la consigne du palier (max \(Int(profile.initialSpeedSettleTimeout)) s)")
+        } else {
+            applyPendingFinal()
+        }
+    }
+
+    /// Vrai pendant l'attente de la vitesse initiale, juste après le démarrage.
+    public var isSettlingInitialSpeed: Bool { settleDeadline != nil }
+
     private func applyPendingFinal() {
         guard let final = pendingFinal else { return }
         pendingFinal = nil
+        settleDeadline = nil
         if let s = final.speed {
             if let ack = speed.acknowledged, abs(ack - s) < 0.001 {
                 // Vitesse initiale = cible : il reste à vérifier qu'elle est observée.
@@ -618,6 +651,7 @@ public final class TreadmillController {
     private func abortActivity(reason: String, paused: Bool) {
         sequenceID += 1
         pendingFinal = nil
+        settleDeadline = nil
         queue.cancelAll(reason: reason)
         zeroObservedSinceHalt = !isMoving
         state = paused ? .paused : .stopped
@@ -636,7 +670,7 @@ public final class TreadmillController {
                 log.log(.session, String(format: "Mouvement observé (%.2f km/h)", telemetry.speedKmh ?? 0))
                 state = .running
                 emit(.beltStarted)
-                applyPendingFinal()
+                beginSettleOrApply(now: now)
             } else if now > deadline {
                 state = .startUnconfirmed
                 lastMessage = "Start acquitté mais aucun mouvement observé après \(Int(profile.beltStartTimeout)) s. Aucun nouvel essai automatique."
@@ -648,7 +682,7 @@ public final class TreadmillController {
                 log.log(.session, "Mouvement observé tardivement")
                 state = .running
                 emit(.beltStarted)
-                applyPendingFinal()
+                beginSettleOrApply(now: now)
             }
         case .stopping:
             if !moving && fresh && queue.inFlightCommand != .stop {
@@ -680,6 +714,21 @@ public final class TreadmillController {
                 }
             } else {
                 zeroSpeedSince = nil
+            }
+            if let deadline = settleDeadline {
+                let initial = speed.acknowledged
+                let within = initial.flatMap { i in telemetry.speedKmh.map { abs($0 - i) <= profile.speedToleranceKmh } } ?? false
+                if within { settleStableSince = settleStableSince ?? now } else { settleStableSince = nil }
+                let reached = settleStableSince.map { now - $0 >= Self.settleDwell } ?? false
+                if reached || now > deadline {
+                    settleDeadline = nil
+                    settleStableSince = nil
+                    log.log(.session, reached
+                            ? String(format: "Vitesse initiale %.2f km/h observée : envoi de la consigne du palier", initial ?? 0)
+                            : "Vitesse initiale non stabilisée après \(Int(profile.initialSpeedSettleTimeout)) s : envoi de la consigne du palier")
+                    applyPendingFinal()
+                }
+                return
             }
             verifySpeed(now: now)
             verifyIncline(now: now)

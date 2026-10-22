@@ -349,3 +349,88 @@ final class StartSequenceDiagnosticTests: XCTestCase {
         XCTAssertTrue(d.steps.contains { $0.title == "Mouvement" && !$0.ok })
     }
 }
+
+final class SpeedHypothesisTests: XCTestCase {
+    func runDiag(_ h: ControllerHarness, _ d: ActiveDiagnostic, seconds: TimeInterval) {
+        let end = h.now + seconds
+        while h.now < end {
+            h.now += 0.1
+            h.link.advance()
+            h.controller.tick()
+            d.tick()
+        }
+    }
+
+    /// Hypothèse : le tapis ignore une consigne reçue pendant qu'il accélère.
+    /// Le profil URTM047 attend la vitesse initiale avant la consigne : pas de renvoi nécessaire.
+    func testSettleBeforeTargetAvoidsIgnoredCommandWhileRamping() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.ignoresSpeedWhileRamping = true
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 6, targetIncline: nil).get())
+        h.run(seconds: 40)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertEqual(h.controller.speed.resendsUsed, 0)
+        XCTAssertEqual(h.sentCommands.filter { $0 == .setTargetSpeed(kmh: 6) }.count, 1)
+        XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1)
+    }
+
+    /// Sans l'attente (consigne envoyée dès le premier mouvement), la consigne est ignorée
+    /// par ce tapis simulé et seul le renvoi unique la rattrape.
+    func testWithoutSettleTheRampingTreadmillNeedsResend() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.ignoresSpeedWhileRamping = true
+        var p = TreadmillProfile.urtm047
+        p.waitForInitialSpeedBeforeTarget = false
+        let h = ControllerHarness(profile: p, quirks: q)
+        _ = h.controller.start(targetSpeed: 6, targetIncline: nil)
+        h.run(seconds: 90)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertEqual(h.controller.speed.resendsUsed, 1)
+        XCTAssertEqual(h.sentCommands.filter { $0 == .setTargetSpeed(kmh: 6) }.count, 2)
+    }
+
+    func testManualTargetDuringSettleIsDeferredNotLost() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        _ = h.controller.start(targetSpeed: 5, targetIncline: 2)
+        // Jusqu'au premier mouvement (compte à rebours 3 s + accélération).
+        while !h.controller.isSettlingInitialSpeed && h.now < 20 { h.run(seconds: 0.1) }
+        XCTAssertTrue(h.controller.isSettlingInitialSpeed)
+        h.controller.setTargetSpeed(4, origin: .user)
+        h.run(seconds: 40)
+        XCTAssertFalse(h.sentCommands.contains(.setTargetSpeed(kmh: 5)))
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 4, accuracy: 0.01)
+        XCTAssertEqual(h.controller.telemetry.inclinePercent ?? 0, 2, accuracy: 0.01)
+    }
+
+    func testSpeedResponseDiagnosticOnHealthyTreadmill() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        let d = SpeedResponseDiagnostic(controller: h.controller)
+        XCTAssertNoThrow(try d.begin().get())
+        runDiag(h, d, seconds: 200)
+        XCTAssertEqual(d.state, .finished(success: true), d.steps.map(\.detail).joined(separator: " | "))
+        XCTAssertEqual(d.measurements.map(\.target), [2.5, 3.5, 2.0])
+        XCTAssertTrue(d.measurements.allSatisfy { $0.reached && !$0.resendNeeded })
+        XCTAssertEqual(d.measurements.first?.reportedByTreadmill, 2.5)
+        XCTAssertEqual(h.controller.state, .stopped)
+        XCTAssertTrue(d.steps.last?.detail.contains("du premier coup") ?? false)
+        XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1)
+    }
+
+    func testSpeedResponseDiagnosticDetectsIgnoredCommands() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.ignoresAllSpeedCommands = true
+        q.requiresSpeedBeforeStart = false
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        var o = SpeedResponseDiagnostic.Options()
+        o.targets = [3.0]
+        o.requestControlBeforeEachStep = true
+        let d = SpeedResponseDiagnostic(controller: h.controller, options: o)
+        _ = d.begin()
+        runDiag(h, d, seconds: 200)
+        XCTAssertEqual(d.state, .finished(success: false))
+        // La vitesse initiale elle-même n'est pas appliquée (tapis à 1,0) : le test s'arrête proprement.
+        XCTAssertEqual(h.controller.state, .stopped)
+        XCTAssertTrue(d.steps.contains { $0.title == "Démarrage" && !$0.ok })
+    }
+}

@@ -14,6 +14,9 @@ public final class SimulatedTreadmill {
         public var ignoresSpeedDuringCountdown = false
         /// Consignes de vitesse acquittées mais jamais appliquées (cas pathologique).
         public var ignoresAllSpeedCommands = false
+        /// Consignes reçues pendant une accélération/décélération : acquittées mais ignorées
+        /// (une des hypothèses pour le symptôme « acquittée sans effet »).
+        public var ignoresSpeedWhileRamping = false
         /// Ne répond jamais aux commandes (test des délais).
         public var dropsResponses = false
         /// Envoie l'extension Step Count (bit 13).
@@ -100,8 +103,10 @@ public final class SimulatedTreadmill {
                 respond(op, .invalidParameter, now: now); return
             }
             respond(op, .success, now: now)
+            let ramping = runState == .running && abs(currentSpeed - (targetSpeed ?? 0)) > 0.05
             let ignored = quirks.ignoresAllSpeedCommands
                 || (quirks.ignoresSpeedDuringCountdown && isCountdown)
+                || (quirks.ignoresSpeedWhileRamping && ramping)
             if !ignored {
                 targetSpeed = kmh
                 status(.targetSpeedChanged(kmh: kmh), now: now)

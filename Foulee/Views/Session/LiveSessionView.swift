@@ -45,6 +45,10 @@ struct LiveSessionView: View {
                    color: tm.beltState == .startUnconfirmed ? Theme.danger : Theme.accent,
                    systemImage: tm.beltState == .startUnconfirmed ? "exclamationmark.octagon.fill" : "hourglass")
         }
+        if tm.settlingInitialSpeed {
+            Banner(text: String(format: "Stabilisation à %.1f km/h avant la consigne du palier", tm.speed.acknowledged ?? 0),
+                   color: Theme.accent, systemImage: "hourglass")
+        }
         if tm.speed.status == .mismatch, let req = tm.speed.acknowledged {
             Banner(text: String(format: "Écart vitesse : consigne %.1f acquittée, mesure %@ km/h", req, Format.speed(tm.telemetry.speedKmh))
                    + (tm.speed.machineReported.map { String(format: " · le tapis annonce %.1f", $0) } ?? ""))

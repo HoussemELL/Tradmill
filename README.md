@@ -48,7 +48,7 @@ TreadCore/                Paquet Swift local, sans dépendance Apple-only :
   Session/                  séance, enregistrement, export, reprise, plan Santé
   Diagnostics/              journal horodaté, test de démarrage
   Simulation/               tapis FTMS simulé au niveau des octets
-  Tests/                    79 tests XCTest
+  Tests/                    84 tests XCTest
 Foulee/                   App iOS (SwiftUI, CoreBluetooth, HealthKit, SwiftData, Charts)
 FouleeWatch/              App watchOS (HKWorkoutSession, HKLiveWorkoutBuilder, miroir)
 docs/FTMS.md              Formats d'octets, règles de la file de commandes
@@ -169,17 +169,27 @@ Détails des octets : [docs/FTMS.md](docs/FTMS.md).
 - Couche de **profils matériels** séparée (`TreadmillProfile`) : séquence de
   démarrage/reprise, vitesse initiale, délais, tolérances, nombre de renvois.
 
-**Profil URTM047** (d'après vos observations, à confirmer) :
-`Request Control → Set Target Speed 1,5 km/h → Start` → attente d'une vitesse
-mesurée non nulle → consigne du palier. Pas de nouveau Start lors des
-changements de vitesse. Si la vitesse n'est pas observée dans le délai calculé,
-**un seul** renvoi de la consigne, puis écart affiché et journalisé. Pas de
-séquences expérimentales pendant une séance ; le test de démarrage du
-diagnostic utilise exactement le même code.
+**Profil URTM047** — faits observés : 1–12 km/h pas 0,1 ; 0–9 % pas 1 ;
+inclinaison fonctionnelle ; seule la séquence `Request Control → Set Target
+Speed → Start` a produit un mouvement ; des consignes de vitesse peuvent être
+acquittées sans effet ; Treadmill Assistant fonctionne sur ce tapis.
+
+La séquence de démarrage n'est **pas** considérée comme la cause certaine du
+problème de vitesse (hypothèses détaillées dans [docs/FTMS.md](docs/FTMS.md)).
+Le profil applique donc les choix prudents :
+`Request Control → Set Target Speed 1,5 km/h → Start` → attente du mouvement →
+**attente d'une vitesse initiale stable 2 s** (max 8 s) → consigne du palier.
+Pas de nouveau Start lors des changements de vitesse. Si la vitesse n'est pas
+observée dans le délai calculé, **un seul** renvoi de la consigne, puis écart
+affiché et journalisé. Pas de séquences expérimentales pendant une séance :
+les tests actifs du diagnostic (démarrage, **réponse en vitesse**) sont lancés
+explicitement, hors du tapis, et utilisent le même code que les séances.
 
 **Diagnostic** (*Réglages › Diagnostic et journaux*) : état du lien, consignes à
 trois niveaux, exploration GATT passive, **test de démarrage actif** (confirmé
-explicitement, hors du tapis), journal horodaté à la milliseconde (commandes,
+explicitement, hors du tapis), **test de réponse en vitesse** (trois
+consignes en marche, avec ou sans Request Control préalable, résultat par
+consigne), journal horodaté à la milliseconde (commandes,
 octets, réponses, statuts, télémétrie) exportable en texte ou JSON.
 
 ## 8. Cardio, zones, pas et énergie
@@ -253,7 +263,7 @@ voir l'onglet *Actions* du dépôt ; aucun avertissement du compilateur Swift :
 La signature réelle (votre équipe, profils, capacité HealthKit) n'est pas
 vérifiable en CI : elle se fait dans Xcode sur votre Mac.
 
-**Testé automatiquement** (79 tests, sous Linux et macOS) :
+**Testé automatiquement** (84 tests, sous Linux et macOS) :
 - décodage FTMS : flags optionnels, bit More Data inversé, valeurs « non
   disponible », paquets tronqués et octets en trop, plages, Feature, statuts,
   Control Point, FC (uint8/uint16, contact, RR) ;
@@ -261,6 +271,10 @@ vérifiable en CI : elle se fait dans Xcode sur votre Mac.
 - file de commandes : sérialisation, espacement, réponses négatives, délai sans
   répétition, réponses tardives/inattendues, fusion des consignes, priorité Stop,
   double Start, erreur d'écriture, perte de lien ;
+- hypothèse « consigne ignorée pendant l'accélération » : avec l'attente de
+  stabilisation aucune consigne n'est perdue, sans elle seul le renvoi la
+  rattrape ; test de réponse en vitesse sur tapis sain et sur tapis qui ignore
+  les consignes ;
 - séquence URTM047 (ordre exact, pas de Start supplémentaire), séquence
   générique sans mouvement, commande acquittée mais vitesse non observée (un
   seul renvoi puis écart), pause/reprise/arrêt confirmé par la télémétrie, clé
@@ -289,8 +303,10 @@ vos observations écrites. Exportez le journal de diagnostic après la
 
 ## 13. Limites restantes
 
-1. Profil URTM047 fondé sur des observations non vérifiées ici ; délais et
-   accélération (0,25 km/h/s supposés) à ajuster d'après le journal.
+1. La cause du problème « consigne de vitesse acquittée sans effet » n'est pas
+   établie ; le profil URTM047 réduit les risques connus mais ses délais,
+   l'accélération (0,25 km/h/s supposée) et l'attente de stabilisation sont à
+   ajuster d'après le journal et le test de réponse en vitesse.
 2. Pas du tapis : uniquement via le champ d'extension bit 13 ; si le tapis
    expose ses pas autrement (service propriétaire), ce n'est pas décodé (le
    diagnostic GATT permet de le repérer).

@@ -39,6 +39,11 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
     public var inclineSettleBase: TimeInterval
     /// Nombre de renvois de la même consigne si la valeur n'est pas observée (jamais de Start).
     public var maxTargetResends: Int
+    /// Après le démarrage, attendre que la vitesse initiale soit observée (ou le délai
+    /// `initialSpeedSettleTimeout`) avant d'envoyer la consigne du palier. Hypothèse prudente :
+    /// certains tapis acquittent sans l'appliquer une consigne reçue pendant leur accélération.
+    public var waitForInitialSpeedBeforeTarget: Bool
+    public var initialSpeedSettleTimeout: TimeInterval
     public var responseTimeout: TimeInterval
     public var commandSpacing: TimeInterval
     /// Capacités supposées si la lecture des plages échoue.
@@ -60,6 +65,8 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
         inclineRampPercentPerSecond: 0.3,
         inclineSettleBase: 8,
         maxTargetResends: 0,
+        waitForInitialSpeedBeforeTarget: false,
+        initialSpeedSettleTimeout: 0,
         responseTimeout: 4,
         commandSpacing: 0.3,
         fallbackCapabilities: TreadmillCapabilities(
@@ -70,12 +77,16 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
 
     /// UREVO FoldiMix 5L (nom BLE « URTM047 »).
     ///
-    /// Observations rapportées (à confirmer par le diagnostic) :
+    /// Observations du diagnostic FTMS de l'utilisateur :
+    /// - plages lues : 1–12 km/h pas 0,1 ; 0–9 % pas 1 ; l'inclinaison répond à toutes les valeurs ;
     /// - Request Control → Set Target Speed → Start produit un mouvement ;
     /// - Request Control → Start (avec ou sans vitesse ensuite) n'en a pas produit ;
-    /// - une commande peut être acquittée sans effet observable.
-    /// D'où : vitesse initiale basse et explicite avant Start, puis consigne du palier
-    /// une fois le mouvement observé dans la télémétrie, avec au plus un renvoi de consigne.
+    /// - une consigne de vitesse peut être acquittée sans effet observable ;
+    /// - Treadmill Assistant pilote correctement ce tapis (le firmware accepte donc un pilotage FTMS).
+    /// La cause du problème de vitesse n'est PAS établie : la séquence de démarrage n'en est
+    /// qu'une hypothèse. Le profil adopte les choix prudents (vitesse initiale explicite avant
+    /// Start, consigne du palier seulement après stabilisation, un seul renvoi) et le test
+    /// « réponse en vitesse » du diagnostic sert à départager les hypothèses.
     public static let urtm047 = TreadmillProfile(
         id: "urevo-urtm047",
         name: "UREVO FoldiMix 5L (URTM047)",
@@ -92,6 +103,8 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
         inclineRampPercentPerSecond: 0.25,
         inclineSettleBase: 10,
         maxTargetResends: 1,
+        waitForInitialSpeedBeforeTarget: true,
+        initialSpeedSettleTimeout: 8,
         responseTimeout: 4,
         commandSpacing: 0.4,
         fallbackCapabilities: TreadmillCapabilities(

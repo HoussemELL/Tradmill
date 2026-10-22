@@ -3,19 +3,10 @@ import Foundation
 /// Diagnostic actif, lancé explicitement et hors du tapis : exécute la séquence de démarrage
 /// du profil à basse vitesse, demande +1 km/h, observe la télémétrie puis arrête le tapis.
 /// Utilise exactement le même code que les séances (pas de séquence expérimentale parallèle).
-public final class StartSequenceDiagnostic {
-    public struct Step: Identifiable, Equatable, Sendable {
-        public let id: Int
-        public let title: String
-        public let ok: Bool
-        public let detail: String
-    }
-
-    public enum State: Equatable, Sendable {
-        case idle
-        case running(String)
-        case finished(success: Bool)
-    }
+public final class StartSequenceDiagnostic: ActiveDiagnostic {
+    public typealias Step = DiagnosticStep
+    public typealias State = DiagnosticRunState
+    public let title = "Test de démarrage"
 
     private enum Phase {
         case starting(deadline: TimeInterval)

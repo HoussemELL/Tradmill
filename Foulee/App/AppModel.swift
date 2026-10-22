@@ -17,7 +17,7 @@ final class AppModel {
     private(set) var lastFinishedRecordID: UUID?
     private(set) var recoveredNotice: String?
     /// Diagnostic actif en cours (avancé par la boucle de l'app, même hors de l'écran Diagnostic).
-    private(set) var diagnostic: StartSequenceDiagnostic?
+    private(set) var diagnostic: ActiveDiagnostic?
     private(set) var diagnosticRevision = 0
     var banner: String?
 
@@ -138,9 +138,19 @@ final class AppModel {
         return false
     }
 
-    func startDiagnostic() -> String? {
+    enum DiagnosticKind { case startSequence, speedResponse(requestControlEachStep: Bool) }
+
+    func startDiagnostic(_ kind: DiagnosticKind) -> String? {
         guard !hasActiveSession else { return "Terminez la séance en cours" }
-        let d = StartSequenceDiagnostic(controller: treadmill.controller)
+        let d: ActiveDiagnostic
+        switch kind {
+        case .startSequence:
+            d = StartSequenceDiagnostic(controller: treadmill.controller)
+        case let .speedResponse(rc):
+            var o = SpeedResponseDiagnostic.Options()
+            o.requestControlBeforeEachStep = rc
+            d = SpeedResponseDiagnostic(controller: treadmill.controller, options: o)
+        }
         diagnostic = d
         diagnosticRevision += 1
         if case let .failure(e) = d.begin() { return e.description }

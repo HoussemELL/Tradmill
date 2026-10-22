@@ -100,16 +100,31 @@ réelle et n'est pas interprétée comme une modification manuelle (le symptôme
 Flags uint8 : bit 0 format FC (uint8/uint16), bits 1–2 contact capteur,
 bit 3 énergie (uint16 kJ), bit 4 intervalles RR (uint16, 1/1024 s).
 
-## Profil URTM047 et hypothèse sur l'observation Kinni
+## Profil URTM047 : faits observés et hypothèses
 
-Séquence de démarrage : `Request Control → Set Target Speed (1,5 km/h) → Start`
-→ attente d'une vitesse mesurée non nulle → consigne du palier. Pas de Start
-lors des changements de vitesse. Au plus **un** renvoi de la même consigne si
-elle n'est pas observée dans le délai (calculé d'après l'écart et une
-accélération supposée de 0,25 km/h/s).
+**Faits** (diagnostic FTMS de l'utilisateur) : plages 1–12 km/h pas 0,1 et
+0–9 % pas 1 ; l'inclinaison répond à toutes les valeurs testées ;
+`Request Control → Set Target Speed → Start` produit un mouvement ;
+`Request Control → Start` et `Request Control → Start → Set Target Speed` n'en
+ont pas produit ; une consigne de vitesse peut être acquittée sans changement
+observé ; avec Kinni, 7 km/h revient à 1 km/h ; **Treadmill Assistant pilote
+correctement ce tapis**, donc le firmware accepte bien un pilotage FTMS.
 
-Hypothèse à vérifier avec le journal : une consigne de 7 km/h encodée avec une
-résolution de 0,1 km/h au lieu de 0,01 donnerait `46 00` = 0,70 km/h, valeur
-qu'un tapis borné à 1,0 km/h ramènerait au minimum — ce qui ressemblerait au
-« retour à 1 km/h » observé. Foulée encode en 0,01 km/h conformément à la
-spécification ; les octets envoyés sont visibles dans chaque ligne `[TX]`.
+**La cause du problème de vitesse n'est pas établie.** La séquence de démarrage
+n'est qu'une hypothèse parmi d'autres :
+
+| # | Hypothèse | Ce que fait Foulée | Comment la vérifier |
+|---|-----------|--------------------|---------------------|
+| H1 | Start exige une consigne de vitesse préalable | vitesse initiale explicite (1,5 km/h) avant Start | test de démarrage |
+| H2 | une consigne reçue pendant le compte à rebours ou l'accélération est acquittée mais ignorée | consigne du palier envoyée seulement quand la vitesse initiale est **stable 2 s** (max 8 s) ; un seul renvoi si non observée | test de réponse en vitesse : renvoi nécessaire ? |
+| H3 | consigne mal encodée par le client (résolution 0,1 au lieu de 0,01 → 7 km/h = 0,70 km/h, ramené au minimum 1 km/h) | encodage 0,01 km/h conforme à la spécification, octets visibles dans chaque `[TX]` | journal : `[TX] Set Target Speed 7.00 km/h | 02 BC 02` |
+| H4 | le contrôle doit être redemandé avant certaines commandes | Request Control au démarrage/reprise ; option du test : Request Control avant chaque consigne | comparer le test avec et sans l'option |
+| H5 | le tapis annonce la consigne (statut 0x05) sans l'appliquer | consigne « annoncée » affichée séparément de la mesure | colonne « tapis annonce » du test |
+
+La comparaison la plus décisive reste une capture du trafic de Treadmill
+Assistant (voir docs/VALIDATION_MATERIELLE.md, étape 7).
+
+Paramètres du profil (dans `TreadmillProfile.urtm047`) : vitesse initiale
+1,5 km/h, attente du mouvement 15 s, stabilisation 2 s (max 8 s), tolérance
+0,15 km/h, accélération supposée 0,25 km/h/s pour le délai d'atteinte,
+1 renvoi maximum, espacement des commandes 0,4 s, délai de réponse 4 s.
