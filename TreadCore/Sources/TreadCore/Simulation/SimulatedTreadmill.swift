@@ -146,6 +146,13 @@ public final class SimulatedTreadmill {
         status(.stoppedBySafetyKey, now: now)
     }
 
+    /// Simule l'appui sur le bouton Stop du tapis ou de sa télécommande.
+    public func pressStopButton(now: TimeInterval) {
+        runState = .stopped
+        targetSpeed = nil
+        status(.stoppedOrPausedByUser(paused: false), now: now)
+    }
+
     public func advance(to now: TimeInterval) {
         let dt = lastAdvance.map { max(0, now - $0) } ?? 0
         lastAdvance = now
