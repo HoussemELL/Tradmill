@@ -39,6 +39,10 @@ public struct HealthSyncPlan: Equatable, Sendable {
             return HealthSyncPlan(owner: .watch, writeHeartRate: false, writeDistance: false, writeEnergy: false,
                                   reason: "exercice enregistré par l'Apple Watch")
         }
+        guard !record.simulated else {
+            return HealthSyncPlan(owner: .none, writeHeartRate: false, writeDistance: false, writeEnergy: false,
+                                  reason: "séance simulée : rien n'est écrit dans Santé")
+        }
         guard settings.enabled else {
             return HealthSyncPlan(owner: .none, writeHeartRate: false, writeDistance: false, writeEnergy: false,
                                   reason: "Santé désactivé")

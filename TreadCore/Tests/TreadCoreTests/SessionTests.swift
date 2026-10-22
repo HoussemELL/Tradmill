@@ -269,6 +269,9 @@ final class HealthSyncPlanTests: XCTestCase {
         var r = record(hrSource: .bleSensor)
         r.healthStatus = .saved(workoutUUID: "x")
         XCTAssertEqual(HealthSyncPlan.make(record: r, settings: s, watchWorkoutUsed: false).owner, .none)
+        var sim = record(hrSource: .bleSensor)
+        sim.simulated = true
+        XCTAssertEqual(HealthSyncPlan.make(record: sim, settings: s, watchWorkoutUsed: false).owner, .none)
         s.enabled = false
         XCTAssertEqual(HealthSyncPlan.make(record: record(hrSource: nil), settings: s, watchWorkoutUsed: false).owner, .none)
     }

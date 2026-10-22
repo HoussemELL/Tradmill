@@ -317,3 +317,35 @@ final class TreadmillControllerTests: XCTestCase {
         XCTAssertNotNil(h.controller.lastMessage)
     }
 }
+
+final class StartSequenceDiagnosticTests: XCTestCase {
+    func run(_ h: ControllerHarness, _ d: StartSequenceDiagnostic, seconds: TimeInterval) {
+        let end = h.now + seconds
+        while h.now < end {
+            h.now += 0.1
+            h.link.advance()
+            h.controller.tick()
+            d.tick()
+        }
+    }
+
+    func testDiagnosticSucceedsWithURTM047Profile() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        let d = StartSequenceDiagnostic(controller: h.controller)
+        XCTAssertNoThrow(try d.begin().get())
+        run(h, d, seconds: 90)
+        XCTAssertEqual(d.state, .finished(success: true), d.steps.map(\.detail).joined(separator: " | "))
+        XCTAssertEqual(d.testSpeed, 2.5)
+        XCTAssertEqual(h.controller.state, .stopped)
+        XCTAssertEqual(Array(h.sentCommands.prefix(3)), [.requestControl, .setTargetSpeed(kmh: 1.5), .startOrResume])
+    }
+
+    func testDiagnosticReportsGenericSequenceFailure() {
+        let h = ControllerHarness(profile: .genericFTMS, quirks: .urtm047Like)
+        let d = StartSequenceDiagnostic(controller: h.controller)
+        _ = d.begin()
+        run(h, d, seconds: 90)
+        XCTAssertEqual(d.state, .finished(success: false))
+        XCTAssertTrue(d.steps.contains { $0.title == "Mouvement" && !$0.ok })
+    }
+}
