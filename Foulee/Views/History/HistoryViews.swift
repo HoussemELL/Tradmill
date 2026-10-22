@@ -13,18 +13,7 @@ struct HistoryListView: View {
             List {
                 ForEach(sessions) { s in
                     NavigationLink(value: s.id) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(s.title).font(.headline)
-                                if s.simulated { StatusPill(text: "Simulé", systemImage: "cpu", color: .purple) }
-                                if s.interrupted { StatusPill(text: "Interrompue", systemImage: "exclamationmark.triangle", color: Theme.warning) }
-                            }
-                            Text(Format.shortDate(s.startDate)).font(.caption).foregroundStyle(.secondary)
-                            Text("\(Format.duration(s.activeSeconds)) · \(Format.distance(s.distanceMeters))"
-                                 + (s.avgHR.map { " · \($0) bpm moy." } ?? "")
-                                 + (s.steps.map { " · \($0) pas" } ?? ""))
-                                .font(.subheadline).monospacedDigit()
-                        }
+                        HistoryRow(entity: s)
                     }
                 }
                 .onDelete { idx in
@@ -54,6 +43,33 @@ struct HistoryListView: View {
             .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }),
                           document: exportDoc, contentType: exportDoc?.contentType ?? .json,
                           defaultFilename: exportDoc?.filename) { _ in }
+        }
+    }
+}
+
+struct HistoryRow: View {
+    let entity: SessionEntity
+
+    private var summary: String {
+        var parts: [String] = [Format.duration(entity.activeSeconds), Format.distance(entity.distanceMeters)]
+        if let hr = entity.avgHR { parts.append("\(hr) bpm moy.") }
+        if let steps = entity.steps { parts.append("\(steps) pas") }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(entity.title).font(.headline)
+                if entity.simulated {
+                    StatusPill(text: "Simulé", systemImage: "cpu", color: .purple)
+                }
+                if entity.interrupted {
+                    StatusPill(text: "Interrompue", systemImage: "exclamationmark.triangle", color: Theme.warning)
+                }
+            }
+            Text(Format.shortDate(entity.startDate)).font(.caption).foregroundStyle(.secondary)
+            Text(summary).font(.subheadline).monospacedDigit()
         }
     }
 }

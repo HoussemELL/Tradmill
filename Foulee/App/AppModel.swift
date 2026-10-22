@@ -156,7 +156,7 @@ final class AppModel {
 
     var hasActiveSession: Bool {
         guard let s = sessionService else { return false }
-        return s.session.status != .finished
+        return s.session.status != .finished && s.session.status != .ready
     }
 
     func prepareSession(program: WorkoutProgram?) {

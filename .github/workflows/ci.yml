@@ -28,22 +28,28 @@ jobs:
         run: swift test --package-path TreadCore
       - name: Build iOS + Watch embarquée (simulateur)
         run: |
-          set -o pipefail
+          status=0
           xcodebuild -project Foulee.xcodeproj -scheme Foulee \
             -destination 'generic/platform=iOS Simulator' -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ios.log | grep -E "(error|warning):|BUILD (SUCCEEDED|FAILED)" || true
-          test "${PIPESTATUS[0]}" -eq 0 || { grep -E "error:" ios.log | sort -u | head -80; exit 1; }
+            CODE_SIGNING_ALLOWED=NO build > ios.log 2>&1 || status=$?
+          grep -E "(error|warning): " ios.log | grep -v "^ld: warning" | sort -u | head -150 || true
+          tail -n 3 ios.log
+          exit $status
       - name: Build watchOS (simulateur)
         run: |
-          set -o pipefail
+          status=0
           xcodebuild -project Foulee.xcodeproj -scheme FouleeWatch \
             -destination 'generic/platform=watchOS Simulator' -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee watch.log | grep -E "(error|warning):|BUILD (SUCCEEDED|FAILED)" || true
-          test "${PIPESTATUS[0]}" -eq 0 || { grep -E "error:" watch.log | sort -u | head -80; exit 1; }
+            CODE_SIGNING_ALLOWED=NO build > watch.log 2>&1 || status=$?
+          grep -E "(error|warning): " watch.log | grep -v "^ld: warning" | sort -u | head -150 || true
+          tail -n 3 watch.log
+          exit $status
       - name: Build iOS appareil (sans signature)
         run: |
-          set -o pipefail
+          status=0
           xcodebuild -project Foulee.xcodeproj -scheme Foulee \
             -destination 'generic/platform=iOS' -configuration Release \
-            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee device.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
-          test "${PIPESTATUS[0]}" -eq 0 || { grep -E "error:" device.log | sort -u | head -80; exit 1; }
+            CODE_SIGNING_ALLOWED=NO build > device.log 2>&1 || status=$?
+          grep -E "(error|warning): " device.log | grep -v "^ld: warning" | sort -u | head -150 || true
+          tail -n 3 device.log
+          exit $status
