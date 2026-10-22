@@ -1,0 +1,319 @@
+import XCTest
+@testable import TreadCore
+
+/// Écrivain factice : enregistre les écritures, réponses injectées à la main.
+final class RecordingWriter: ControlPointWriter {
+    var writes: [[UInt8]] = []
+    var accept = true
+    func writeControlPoint(_ bytes: [UInt8]) -> Bool {
+        writes.append(bytes)
+        return accept
+    }
+}
+
+final class CommandQueueTests: XCTestCase {
+    var now: TimeInterval = 0
+    var queue: CommandQueue!
+    var writer: RecordingWriter!
+
+    override func setUp() {
+        now = 0
+        writer = RecordingWriter()
+        queue = CommandQueue(configuration: .init(responseTimeout: 3, minimumSpacing: 0.2))
+        queue.writer = writer
+        queue.log = DiagnosticLog()
+        queue.setLinkReady(true, now: now)
+    }
+
+    func testRefusedWhenLinkNotReady() {
+        queue.setLinkReady(false, now: 0)
+        var outcome: CommandOutcome?
+        queue.enqueue(.requestControl, origin: .user, now: 0) { outcome = $0 }
+        XCTAssertEqual(outcome, .notReady)
+        XCTAssertTrue(writer.writes.isEmpty)
+    }
+
+    func testOneCommandInFlightAndSpacing() {
+        var results: [CommandOutcome] = []
+        queue.enqueue(.requestControl, origin: .user, now: now) { results.append($0) }
+        queue.enqueue(.startOrResume, origin: .user, now: now) { results.append($0) }
+        XCTAssertEqual(writer.writes, [[0x00]])
+        // Réponse : la suivante attend l'espacement minimal.
+        now = 0.1
+        queue.handleIndication([0x80, 0x00, 0x01], now: now)
+        XCTAssertEqual(results, [.success])
+        XCTAssertEqual(writer.writes.count, 1)
+        now = 0.25
+        queue.tick(now: now)
+        XCTAssertEqual(writer.writes.last, [0x07])
+        queue.handleIndication([0x80, 0x07, 0x01], now: now)
+        XCTAssertEqual(results, [.success, .success])
+        XCTAssertTrue(queue.isIdle)
+    }
+
+    func testNegativeResponse() {
+        var outcome: CommandOutcome?
+        queue.enqueue(.setTargetSpeed(kmh: 7), origin: .user, now: now) { outcome = $0 }
+        queue.handleIndication([0x80, 0x02, 0x05], now: 0.1)
+        XCTAssertEqual(outcome, .rejected(.controlNotPermitted))
+        queue.enqueue(.setTargetSpeed(kmh: 20), origin: .user, now: 1) { outcome = $0 }
+        queue.handleIndication([0x80, 0x02, 0x03], now: 1.1)
+        XCTAssertEqual(outcome, .rejected(.invalidParameter))
+    }
+
+    func testTimeoutWithoutAutomaticRetry() {
+        var outcome: CommandOutcome?
+        queue.enqueue(.startOrResume, origin: .user, now: now) { outcome = $0 }
+        queue.tick(now: 2.9)
+        XCTAssertNil(outcome)
+        queue.tick(now: 3.1)
+        XCTAssertEqual(outcome, .timeout)
+        queue.tick(now: 10)
+        XCTAssertEqual(writer.writes.count, 1, "aucune répétition automatique")
+        // Réponse tardive : ignorée sans planter ni compléter autre chose.
+        XCTAssertTrue(queue.handleIndication([0x80, 0x07, 0x01], now: 11))
+    }
+
+    func testMismatchedResponseIsIgnored() {
+        var outcome: CommandOutcome?
+        queue.enqueue(.setTargetSpeed(kmh: 5), origin: .user, now: now) { outcome = $0 }
+        queue.handleIndication([0x80, 0x03, 0x01], now: 0.1)
+        XCTAssertNil(outcome)
+        queue.handleIndication([0x80, 0x02, 0x01], now: 0.2)
+        XCTAssertEqual(outcome, .success)
+    }
+
+    func testPendingSpeedCommandsAreCoalesced() {
+        var outcomes: [String: CommandOutcome] = [:]
+        queue.enqueue(.requestControl, origin: .user, now: now)
+        queue.enqueue(.setTargetSpeed(kmh: 5), origin: .user, now: now) { outcomes["5"] = $0 }
+        queue.enqueue(.setTargetSpeed(kmh: 6), origin: .user, now: now) { outcomes["6"] = $0 }
+        queue.enqueue(.setTargetSpeed(kmh: 7), origin: .user, now: now) { outcomes["7"] = $0 }
+        XCTAssertEqual(queue.pendingCommands, [.setTargetSpeed(kmh: 7)])
+        XCTAssertEqual(outcomes["5"], .cancelled("remplacée par une consigne plus récente"))
+        XCTAssertEqual(outcomes["6"], .cancelled("remplacée par une consigne plus récente"))
+        queue.handleIndication([0x80, 0x00, 0x01], now: 0.1)
+        queue.tick(now: 0.5)
+        XCTAssertEqual(writer.writes.last, [0x02, 0xBC, 0x02])
+    }
+
+    func testStopJumpsQueueAndCancelsSetpoints() {
+        var startOutcome: CommandOutcome?
+        var speedOutcome: CommandOutcome?
+        queue.enqueue(.requestControl, origin: .user, now: now)
+        queue.enqueue(.setTargetSpeed(kmh: 5), origin: .program, now: now) { speedOutcome = $0 }
+        queue.enqueue(.startOrResume, origin: .user, now: now) { startOutcome = $0 }
+        queue.enqueue(.stop, origin: .safety, now: now)
+        XCTAssertEqual(queue.pendingCommands, [.stop])
+        XCTAssertEqual(speedOutcome, .cancelled("annulée par Stop"))
+        XCTAssertEqual(startOutcome, .cancelled("annulée par Stop"))
+        queue.handleIndication([0x80, 0x00, 0x01], now: 0.1)
+        queue.tick(now: 0.5)
+        XCTAssertEqual(writer.writes.last, [0x08, 0x01])
+    }
+
+    func testDoubleStartPrevented() {
+        var second: CommandOutcome?
+        queue.enqueue(.startOrResume, origin: .user, now: now)
+        queue.enqueue(.startOrResume, origin: .user, now: now) { second = $0 }
+        XCTAssertEqual(second, .cancelled("démarrage déjà en cours"))
+        XCTAssertEqual(writer.writes.count, 1)
+    }
+
+    func testWriteErrorFailsCommand() {
+        var outcome: CommandOutcome?
+        queue.enqueue(.requestControl, origin: .user, now: now) { outcome = $0 }
+        queue.handleWriteResult(error: "Insufficient authorization", now: 0.05)
+        XCTAssertEqual(outcome, .writeFailed("Insufficient authorization"))
+    }
+
+    func testLinkLossCancelsEverything() {
+        var a: CommandOutcome?
+        var b: CommandOutcome?
+        queue.enqueue(.requestControl, origin: .user, now: now) { a = $0 }
+        queue.enqueue(.startOrResume, origin: .user, now: now) { b = $0 }
+        queue.setLinkReady(false, now: 0.1)
+        XCTAssertEqual(a, .notReady)
+        XCTAssertEqual(b, .notReady)
+        XCTAssertTrue(queue.isIdle)
+    }
+}
+
+/// Banc de test : contrôleur + tapis simulé + horloge manuelle.
+final class ControllerHarness {
+    var now: TimeInterval = 0
+    let log = DiagnosticLog(clock: { Date(timeIntervalSince1970: 0) })
+    var controller: TreadmillController!
+    var link: SimulatedFTMSLink!
+    var events: [ControllerEvent] = []
+
+    init(profile: TreadmillProfile, quirks: SimulatedTreadmill.Quirks) {
+        controller = TreadmillController(profile: profile, log: log, clock: { [unowned self] in self.now })
+        controller.onEvent = { [unowned self] in self.events.append($0) }
+        link = SimulatedFTMSLink(treadmill: SimulatedTreadmill(quirks: quirks), clock: { [unowned self] in self.now })
+        link.connect(to: controller)
+    }
+
+    func run(seconds: TimeInterval, step: TimeInterval = 0.05) {
+        let end = now + seconds
+        while now < end {
+            now += step
+            link.advance()
+            controller.tick()
+        }
+    }
+
+    var sentCommands: [ControlCommand] { link.treadmill.receivedCommands }
+}
+
+final class TreadmillControllerTests: XCTestCase {
+
+    func testURTM047StartSequenceOrder() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 7, targetIncline: 2).get())
+        h.run(seconds: 30)
+        XCTAssertEqual(Array(h.sentCommands.prefix(3)),
+                       [.requestControl, .setTargetSpeed(kmh: 1.5), .startOrResume])
+        // La consigne du palier part après le mouvement observé, sans nouveau Start.
+        XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1)
+        XCTAssertTrue(h.sentCommands.contains(.setTargetSpeed(kmh: 7)))
+        XCTAssertTrue(h.sentCommands.contains(.setTargetInclination(percent: 2)))
+        XCTAssertEqual(h.controller.state, .running)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 7, accuracy: 0.01)
+        XCTAssertTrue(h.events.contains(.beltStarted))
+        XCTAssertTrue(h.events.contains(.speedReached(7)))
+    }
+
+    func testGenericSequenceFailsToMoveOnURTM047LikeTreadmill() {
+        // Reproduit l'observation : Request Control → Start ne produit pas de mouvement.
+        let h = ControllerHarness(profile: .genericFTMS, quirks: .urtm047Like)
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 5, targetIncline: nil).get())
+        h.run(seconds: 20)
+        XCTAssertEqual(h.controller.state, .startUnconfirmed)
+        XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1, "pas de nouvel essai automatique")
+        XCTAssertTrue(h.events.contains { if case .startFailed = $0 { return true }; return false })
+    }
+
+    func testAcknowledgedButNotObservedSpeedIsReported() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.ignoresAllSpeedCommands = true
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        // Le tapis ignore toutes les vitesses : Start sans consigne prise en compte ⇒ pas de mouvement.
+        // On autorise donc le démarrage par défaut pour isoler le cas « acquitté mais non observé ».
+        h.link.treadmill.quirks.requiresSpeedBeforeStart = false
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 7, targetIncline: nil).get())
+        h.run(seconds: 120)
+        XCTAssertEqual(h.controller.state, .running)
+        XCTAssertEqual(h.controller.speed.acknowledged, 7)
+        XCTAssertEqual(h.controller.speed.status, .mismatch)
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 1.0, accuracy: 0.01)
+        XCTAssertTrue(h.events.contains(.speedMismatch(target: 7, observed: 1.0)))
+        // Un seul renvoi de la consigne (profil URTM047), jamais de Start supplémentaire.
+        XCTAssertEqual(h.sentCommands.filter { $0 == .setTargetSpeed(kmh: 7) }.count, 2)
+        XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1)
+    }
+
+    func testSpeedChangeWhileRunningDoesNotResendStart() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        _ = h.controller.start(targetSpeed: 4, targetIncline: nil)
+        h.run(seconds: 20)
+        h.controller.setTargetSpeed(6, origin: .program)
+        h.run(seconds: 15)
+        h.controller.setTargetSpeed(3.5, origin: .user)
+        h.run(seconds: 15)
+        XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1)
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 3.5, accuracy: 0.01)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+    }
+
+    func testDoubleStartRejected() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 4, targetIncline: nil).get())
+        if case .success = h.controller.start(targetSpeed: 4, targetIncline: nil) {
+            XCTFail("le second démarrage doit être refusé")
+        }
+        h.run(seconds: 20)
+        if case .success = h.controller.start(targetSpeed: 4, targetIncline: nil) {
+            XCTFail("démarrage refusé tant que le tapis tourne")
+        }
+    }
+
+    func testOutOfRangeIsRejectedNotClamped() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        guard case .failure(.outOfRange) = h.controller.start(targetSpeed: 14, targetIncline: nil) else {
+            return XCTFail("vitesse hors plage acceptée")
+        }
+        guard case .failure(.outOfRange) = h.controller.start(targetSpeed: 5, targetIncline: 12) else {
+            return XCTFail("inclinaison hors plage acceptée")
+        }
+        XCTAssertTrue(h.sentCommands.isEmpty)
+    }
+
+    func testPauseResumeAndStopConfirmation() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        _ = h.controller.start(targetSpeed: 5, targetIncline: nil)
+        h.run(seconds: 25)
+        XCTAssertNoThrow(try h.controller.pause().get())
+        XCTAssertEqual(h.controller.state, .pausing)
+        h.run(seconds: 15)
+        XCTAssertEqual(h.controller.state, .paused)
+        XCTAssertNoThrow(try h.controller.resume(targetSpeed: 5, targetIncline: nil).get())
+        h.run(seconds: 25)
+        XCTAssertEqual(h.controller.state, .running)
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 5, accuracy: 0.01)
+        XCTAssertNoThrow(try h.controller.stop().get())
+        XCTAssertEqual(h.controller.state, .stopping, "pas d'arrêt affiché avant confirmation")
+        h.run(seconds: 15)
+        XCTAssertEqual(h.controller.state, .stopped)
+        XCTAssertTrue(h.events.contains(.stopConfirmed))
+    }
+
+    func testSafetyKeyStopsAndCancelsSequence() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        _ = h.controller.start(targetSpeed: 5, targetIncline: nil)
+        h.run(seconds: 20)
+        h.link.treadmill.pullSafetyKey(now: h.now)
+        h.run(seconds: 1)
+        XCTAssertEqual(h.controller.state, .stopped)
+        XCTAssertTrue(h.events.contains(.machineStopped(reason: "clé de sécurité", paused: false)))
+    }
+
+    func testLinkLossIsReportedAndNoAutomaticRestart() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        _ = h.controller.start(targetSpeed: 5, targetIncline: nil)
+        h.run(seconds: 20)
+        let countBefore = h.sentCommands.count
+        h.link.disconnect()
+        XCTAssertEqual(h.controller.state, .linkLost)
+        XCTAssertTrue(h.events.contains(.linkLost(wasActive: true)))
+        if case .success = h.controller.stop() { XCTFail("un arrêt ne peut être annoncé sans lien") }
+        h.link.connect(to: h.controller)
+        h.run(seconds: 10)
+        XCTAssertEqual(h.sentCommands.count, countBefore, "aucune commande après reconnexion sans action")
+        // Le tapis tourne encore : l'état reflète la télémétrie, pas une commande.
+        XCTAssertEqual(h.controller.state, .running)
+        XCTAssertTrue(h.events.contains(.externalMovement))
+    }
+
+    func testCommandsDuringSequenceAreDeferred() {
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        _ = h.controller.start(targetSpeed: 5, targetIncline: nil)
+        h.controller.setTargetSpeed(6, origin: .user)
+        h.run(seconds: 30)
+        XCTAssertFalse(h.sentCommands.contains(.setTargetSpeed(kmh: 5)))
+        XCTAssertTrue(h.sentCommands.contains(.setTargetSpeed(kmh: 6)))
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 6, accuracy: 0.01)
+    }
+
+    func testNoResponseTimesOutAndAbortsStart() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.dropsResponses = true
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        _ = h.controller.start(targetSpeed: 5, targetIncline: nil)
+        h.run(seconds: 10)
+        XCTAssertEqual(h.controller.state, .idle)
+        XCTAssertEqual(h.sentCommands, [.requestControl])
+        XCTAssertNotNil(h.controller.lastMessage)
+    }
+}
