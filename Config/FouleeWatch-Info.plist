@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>WKApplication</key>
+	<true/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Foulée lit votre fréquence cardiaque, vos pas et votre énergie active pendant l'exercice pour les envoyer à l'iPhone.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Foulée enregistre l'exercice de tapis de course dans Apple Santé.</string>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
+</dict>
+</plist>

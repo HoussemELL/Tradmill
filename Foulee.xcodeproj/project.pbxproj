@@ -1,0 +1,484 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		F0000000000000000000A050 /* TreadCore in Frameworks */ = {isa = PBXBuildFile; productRef = F0000000000000000000A060 /* TreadCore */; };
+		F0000000000000000000A051 /* TreadCore in Frameworks */ = {isa = PBXBuildFile; productRef = F0000000000000000000A061 /* TreadCore */; };
+		F0000000000000000000A052 /* FouleeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = F0000000000000000000A011 /* FouleeWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		F0000000000000000000A070 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F0000000000000000000A001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F0000000000000000000A040;
+			remoteInfo = FouleeWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F0000000000000000000A034 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				F0000000000000000000A052 /* FouleeWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		F0000000000000000000A010 /* Foulee.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Foulee.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000000000000000000A011 /* FouleeWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FouleeWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000000000000000000A020 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		F0000000000000000000A021 /* Foulee-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Foulee-Info.plist"; sourceTree = "<group>"; };
+		F0000000000000000000A022 /* Foulee.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Foulee.entitlements; sourceTree = "<group>"; };
+		F0000000000000000000A023 /* FouleeWatch-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FouleeWatch-Info.plist"; sourceTree = "<group>"; };
+		F0000000000000000000A024 /* FouleeWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FouleeWatch.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		F0000000000000000000A005 /* Foulee */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Foulee;
+			sourceTree = "<group>";
+		};
+		F0000000000000000000A006 /* FouleeWatch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FouleeWatch;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F0000000000000000000A032 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F0000000000000000000A050 /* TreadCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0000000000000000000A042 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F0000000000000000000A051 /* TreadCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		F0000000000000000000A002 = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000A004 /* Config */,
+				F0000000000000000000A005 /* Foulee */,
+				F0000000000000000000A006 /* FouleeWatch */,
+				F0000000000000000000A003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F0000000000000000000A003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000A010 /* Foulee.app */,
+				F0000000000000000000A011 /* FouleeWatch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F0000000000000000000A004 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000A020 /* Signing.xcconfig */,
+				F0000000000000000000A021 /* Foulee-Info.plist */,
+				F0000000000000000000A022 /* Foulee.entitlements */,
+				F0000000000000000000A023 /* FouleeWatch-Info.plist */,
+				F0000000000000000000A024 /* FouleeWatch.entitlements */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F0000000000000000000A030 /* Foulee */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F0000000000000000000A081 /* Build configuration list for PBXNativeTarget "Foulee" */;
+			buildPhases = (
+				F0000000000000000000A031 /* Sources */,
+				F0000000000000000000A032 /* Frameworks */,
+				F0000000000000000000A033 /* Resources */,
+				F0000000000000000000A034 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F0000000000000000000A071 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F0000000000000000000A005 /* Foulee */,
+			);
+			name = Foulee;
+			packageProductDependencies = (
+				F0000000000000000000A060 /* TreadCore */,
+			);
+			productName = Foulee;
+			productReference = F0000000000000000000A010 /* Foulee.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F0000000000000000000A040 /* FouleeWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F0000000000000000000A082 /* Build configuration list for PBXNativeTarget "FouleeWatch" */;
+			buildPhases = (
+				F0000000000000000000A041 /* Sources */,
+				F0000000000000000000A042 /* Frameworks */,
+				F0000000000000000000A043 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F0000000000000000000A006 /* FouleeWatch */,
+			);
+			name = FouleeWatch;
+			packageProductDependencies = (
+				F0000000000000000000A061 /* TreadCore */,
+			);
+			productName = FouleeWatch;
+			productReference = F0000000000000000000A011 /* FouleeWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F0000000000000000000A001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					F0000000000000000000A030 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					F0000000000000000000A040 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = F0000000000000000000A080 /* Build configuration list for PBXProject "Foulee" */;
+			developmentRegion = fr;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				fr,
+				Base,
+			);
+			mainGroup = F0000000000000000000A002;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F0000000000000000000A062 /* XCLocalSwiftPackageReference "TreadCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F0000000000000000000A003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F0000000000000000000A030 /* Foulee */,
+				F0000000000000000000A040 /* FouleeWatch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F0000000000000000000A033 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0000000000000000000A043 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F0000000000000000000A031 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0000000000000000000A041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F0000000000000000000A071 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F0000000000000000000A040 /* FouleeWatch */;
+			targetProxy = F0000000000000000000A070 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		F0000000000000000000A090 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F0000000000000000000A020 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		F0000000000000000000A091 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F0000000000000000000A020 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		F0000000000000000000A092 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/Foulee.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Foulee-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		F0000000000000000000A093 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/Foulee.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Foulee-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		F0000000000000000000A094 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/FouleeWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/FouleeWatch-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_ID_PREFIX)";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		F0000000000000000000A095 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/FouleeWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/FouleeWatch-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_ID_PREFIX)";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F0000000000000000000A080 /* Build configuration list for PBXProject "Foulee" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F0000000000000000000A090 /* Debug */,
+				F0000000000000000000A091 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F0000000000000000000A081 /* Build configuration list for PBXNativeTarget "Foulee" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F0000000000000000000A092 /* Debug */,
+				F0000000000000000000A093 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F0000000000000000000A082 /* Build configuration list for PBXNativeTarget "FouleeWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F0000000000000000000A094 /* Debug */,
+				F0000000000000000000A095 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		F0000000000000000000A062 /* XCLocalSwiftPackageReference "TreadCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = TreadCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F0000000000000000000A060 /* TreadCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F0000000000000000000A062 /* XCLocalSwiftPackageReference "TreadCore" */;
+			productName = TreadCore;
+		};
+		F0000000000000000000A061 /* TreadCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F0000000000000000000A062 /* XCLocalSwiftPackageReference "TreadCore" */;
+			productName = TreadCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = F0000000000000000000A001 /* Project object */;
+}

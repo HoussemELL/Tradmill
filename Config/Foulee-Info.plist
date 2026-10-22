@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Foulée se connecte en Bluetooth à votre tapis de course (FTMS) pour lire vitesse et inclinaison et lui envoyer les consignes du programme, ainsi qu'à votre ceinture ou brassard cardio.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Foulée lit la fréquence cardiaque et les données de l'exercice Apple Watch en cours pour les afficher pendant la séance.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Foulée peut enregistrer vos séances de tapis (durée, distance, fréquence cardiaque de la ceinture) dans Apple Santé si vous l'activez dans les réglages.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>workout-processing</string>
+	</array>
+</dict>
+</plist>

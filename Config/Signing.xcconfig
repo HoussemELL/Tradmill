@@ -1,0 +1,11 @@
+// Réglages de signature — À MODIFIER UNE FOIS avant d'installer sur vos appareils.
+//
+// BUNDLE_ID_PREFIX : identifiant unique de l'app iPhone (notation DNS inversée).
+//   L'app Watch utilisera automatiquement $(BUNDLE_ID_PREFIX).watchkitapp.
+//   Exemple : com.votrenom.foulee
+// DEVELOPMENT_TEAM : identifiant d'équipe (10 caractères) visible dans Xcode >
+//   Settings > Accounts, ou laissez vide et choisissez l'équipe dans l'onglet
+//   « Signing & Capabilities » de chaque target.
+
+BUNDLE_ID_PREFIX = com.example.foulee
+DEVELOPMENT_TEAM =
