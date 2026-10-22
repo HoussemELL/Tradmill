@@ -103,8 +103,7 @@ struct HistoryDetailView: View {
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters), detail: r.distanceSource.label)
                     MetricTile(title: "Vitesse", value: Format.speed(r.avgSpeed), unit: "km/h", detail: "max \(Format.speed(r.maxSpeed))")
                     MetricTile(title: "Inclinaison", value: Format.incline(r.avgIncline), unit: "%", detail: "max \(Format.incline(r.maxIncline))")
-                    MetricTile(title: "FC", value: r.avgHR.map { "\($0)" } ?? "—", unit: "bpm",
-                               detail: "max \(r.maxHR.map { "\($0)" } ?? "—") · " + r.hrSources.map(\.shortLabel).joined(separator: ", "))
+                    MetricTile(title: "FC", value: r.avgHR.map { "\($0)" } ?? "—", unit: "bpm", detail: hrDetail(r))
                     MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
                 }
                 caloriesCard(r)
@@ -171,6 +170,12 @@ struct HistoryDetailView: View {
         .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }),
                       document: exportDoc, contentType: exportDoc?.contentType ?? .json,
                       defaultFilename: exportDoc?.filename) { _ in }
+    }
+
+    private func hrDetail(_ r: SessionRecord) -> String {
+        let maxText = r.maxHR.map { String($0) } ?? "—"
+        let sources = r.hrSources.map { $0.shortLabel }.joined(separator: ", ")
+        return "max \(maxText) · \(sources)"
     }
 
     private func caloriesCard(_ r: SessionRecord) -> some View {

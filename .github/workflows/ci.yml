@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.1-noble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: swift test
         run: swift test --package-path TreadCore
 
@@ -19,7 +19,7 @@ jobs:
     name: Xcode — tests TreadCore + build iOS/watchOS
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Versions
         run: |
           xcodebuild -version

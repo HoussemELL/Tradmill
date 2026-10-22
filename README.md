@@ -244,10 +244,14 @@ pendant le compte à rebours acquittée mais ignorée). Pastille violette
 
 ## 12. Ce qui compile, ce qui est testé, ce qui reste à valider
 
-**Compile (CI GitHub Actions, `xcodebuild`)** — voir l'onglet *Actions* du dépôt :
+**Compile (CI GitHub Actions, `xcodebuild`, Xcode 16.4 / Swift 6.1.2, macOS 15)** —
+voir l'onglet *Actions* du dépôt ; aucun avertissement du compilateur Swift :
 - app iOS + app Watch embarquée pour le simulateur iOS ;
 - app watchOS seule pour le simulateur watchOS ;
 - app iOS pour appareil (Release, sans signature).
+
+La signature réelle (votre équipe, profils, capacité HealthKit) n'est pas
+vérifiable en CI : elle se fait dans Xcode sur votre Mac.
 
 **Testé automatiquement** (79 tests, sous Linux et macOS) :
 - décodage FTMS : flags optionnels, bit More Data inversé, valeurs « non
