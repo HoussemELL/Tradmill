@@ -21,7 +21,37 @@ public extension WorkoutProgram {
     /// Révision de la bibliothèque. À chaque hausse, l'app met à jour les programmes prédéfinis
     /// déjà installés (même identifiant) et ajoute les nouveaux.
     /// 2 : inclinaison minimale 1 % partout, Football Endurance (3 niveaux), HIIT avancé.
-    static let templatesRevision = 2
+    /// 3 : retrait des anciens programmes de la première version, s'ils n'ont pas été modifiés.
+    static let templatesRevision = 3
+
+    /// Programmes installés par la toute première version (avant les identifiants de modèle),
+    /// remplacés par la bibliothèque actuelle. Retirés seulement s'ils sont restés intacts.
+    static var legacyTemplates: [WorkoutProgram] {
+        [
+            WorkoutProgram(name: "Marche active 30 min", items: [
+                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 300, speedKmh: 3.5, inclinePercent: 0, targetZone: 1)),
+                .phase(.init(name: "Marche", kind: .steady, durationSeconds: 600, speedKmh: 5.0, inclinePercent: 1, targetZone: 2)),
+                .phase(.init(name: "Côte", kind: .work, durationSeconds: 600, speedKmh: 5.0, inclinePercent: 4, targetZone: 3)),
+                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 300, speedKmh: 3.5, inclinePercent: 0, targetZone: 1)),
+            ]),
+            WorkoutProgram(name: "Intervalles marche/course", items: [
+                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 300, speedKmh: 4.5, targetZone: 2)),
+                .block(.init(name: "Intervalles", repeatCount: 6, phases: [
+                    .init(name: "Course", kind: .work, durationSeconds: 60, speedKmh: 8.5, targetZone: 4),
+                    .init(name: "Marche", kind: .recovery, durationSeconds: 120, speedKmh: 5.0, targetZone: 2),
+                ])),
+                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 300, speedKmh: 4.0, targetZone: 1)),
+            ]),
+            WorkoutProgram(name: "Collines", items: [
+                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 300, speedKmh: 4.0)),
+                .block(.init(name: "Montées", repeatCount: 3, phases: [
+                    .init(name: "Montée", kind: .work, durationSeconds: 180, speedKmh: 5.0, inclinePercent: 6, targetZone: 3),
+                    .init(name: "Plat", kind: .recovery, durationSeconds: 120, speedKmh: 5.0, inclinePercent: 1, targetZone: 2),
+                ])),
+                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 300, speedKmh: 3.5)),
+            ]),
+        ]
+    }
 
     /// Inclinaison minimale de tous les programmes prédéfinis.
     static let minimumTemplateIncline = 1.0
@@ -193,6 +223,8 @@ public extension WorkoutProgram {
 public enum TemplateLibrary {
     public struct Plan: Equatable {
         public var upserts: [WorkoutProgram]
+        /// Anciens programmes de la première version, intacts, à retirer.
+        public var removals: [UUID] = []
         public var seededIDs: [String]
         public var revision: Int
         public var updatedNames: [String]
@@ -223,7 +255,16 @@ public enum TemplateLibrary {
             }
             seeded.insert(id)
         }
-        return Plan(upserts: upserts, seededIDs: Array(seeded).sorted(), revision: max(installedRevision, revision),
-                    updatedNames: updated, addedNames: added)
+        // Anciens programmes de la première version : retirés seulement si nom et déroulé sont
+        // exactement ceux d'origine (une version modifiée par l'utilisateur est conservée).
+        var removals: [UUID] = []
+        if installedRevision < 3 {
+            let legacy = Dictionary(uniqueKeysWithValues: WorkoutProgram.legacyTemplates.map { ($0.name, $0.protocolSignature) })
+            for p in installed where p.templateID == nil && legacy[p.name] == p.protocolSignature {
+                removals.append(p.id)
+            }
+        }
+        return Plan(upserts: upserts, removals: removals, seededIDs: Array(seeded).sorted(),
+                    revision: max(installedRevision, revision), updatedNames: updated, addedNames: added)
     }
 }

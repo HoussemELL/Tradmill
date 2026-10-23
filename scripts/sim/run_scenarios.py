@@ -95,6 +95,10 @@ def main():
         log("Installation Watch : directe (repli)", w.returncode, w.stderr.strip()[-500:])
 
     scenarios = json.load(open(os.path.join(HERE, "scenarios.json")))
+    only = os.environ.get("ONLY", "").strip()
+    if only:
+        scenarios = [s for s in scenarios if re.search(only, s["name"])]
+        log("Scénarios retenus :", [s["name"] for s in scenarios])
     results = []
     for sc in scenarios:
         name = sc["name"]

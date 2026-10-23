@@ -3,6 +3,11 @@ name: Simulateurs
 # Lancement manuel uniquement (onglet Actions) : ~45 min de simulateurs.
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Scénarios à exécuter (expression régulière sur le nom, vide = tous)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -32,6 +37,8 @@ jobs:
           tail -n 3 out/build.log
           exit $status
       - name: Scénarios
+        env:
+          ONLY: ${{ github.event.inputs.only }}
         run: python3 scripts/sim/run_scenarios.py build/dd/Build/Products/Debug-iphonesimulator/Foulee.app out
       - name: Publier les résultats (branche ci-sim-results)
         if: always()

@@ -123,6 +123,16 @@ final class ProgramLibraryTests: XCTestCase {
         let installed = [oldBaseline, oldZ2, personal] + plan.upserts.filter { p in ![oldBaseline.id, oldZ2.id].contains(p.id) }
         let again = TemplateLibrary.plan(installed: installed, seededIDs: plan.seededIDs, installedRevision: plan.revision)
         XCTAssertTrue(again.upserts.isEmpty)
+        // Anciens programmes de la première version : retirés s'ils sont intacts, gardés si modifiés.
+        let legacy = WorkoutProgram.legacyTemplates
+        var modified = legacy[2]
+        if case var .phase(p) = modified.items[0] { p.speedKmh = 4.5; modified.items[0] = .phase(p) }
+        let cleanup = TemplateLibrary.plan(installed: [legacy[0], legacy[1], modified, personal], seededIDs: plan.seededIDs,
+                                           installedRevision: 2)
+        XCTAssertEqual(Set(cleanup.removals), [legacy[0].id, legacy[1].id])
+        XCTAssertTrue(TemplateLibrary.plan(installed: [legacy[0]], seededIDs: plan.seededIDs, installedRevision: 3).removals.isEmpty,
+                      "une seule fois")
+        XCTAssertEqual(legacy.map { $0.totalDurationSeconds / 60 }, [30, 28, 25], "définitions d'origine")
         // Première installation : tout est ajouté une fois.
         let fresh = TemplateLibrary.plan(installed: [], seededIDs: [], installedRevision: 0)
         XCTAssertEqual(fresh.upserts.count, WorkoutProgram.templates.count)

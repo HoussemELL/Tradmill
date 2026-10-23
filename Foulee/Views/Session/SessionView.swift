@@ -305,7 +305,7 @@ struct DevicesCard: View {
     }
 }
 
-/// Ligne de programme sélectionnable.
+/// Programme sélectionnable : même carte que dans l'onglet Programmes.
 struct ProgramChoiceRow: View {
     let program: WorkoutProgram
     let selected: Bool
@@ -313,32 +313,9 @@ struct ProgramChoiceRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                PhaseStrip(program: program)
-                    .frame(width: 6)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(program.name).font(.headline).foregroundStyle(.primary).lineLimit(1)
-                        if program.isLocked { Image(systemName: "lock.fill").font(.caption).foregroundStyle(Theme.warning) }
-                        if program.hasAutoSpeed { Image(systemName: "heart.circle.fill").font(.caption).foregroundStyle(Theme.accent) }
-                    }
-                    ProgramBadges(program: program)
-                    Text("\(Format.duration(TimeInterval(program.totalDurationSeconds))) · max \(Format.speed(program.maxSpeedKmh)) km/h")
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                }
-                Spacer()
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(selected ? Theme.accent : Color(uiColor: .tertiaryLabel))
-            }
-            .padding(12)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(selected ? Theme.accent : .clear, lineWidth: 2))
+            ProgramCardView(program: program, selected: selected, showChevron: false)
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -368,25 +345,6 @@ struct FreeRunChoiceRow: View {
     }
 }
 
-/// Bande verticale des phases, couleur par type, hauteur proportionnelle à la durée.
-struct PhaseStrip: View {
-    let program: WorkoutProgram
-
-    var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 1) {
-                ForEach(program.schedule) { sp in
-                    Rectangle().fill(Theme.phaseColor(sp.phase.kind))
-                        .frame(height: max(1, geo.size.height * Double(sp.phase.durationSeconds) / Double(max(program.totalDurationSeconds, 1)) - 1))
-                }
-            }
-        }
-        .frame(minHeight: 38)
-        .clipShape(Capsule())
-        .accessibilityHidden(true)
-    }
-}
-
 /// Ligne d'état cardio : source, valeur, ancienneté.
 struct HeartRateLine: View {
     @Environment(AppModel.self) private var model
@@ -404,24 +362,5 @@ struct HeartRateLine: View {
             }
         }
         .font(.caption)
-    }
-}
-
-/// Niveau et statut « avancé » d'un programme.
-struct ProgramBadges: View {
-    let program: WorkoutProgram
-
-    var body: some View {
-        if program.level != nil || program.isAdvanced {
-            HStack(spacing: 6) {
-                if let l = program.level {
-                    StatusPill(text: l == 1 ? "Niveau 1 · par défaut" : "Niveau \(l) · progression",
-                               systemImage: "chart.bar.fill", color: Theme.speed)
-                }
-                if program.isAdvanced {
-                    StatusPill(text: "Avancé", systemImage: "exclamationmark.triangle.fill", color: Theme.warning)
-                }
-            }
-        }
     }
 }

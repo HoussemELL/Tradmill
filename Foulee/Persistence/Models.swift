@@ -118,6 +118,12 @@ final class DataStore {
         try? context.save()
     }
 
+    func deleteProgram(id: UUID) {
+        let d = FetchDescriptor<ProgramEntity>(predicate: #Predicate { $0.id == id })
+        for e in (try? context.fetch(d)) ?? [] { context.delete(e) }
+        try? context.save()
+    }
+
     func record(id: UUID) -> SessionRecord? {
         let d = FetchDescriptor<SessionEntity>(predicate: #Predicate { $0.id == id })
         return (try? context.fetch(d))?.first?.record

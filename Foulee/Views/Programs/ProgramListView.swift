@@ -16,29 +16,50 @@ struct ProgramListView: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(programs) { entity in
-                    Button {
-                        editing = entity.program
-                    } label: {
-                        ProgramRow(entity: entity)
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) { delete(entity) } label: { Label("Supprimer", systemImage: "trash") }
-                        Button { duplicate(entity) } label: { Label("Dupliquer", systemImage: "plus.square.on.square") }
-                            .tint(.blue)
-                    }
-                    .contextMenu {
-                        Button { duplicate(entity) } label: { Label("Dupliquer", systemImage: "plus.square.on.square") }
-                        Button { export([entity]) } label: { Label("Exporter (JSON)", systemImage: "square.and.arrow.up") }
-                        Button(role: .destructive) { delete(entity) } label: { Label("Supprimer", systemImage: "trash") }
+                ForEach(ProgramCategory.allCases) { cat in
+                    let items = entities(in: cat)
+                    if !items.isEmpty {
+                        Section {
+                            ForEach(items) { entity in
+                                if let p = entity.program {
+                                    Button { editing = p } label: { ProgramCardView(program: p) }
+                                        .buttonStyle(.plain)
+                                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                                        .listRowSeparator(.hidden)
+                                        .listRowBackground(Color.clear)
+                                        .swipeActions(edge: .trailing) {
+                                            Button(role: .destructive) { delete(entity) } label: { Label("Supprimer", systemImage: "trash") }
+                                            Button { duplicate(entity) } label: { Label("Dupliquer", systemImage: "plus.square.on.square") }
+                                                .tint(.blue)
+                                        }
+                                        .contextMenu {
+                                            Button { duplicate(entity) } label: { Label("Dupliquer", systemImage: "plus.square.on.square") }
+                                            Button { export([entity]) } label: { Label("Exporter (JSON)", systemImage: "square.and.arrow.up") }
+                                            Button(role: .destructive) { delete(entity) } label: { Label("Supprimer", systemImage: "trash") }
+                                        }
+                                }
+                            }
+                            .onMove { move(in: cat, from: $0, to: $1) }
+                        } header: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(cat.title).font(.title3.bold()).foregroundStyle(.primary)
+                                Text(cat.subtitle).font(.footnote).foregroundStyle(.secondary)
+                            }
+                            .textCase(nil)
+                            .padding(.top, 8)
+                            .accessibilityAddTraits(.isHeader)
+                        }
                     }
                 }
-                .onMove(perform: move)
                 if programs.isEmpty {
-                    Text("Aucun programme. Créez-en un avec +.").foregroundStyle(.secondary)
+                    ContentUnavailableView("Aucun programme", systemImage: "list.bullet.rectangle",
+                                           description: Text("Créez un programme avec +, ou restaurez les programmes prédéfinis."))
+                        .listRowBackground(Color.clear)
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .screenBackground()
             .navigationTitle("Programmes")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
@@ -112,10 +133,17 @@ struct ProgramListView: View {
         model.dataStore.upsert(p.duplicated())
     }
 
-    private func move(from: IndexSet, to: Int) {
-        var list = programs
-        list.move(fromOffsets: from, toOffset: to)
-        for (i, e) in list.enumerated() { e.sortIndex = i }
+    private func entities(in cat: ProgramCategory) -> [ProgramEntity] {
+        programs.filter { e in e.program.map { ProgramCategory.of($0) == cat } ?? (cat == .personal) }
+    }
+
+    /// Réorganisation dans une section ; l'ordre global (iPhone, accueil, Watch) suit les sections.
+    private func move(in cat: ProgramCategory, from: IndexSet, to: Int) {
+        var section = entities(in: cat)
+        section.move(fromOffsets: from, toOffset: to)
+        var order: [ProgramEntity] = []
+        for c in ProgramCategory.allCases { order += c == cat ? section : entities(in: c) }
+        for (i, e) in order.enumerated() { e.sortIndex = i }
         try? context.save()
     }
 
@@ -148,30 +176,5 @@ struct ProgramListView: View {
                 alert = error.localizedDescription
             }
         }
-    }
-}
-
-struct ProgramRow: View {
-    let entity: ProgramEntity
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(entity.name).font(.headline).foregroundStyle(.primary)
-                if entity.program?.isLocked == true {
-                    Image(systemName: "lock.fill").font(.caption).foregroundStyle(Theme.warning).accessibilityLabel("verrouillé")
-                }
-                if entity.program?.hasAutoSpeed == true {
-                    StatusPill(text: "FC auto", systemImage: "heart.circle", color: Theme.accent)
-                }
-            }
-            if let p = entity.program { ProgramBadges(program: p) }
-            if let p = entity.program {
-                Text("\(p.schedule.count) phases · \(Format.duration(TimeInterval(p.totalDurationSeconds))) · max \(Format.speed(p.maxSpeedKmh)) km/h")
-                    .font(.caption).foregroundStyle(.secondary)
-                ProgramChart(program: p, compact: true).frame(height: 36).allowsHitTesting(false)
-            }
-        }
-        .padding(.vertical, 4)
     }
 }

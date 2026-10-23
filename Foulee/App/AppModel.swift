@@ -605,6 +605,8 @@ final class AppModel {
         let plan = TemplateLibrary.plan(installed: dataStore.allPrograms(), seededIDs: settings.seededTemplateIDs ?? [],
                                         installedRevision: installedRevision)
         plan.upserts.forEach { dataStore.upsert($0) }
+        plan.removals.forEach { dataStore.deleteProgram(id: $0) }
+        if !plan.removals.isEmpty { log.log(.info, "\(plan.removals.count) ancien(s) programme(s) de la première version retiré(s)") }
         if !plan.updatedNames.isEmpty { log.log(.info, "Programmes mis à jour : \(plan.updatedNames.joined(separator: ", "))") }
         if !plan.addedNames.isEmpty { log.log(.info, "Programmes ajoutés : \(plan.addedNames.joined(separator: ", "))") }
         settings.seededTemplateIDs = plan.seededIDs
