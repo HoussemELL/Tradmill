@@ -142,6 +142,11 @@ distance, temps actif et restant, phase actuelle et suivante.
 - Écarts consigne/mesure affichés en bandeau ; une valeur demandée n'est jamais
   présentée comme une mesure.
 
+**Programmes prédéfinis** : Cardio Baseline (verrouillé, pour comparer la FC à
+effort identique), Zone 2 Endurance, Interval Run 9/11, HIIT Run 11, Incline Walk,
+Post-Meal Walk et **Zone 2 Auto** (vitesse réglée par la FC pour rester en zone 2).
+Détails, règles du pilotage et sécurité : [docs/PROGRAMMES.md](docs/PROGRAMMES.md).
+
 **Programmes** : créer, modifier, dupliquer (balayage ou appui long),
 supprimer, réorganiser (bouton Modifier). Phases avec nom, type (échauffement,
 effort, récupération, allure stable, retour au calme), durée, vitesse,
@@ -151,8 +156,15 @@ totale. Import/export JSON versionné (`"format": "foulee.programs",
 sont **signalées et bloquent le lancement** ; rien n'est corrigé en silence.
 
 **Historique** : détail avec graphiques FC / vitesse / inclinaison (mesure et
-cible), temps par zone, événements (pertes de connexion, écarts, phases…),
-export JSON et CSV, « Enregistrer comme modèle ».
+cible), courbes superposées vitesse/FC, FC moyenne, maximale et récupération par
+intervalle, bilan zone 2, temps par zone, événements (pertes de connexion, écarts,
+phases, ajustements du pilote…), export JSON et CSV, « Enregistrer comme modèle ».
+**Progression** (bouton en haut à gauche) : évolution des séances de protocole
+identique (FC de référence, vitesse en zone 2).
+
+**Apple Watch** : FC, zone colorée et bornes, temps par zone, durée, vitesse,
+inclinaison, étape et temps restant, Pause/Reprise et Arrêt (le tapis est
+commandé par l'iPhone).
 
 ## 7. Bluetooth FTMS et profil URTM047
 
@@ -265,7 +277,7 @@ voir l'onglet *Actions* du dépôt ; aucun avertissement du compilateur Swift :
 La signature réelle (votre équipe, profils, capacité HealthKit) n'est pas
 vérifiable en CI : elle se fait dans Xcode sur votre Mac.
 
-**Testé automatiquement** (90 tests, sous Linux et macOS) :
+**Testé automatiquement** (126 tests, sous Linux et macOS) :
 - décodage FTMS : flags optionnels, bit More Data inversé, valeurs « non
   disponible », paquets tronqués et octets en trop, plages, Feature, statuts,
   Control Point, FC (uint8/uint16, contact, RR) ;
@@ -292,7 +304,10 @@ vérifiable en CI : elle se fait dans Xcode sur votre Mac.
 - compteurs : remise à zéro, débordement, saut aberrant, reconnexion ; pas
   (priorité, pas d'addition, estimation) ;
 - séance complète simulée, modification manuelle, perte de connexion, reprise
-  après crash, export CSV/JSON, modèle depuis séance, plan Santé idempotent.
+  après crash, export CSV/JSON, modèle depuis séance, plan Santé idempotent ;
+- 7 programmes prédéfinis (segments exacts), transitions par paliers, rampes,
+  pilote Zone 2 (règles, perte de FC, contrôle manuel, séance complète simulée),
+  statistiques par intervalle, comparabilité, état envoyé à la Watch.
 
 **Nécessite une validation physique** (non vérifiable sans votre matériel) :
 - la séquence de démarrage et le comportement réel de l'URTM047 (délais,
@@ -322,9 +337,12 @@ vos observations écrites. Exportez le journal de diagnostic après la
    cette réponse ou son délai (4 s max) : la clé de sécurité reste la
    protection de référence.
 5. Pas de restauration d'état CoreBluetooth après que iOS a tué l'app.
-6. Zones calculées sur l'iPhone ; la Watch affiche la FC brute.
-7. Pas de pilotage par la FC, pas de Live Activity/widget, pas de
-   synchronisation iCloud (volontairement hors V1).
+6. Les zones personnalisées réglées dans l'app Exercice de la montre ne sont pas
+   lisibles par les apps (HealthKit) : les recopier dans Foulée si elles diffèrent
+   des zones calculées.
+7. Pilotage par la FC limité aux phases « pilotées » (Zone 2 Auto) et validé en
+   simulation seulement : à vérifier sur le tapis. Pas de Live Activity/widget, pas
+   de synchronisation iCloud.
 8. Énergie du tapis écrite dans Santé comme énergie active alors qu'il s'agit
    souvent d'une estimation brute : désactivé par défaut.
 9. Interface en français uniquement ; textes non externalisés dans un catalogue.
