@@ -80,12 +80,13 @@ public struct HeartRateFilter: Equatable, Sendable {
 
     public mutating func reset() { points.removeAll(); source = nil }
 
-    /// FC filtrée, ou nil si la fenêtre n'est pas assez remplie (≥ 3 mesures sur au moins
-    /// la moitié de la fenêtre, la plus récente datant de moins de 10 s).
+    /// FC filtrée, ou nil si la fenêtre n'est pas assez remplie (≥ 2 mesures couvrant au moins
+    /// un tiers de la fenêtre — l'Apple Watch n'envoie qu'une mesure toutes les ≈ 5 s —, la plus
+    /// récente datant de moins de 10 s).
     public func value(at now: TimeInterval) -> Double? {
         let recent = points.filter { now - $0.t <= window }
-        guard recent.count >= 3, let first = recent.first, let last = recent.last,
-              last.t - first.t >= window / 2, now - last.t <= 10 else { return nil }
+        guard recent.count >= 2, let first = recent.first, let last = recent.last,
+              last.t - first.t >= window / 3, now - last.t <= 10 else { return nil }
         return Double(recent.map(\.bpm).reduce(0, +)) / Double(recent.count)
     }
 }

@@ -9,9 +9,11 @@ struct HistoryListView: View {
     @State private var exportDoc: ExportDocument?
     @State private var pendingDelete: SessionRecord?
     @State private var deleteMessage: String?
+    @State private var path: [UUID] = []
+    @State private var showProgress = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 ForEach(sessions) { s in
                     NavigationLink(value: s.id) {
@@ -44,6 +46,14 @@ struct HistoryListView: View {
             } message: { Text(deleteMessage ?? "") }
             .navigationDestination(for: UUID.self) { id in
                 if let e = sessions.first(where: { $0.id == id }) { HistoryDetailView(entity: e) }
+            }
+            .navigationDestination(isPresented: $showProgress) { ProgressListView() }
+            .onAppear {
+                switch ScenarioRunner.value("-FouleeOpen") {
+                case "history:last": if path.isEmpty, let first = sessions.first { path = [first.id] }
+                case "progress": showProgress = true
+                default: break
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -157,6 +167,7 @@ struct HistoryDetailView: View {
             }
             .padding()
         }
+        .screenBackground()
         .navigationTitle(r.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

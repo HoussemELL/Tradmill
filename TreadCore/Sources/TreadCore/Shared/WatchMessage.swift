@@ -20,8 +20,18 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case workoutMetadata(standard: StandardWorkoutMetadata, foulee: [String: MetadataValue])
     /// iPhone → Watch (≈ 1 Hz) : état du tapis et du programme, zones et temps par zone.
     case liveStatus(WatchLiveStatus)
-    /// Watch → iPhone : commande du tapis demandée depuis la montre.
+    /// Watch → iPhone : commande du tapis demandée depuis la montre (ancienne forme, sans séance).
     case remoteCommand(WatchRemoteCommand)
+    /// iPhone → Watch : programmes, état du tapis, séance en cours.
+    case context(WatchPhoneContext)
+    /// Watch → iPhone : demande de contexte (ouverture de l'app Watch).
+    case requestContext
+    /// Watch → iPhone : démarrer un programme (ou une séance libre) sur le tapis.
+    case startRequest(WatchStartRequest)
+    /// iPhone → Watch : résultat de la demande de démarrage.
+    case startResult(WatchStartResult)
+    /// Watch → iPhone : pause, reprise, arrêt liés à une séance et horodatés.
+    case control(WatchControl)
 
     public func encoded() throws -> Data {
         let e = JSONEncoder()
@@ -85,13 +95,19 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
     public var autopilotStatus: String?
     public var autopilotManual: Bool
     public var sentAt: Date
+    /// Séance de l'iPhone (les commandes de la montre s'y rapportent).
+    public var sessionID: UUID?
+    /// Tapis : connexion perdue (état réel inconnu).
+    public var treadmillLinkLost: Bool?
+    /// Dernière alerte (perte de FC, écart…) à signaler sur la montre.
+    public var alert: String?
 
     public init(state: State, stateLabel: String, programName: String?, activeSeconds: Double, speedKmh: Double?,
                 inclinePercent: Double?, targetSpeedKmh: Double, targetInclinePercent: Double, phaseName: String?,
                 phaseIndex: Int?, phaseCount: Int, phaseRemaining: Double?, programRemaining: Double?,
                 nextPhaseName: String?, zoneBounds: [Int], zoneSeconds: [Double], targetZone: Int?,
                 phoneHeartRate: Int?, phoneHeartRateSource: String?, phoneZone: Int?, autopilotStatus: String?,
-                autopilotManual: Bool, sentAt: Date) {
+                autopilotManual: Bool, sentAt: Date, sessionID: UUID? = nil, treadmillLinkLost: Bool? = nil, alert: String? = nil) {
         self.state = state
         self.stateLabel = stateLabel
         self.programName = programName
@@ -115,6 +131,9 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
         self.autopilotStatus = autopilotStatus
         self.autopilotManual = autopilotManual
         self.sentAt = sentAt
+        self.sessionID = sessionID
+        self.treadmillLinkLost = treadmillLinkLost
+        self.alert = alert
     }
 
     /// Zone (1…5) d'une FC avec les bornes reçues (même règle que `HeartZoneSettings.zone(for:)` :
@@ -170,6 +189,8 @@ public extension WatchLiveStatus {
             zoneBounds: s.settings.zones.bounds, zoneSeconds: s.zoneTime.seconds,
             targetZone: a?.settings.targetZone ?? s.currentPhase?.phase.targetZone,
             phoneHeartRate: hr.liveBPM, phoneHeartRateSource: hr.liveBPM != nil ? s.heartRate.activeSource?.shortLabel : nil,
-            phoneZone: s.currentZone, autopilotStatus: a?.status, autopilotManual: a?.mode == .manual, sentAt: date)
+            phoneZone: s.currentZone, autopilotStatus: a?.status, autopilotManual: a?.mode == .manual, sentAt: date,
+            sessionID: s.record.id, treadmillLinkLost: s.controller.state == .linkLost || s.status == .paused(.connectionLost),
+            alert: s.lastAlert)
     }
 }

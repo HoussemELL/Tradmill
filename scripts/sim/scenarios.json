@@ -1,15 +1,907 @@
 [
-  {"name": "00-etat-initial", "description": "Lancement des deux apps dans leur état actuel (audit).",
-   "steps": [
-     {"do": "appearance", "on": "phone", "value": "dark"},
-     {"do": "launch", "on": "phone"},
-     {"do": "wait", "seconds": 8},
-     {"do": "shot", "on": "phone", "label": "iphone-accueil"},
-     {"do": "launch", "on": "watch"},
-     {"do": "wait", "seconds": 8},
-     {"do": "shot", "on": "watch", "label": "watch-accueil"},
-     {"do": "appearance", "on": "phone", "value": "light"},
-     {"do": "wait", "seconds": 3},
-     {"do": "shot", "on": "phone", "label": "iphone-accueil-clair"}
-   ]}
+ {
+  "name": "01-iphone-ecrans",
+  "description": "iPhone : navigation dans tous les onglets et écrans principaux (sombre, clair, grand texte).",
+  "steps": [
+   {
+    "do": "appearance",
+    "on": "phone",
+    "value": "dark"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "0"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "accueil-sombre"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "1"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 5
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "programmes"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "1",
+     "-FouleeOpen",
+     "program:Zone 2 Auto"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 5
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "editeur-zone2auto"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "1",
+     "-FouleeOpen",
+     "program:Cardio Baseline"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 5
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "editeur-baseline-verrouille"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "2"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 5
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "historique"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "3"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 5
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "reglages"
+   },
+   {
+    "do": "appearance",
+    "on": "phone",
+    "value": "light"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "0"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 6
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "accueil-clair"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "1"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 5
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "programmes-clair"
+   },
+   {
+    "do": "contentsize",
+    "on": "phone",
+    "value": "accessibility-extra-large"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeTab",
+     "0"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 6
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "accueil-grand-texte"
+   },
+   {
+    "do": "contentsize",
+    "on": "phone",
+    "value": "large"
+   },
+   {
+    "do": "appearance",
+    "on": "phone",
+    "value": "dark"
+   },
+   {
+    "do": "collect",
+    "on": "phone",
+    "expect": [
+     {
+      "file": "phone.json",
+      "path": "scenario",
+      "op": "eq",
+      "value": "screens",
+      "label": "rapport écrit, app sans crash"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "02-zone2auto-fc-simulee",
+  "description": "iPhone + tapis simulé : programme « Test Zone 2 Auto » avec FC simulée dépendant de la vitesse ; perte de FC 45 s, reprise manuelle puis réactivation du pilote.",
+  "steps": [
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "zone2auto",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeSimHR",
+     "-FouleeStartProgram",
+     "Test Zone 2 Auto",
+     "-FouleeScript",
+     "hrgap@200-245,manual@265,autopilot@285"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 30
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "echauffement-progressif"
+   },
+   {
+    "do": "wait",
+    "seconds": 140
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "pilote-fc-actif"
+   },
+   {
+    "do": "wait",
+    "seconds": 45
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "perte-fc"
+   },
+   {
+    "do": "wait",
+    "seconds": 50
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "controle-manuel"
+   },
+   {
+    "do": "wait",
+    "seconds": 110
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "fin-seance-bilan"
+   },
+   {
+    "do": "collect",
+    "on": "phone",
+    "expect": [
+     {
+      "file": "phone.json",
+      "path": "statuses",
+      "op": "contains",
+      "value": "finished",
+      "label": "séance terminée"
+     },
+     {
+      "file": "phone.json",
+      "path": "phases",
+      "op": "contains",
+      "value": "Zone 2 pilotée",
+      "label": "phase pilotée atteinte"
+     },
+     {
+      "file": "phone.json",
+      "path": "phases",
+      "op": "contains",
+      "value": "Retour au calme",
+      "label": "retour au calme atteint"
+     },
+     {
+      "file": "phone.json",
+      "path": "adjustments",
+      "op": "lenge",
+      "value": 2,
+      "label": "au moins 2 ajustements automatiques"
+     },
+     {
+      "file": "phone.json",
+      "path": "autopilotModes",
+      "op": "contains",
+      "value": "heartRateLost",
+      "label": "perte de FC détectée"
+     },
+     {
+      "file": "phone.json",
+      "path": "alerts",
+      "op": "contains",
+      "value": "FC indisponible",
+      "label": "alerte perte de FC"
+     },
+     {
+      "file": "phone.json",
+      "path": "autopilotModes",
+      "op": "contains",
+      "value": "manual",
+      "label": "contrôle manuel prioritaire"
+     },
+     {
+      "file": "phone.json",
+      "path": "maxBeltSpeed",
+      "op": "le",
+      "value": 7.05,
+      "label": "jamais au-delà de 7 km/h (limite auto)"
+     },
+     {
+      "file": "phone.json",
+      "path": "finished.autoAdjustments",
+      "op": "ge",
+      "value": 2,
+      "label": "ajustements enregistrés dans la séance"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "03-pause-deconnexion",
+  "description": "iPhone + tapis simulé : transitions par paliers, pause/reprise, coupure Bluetooth pendant la séance puis reconnexion (aucun redémarrage automatique), reprise explicite, arrêt.",
+  "steps": [
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "pause",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system",
+     "-FouleeSimHR",
+     "-FouleeStartProgram",
+     "Test enchaînement",
+     "-FouleeScript",
+     "pause@45,resume@60,linkloss@95,reconnect@110,resume@135,stop@175"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 52
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "pause"
+   },
+   {
+    "do": "wait",
+    "seconds": 53
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "connexion-perdue"
+   },
+   {
+    "do": "wait",
+    "seconds": 15
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "reconnecte-toujours-en-pause"
+   },
+   {
+    "do": "wait",
+    "seconds": 75
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "fin"
+   },
+   {
+    "do": "collect",
+    "on": "phone",
+    "expect": [
+     {
+      "file": "phone.json",
+      "path": "requestedSpeeds",
+      "op": "contains",
+      "value": "6.0",
+      "label": "transition 4 → 7 km/h par paliers (6 km/h)"
+     },
+     {
+      "file": "phone.json",
+      "path": "statuses",
+      "op": "contains",
+      "value": "paused(user)",
+      "label": "pause utilisateur"
+     },
+     {
+      "file": "phone.json",
+      "path": "statuses",
+      "op": "contains",
+      "value": "paused(connectionLost)",
+      "label": "pause sur perte de connexion"
+     },
+     {
+      "file": "phone.json",
+      "path": "statusAfterReconnect",
+      "op": "eq",
+      "value": "paused(connectionLost)",
+      "label": "reconnexion : reste en pause"
+     },
+     {
+      "file": "phone.json",
+      "path": "requestedSpeedIncreasedWhileLinkLost",
+      "op": "eq",
+      "value": false,
+      "label": "aucune accélération pendant la coupure"
+     },
+     {
+      "file": "phone.json",
+      "path": "startCommandsAfterLinkLoss",
+      "op": "eq",
+      "value": 0,
+      "label": "aucun Start automatique après reconnexion"
+     },
+     {
+      "file": "phone.json",
+      "path": "statuses",
+      "op": "contains",
+      "value": "finished",
+      "label": "arrêt final"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "04-watch-ecrans",
+  "description": "Apple Watch : accueil Mes programmes (catalogue reçu de l'iPhone), détail d'un programme, pages de séance (démo).",
+  "steps": [
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeSimulated",
+     "-FouleeDemo"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 12
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "accueil-mes-programmes"
+   },
+   {
+    "do": "collect",
+    "on": "watch",
+    "expect": [
+     {
+      "file": "watch.json",
+      "path": "programsReceived",
+      "op": "ge",
+      "value": 7,
+      "label": "programmes reçus sur la montre"
+     }
+    ]
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeSimulated",
+     "-FouleeDemo",
+     "-FouleeOpen",
+     "Zone 2 Auto"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 10
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "detail-zone2auto"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeSimulated",
+     "-FouleeDemo",
+     "-FouleeOpen",
+     "Interval Run 9/11"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 10
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "detail-interval"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "1"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 10
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-mesures"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "2"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-programme"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "3"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-zones"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "0"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-commandes"
+   },
+   {
+    "do": "terminate",
+    "on": "watch"
+   }
+  ]
+ },
+ {
+  "name": "05-watch-lance-zone2auto",
+  "description": "Scénario complet : la montre lance « Test Zone 2 Auto », l'iPhone démarre le tapis simulé, la montre envoie sa FC (simulée) par WatchConnectivity et le pilote l'utilise ; pause, reprise et arrêt depuis la montre.",
+  "steps": [
+   {
+    "do": "terminate",
+    "on": "phone"
+   },
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "watchsync",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 10
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "e2e",
+     "-FouleeSimulated",
+     "-FouleeAutoStart",
+     "Test Zone 2 Auto",
+     "-FouleeScript",
+     "pause@150,resume@165,stop@300"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 6
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "demarrage"
+   },
+   {
+    "do": "wait",
+    "seconds": 40
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-en-cours"
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "seance-lancee-depuis-montre"
+   },
+   {
+    "do": "wait",
+    "seconds": 115
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "pause-depuis-montre"
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "pause-recue"
+   },
+   {
+    "do": "wait",
+    "seconds": 60
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "pilote-fc"
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "pilote-fc-watch"
+   },
+   {
+    "do": "wait",
+    "seconds": 110
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "fin"
+   },
+   {
+    "do": "shot",
+    "on": "phone",
+    "label": "fin"
+   },
+   {
+    "do": "collect",
+    "on": "watch",
+    "expect": [
+     {
+      "file": "watch.json",
+      "path": "startRequested",
+      "op": "eq",
+      "value": true,
+      "label": "demande de démarrage envoyée"
+     },
+     {
+      "file": "watch.json",
+      "path": "startAccepted",
+      "op": "eq",
+      "value": true,
+      "label": "démarrage accepté par l'iPhone"
+     },
+     {
+      "file": "watch.json",
+      "path": "liveCount",
+      "op": "gt",
+      "value": 30,
+      "label": "état en direct reçu de l'iPhone"
+     },
+     {
+      "file": "watch.json",
+      "path": "states",
+      "op": "contains",
+      "value": "paused",
+      "label": "pause visible sur la montre"
+     },
+     {
+      "file": "watch.json",
+      "path": "states",
+      "op": "contains",
+      "value": "finished",
+      "label": "fin visible sur la montre"
+     },
+     {
+      "file": "watch.json",
+      "path": "heartRatesSent",
+      "op": "gt",
+      "value": 20,
+      "label": "FC envoyée par la montre"
+     },
+     {
+      "file": "watch.json",
+      "path": "phases",
+      "op": "contains",
+      "value": "Zone 2 pilotée",
+      "label": "phase affichée sur la montre"
+     },
+     {
+      "file": "watch.json",
+      "path": "workoutEnded",
+      "op": "eq",
+      "value": true,
+      "label": "exercice de la montre terminé"
+     }
+    ]
+   },
+   {
+    "do": "collect",
+    "on": "phone",
+    "expect": [
+     {
+      "file": "phone.json",
+      "path": "watchStartRequests",
+      "op": "ge",
+      "value": 1,
+      "label": "demande reçue par l'iPhone"
+     },
+     {
+      "file": "phone.json",
+      "path": "watchHeartRates",
+      "op": "gt",
+      "value": 20,
+      "label": "FC Apple Watch reçue"
+     },
+     {
+      "file": "phone.json",
+      "path": "hrSources",
+      "op": "contains",
+      "value": "Apple Watch",
+      "label": "source FC = Apple Watch"
+     },
+     {
+      "file": "phone.json",
+      "path": "watchControls",
+      "op": "contains",
+      "value": "pause",
+      "label": "pause depuis la montre"
+     },
+     {
+      "file": "phone.json",
+      "path": "watchControls",
+      "op": "contains",
+      "value": "stop",
+      "label": "arrêt depuis la montre"
+     },
+     {
+      "file": "phone.json",
+      "path": "statuses",
+      "op": "contains",
+      "value": "paused(user)",
+      "label": "séance mise en pause"
+     },
+     {
+      "file": "phone.json",
+      "path": "statuses",
+      "op": "contains",
+      "value": "finished",
+      "label": "séance terminée"
+     },
+     {
+      "file": "phone.json",
+      "path": "adjustments",
+      "op": "lenge",
+      "value": 1,
+      "label": "pilote FC : ajustement avec la FC de la montre"
+     }
+    ]
+   }
+  ]
+ }
 ]

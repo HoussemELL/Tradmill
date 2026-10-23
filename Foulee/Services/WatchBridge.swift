@@ -50,6 +50,12 @@ final class WatchBridge {
     @ObservationIgnored var onActiveEnergy: ((Double) -> Void)?
     /// Commande du tapis demandée depuis la montre.
     @ObservationIgnored var onRemoteCommand: ((WatchRemoteCommand) -> Void)?
+    @ObservationIgnored var onControl: ((WatchControl) -> Void)?
+    @ObservationIgnored var onStartRequest: ((WatchStartRequest) -> Void)?
+    @ObservationIgnored var onContextRequested: (() -> Void)?
+    @ObservationIgnored private var lastContext: WatchPhoneContext?
+    /// Dernier message reçu de la montre (pour l'affichage « Watch reliée »).
+    private(set) var lastWatchMessageAt: Date?
 
     init(healthStore: HKHealthStore, log: DiagnosticLog) {
         self.healthStore = healthStore
@@ -135,6 +141,39 @@ final class WatchBridge {
         }
     }
 
+    /// App Watch ouverte et joignable par WatchConnectivity.
+    var isReachable: Bool {
+        _ = connectivityRevision
+        return WCSession.isSupported() && WCSession.default.activationState == .activated && WCSession.default.isReachable
+    }
+
+    /// Publie programmes, état du tapis et séance (dernier état gagnant, livré même si la montre
+    /// est hors de portée), et l'envoie tout de suite si l'app Watch est ouverte.
+    func publish(_ ctx: WatchPhoneContext, force: Bool = false) {
+        guard force || !ctx.sameContent(as: lastContext) else { return }
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated,
+              let data = try? ctx.encoded() else { return }
+        do {
+            try WCSession.default.updateApplicationContext([WatchPhoneContext.key: data])
+            lastContext = ctx
+        } catch {
+            log.log(.warning, "Contexte Watch non publié : \(error.localizedDescription)")
+        }
+        if WCSession.default.isReachable { send(.context(ctx), quiet: true) }
+    }
+
+    /// Message important (résultat de démarrage) : direct si possible, sinon file WatchConnectivity.
+    func sendReliably(_ message: WatchMessage) {
+        guard let data = try? message.encoded(), WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage([WatchMessage.wcKey: data], replyHandler: nil) { _ in
+                _ = WCSession.default.transferUserInfo([WatchMessage.wcKey: data])
+            }
+        } else {
+            _ = WCSession.default.transferUserInfo([WatchMessage.wcKey: data])
+        }
+    }
+
     /// La montre peut recevoir l'état en direct (miroir établi ou app Watch joignable).
     var canStreamToWatch: Bool {
         mirrored != nil || (WCSession.isSupported() && WCSession.default.activationState == .activated && WCSession.default.isReachable)
@@ -204,7 +243,8 @@ final class WatchBridge {
             return
         }
         lastMessageAt = Date()
-        if !mirror, linkState != .mirrored { linkState = .connectivity }
+        lastWatchMessageAt = lastMessageAt
+        if !mirror, linkState != .mirrored, case .heartRate = msg { linkState = .connectivity }
         switch msg {
         case let .heartRate(bpm, sampleDate):
             usedDuringSession = pendingLink != nil || usedDuringSession
@@ -220,7 +260,16 @@ final class WatchBridge {
         case let .remoteCommand(c):
             log.log(.watch, "Commande depuis la Watch : \(c.rawValue)")
             onRemoteCommand?(c)
-        case .linkSession, .command, .workoutMetadata, .liveStatus:
+        case let .control(c):
+            log.log(.watch, "Commande depuis la Watch : \(c.command.rawValue)")
+            onControl?(c)
+        case let .startRequest(r):
+            log.log(.watch, "Démarrage demandé depuis la Watch (\(r.programID.map { "programme \($0.uuidString.prefix(8))" } ?? "séance libre"))")
+            onStartRequest?(r)
+        case .requestContext:
+            if let c = lastContext { send(.context(c), quiet: true) }
+            onContextRequested?()
+        case .linkSession, .command, .workoutMetadata, .liveStatus, .context, .startResult:
             break
         }
     }
@@ -259,8 +308,23 @@ private final class ConnectivityProxy: NSObject, WCSessionDelegate {
     func sessionDidBecomeInactive(_ session: WCSession) {}
     func sessionDidDeactivate(_ session: WCSession) { session.activate() }
 
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        DispatchQueue.main.async { self.owner?.connectivityChanged() }
+    }
+
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let data = message[WatchMessage.wcKey] as? Data else { return }
+        DispatchQueue.main.async { self.owner?.receive(data, via: false) }
+    }
+
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        replyHandler([:])
+        guard let data = message[WatchMessage.wcKey] as? Data else { return }
+        DispatchQueue.main.async { self.owner?.receive(data, via: false) }
+    }
+
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let data = userInfo[WatchMessage.wcKey] as? Data else { return }
         DispatchQueue.main.async { self.owner?.receive(data, via: false) }
     }
 }

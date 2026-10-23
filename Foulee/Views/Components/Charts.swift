@@ -135,3 +135,32 @@ struct SessionSeriesChart: View {
         .chartLegend(.hidden)
     }
 }
+
+/// Frise du programme : phases colorées par type, position actuelle.
+struct ProgramTimeline: View {
+    let program: WorkoutProgram
+    /// Secondes de programme écoulées.
+    let elapsed: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            let total = Double(max(program.totalDurationSeconds, 1))
+            ZStack(alignment: .leading) {
+                HStack(spacing: 1) {
+                    ForEach(program.schedule) { sp in
+                        Rectangle()
+                            .fill(Theme.phaseColor(sp.phase.kind).opacity(Double(sp.end) <= elapsed ? 0.35 : 1))
+                            .frame(width: max(1, geo.size.width * Double(sp.phase.durationSeconds) / total - 1))
+                    }
+                }
+                .clipShape(Capsule())
+                Capsule().fill(Color.primary)
+                    .frame(width: 3, height: geo.size.height + 6)
+                    .offset(x: min(max(0, geo.size.width * elapsed / total - 1.5), geo.size.width - 3))
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Progression du programme")
+        .accessibilityValue("\(Int(elapsed / Double(max(program.totalDurationSeconds, 1)) * 100)) %")
+    }
+}

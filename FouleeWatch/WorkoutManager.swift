@@ -4,16 +4,28 @@ import WatchConnectivity
 import Observation
 import TreadCore
 
-/// Session d'exercice watchOS réelle (HKWorkoutSession + HKLiveWorkoutBuilder),
-/// envoyée en miroir à l'iPhone (watchOS 10+). La Watch est propriétaire de
-/// l'enregistrement Santé quand elle est utilisée.
+/// Cœur de l'app Watch :
+/// - catalogue des programmes et état du tapis publiés par l'iPhone (WatchConnectivity) ;
+/// - lancement d'un programme depuis la montre : l'iPhone démarre le tapis (FTMS), la montre
+///   démarre son exercice (HKWorkoutSession + HKLiveWorkoutBuilder) et fournit la FC ;
+/// - état de séance en direct reçu de l'iPhone, commandes Pause/Reprise/Arrêt liées à la séance.
+///
+/// L'iPhone reste la seule autorité sur le tapis : la montre ne fait que demander.
 @Observable
 final class WorkoutManager {
     static let shared = WorkoutManager()
 
     enum Phase: Equatable { case idle, starting, running, paused, ending, ended(saved: Bool), failed(String) }
 
+    /// Étape d'un lancement demandé à l'iPhone.
+    enum LaunchState: Equatable {
+        case none
+        case requesting(String)
+        case refused(String)
+    }
+
     private(set) var phase: Phase = .idle
+    private(set) var launch: LaunchState = .none
     private(set) var heartRate: Double?
     private(set) var heartRateDate: Date?
     private(set) var steps: Double?
@@ -21,7 +33,10 @@ final class WorkoutManager {
     private(set) var startDate: Date?
     private(set) var mirroring = false
     private(set) var linkedTitle: String?
-    /// Dernier état reçu de l'iPhone (tapis, programme, zones).
+    /// Programmes, tapis et séance publiés par l'iPhone (mémorisés pour l'affichage hors connexion).
+    private(set) var context: WatchPhoneContext?
+    private(set) var phoneReachable = false
+    /// Dernier état de séance reçu de l'iPhone.
     private(set) var live: WatchLiveStatus?
     private(set) var liveReceivedAt: Date?
     /// Bornes des zones (reçues de l'iPhone, mémorisées pour une séance sans iPhone).
@@ -30,6 +45,12 @@ final class WorkoutManager {
     private(set) var localZoneSeconds: [Double] = Array(repeating: 0, count: 6)
     /// Arrêt demandé à l'iPhone (le tapis s'arrête, puis l'iPhone termine l'exercice).
     private(set) var stopRequestedAt: Date?
+    /// Message important à afficher (iPhone injoignable pendant un arrêt…).
+    var warning: String?
+    /// Séance de l'iPhone suivie par cet exercice.
+    private(set) var linkedSessionID: UUID?
+    /// Exercice simulé (tests dans le simulateur : pas de HealthKit, FC calculée).
+    let simulated: Bool
 
     @ObservationIgnored let healthStore = HKHealthStore()
     @ObservationIgnored private var session: HKWorkoutSession?
@@ -37,14 +58,24 @@ final class WorkoutManager {
     @ObservationIgnored private let proxy = WorkoutProxy()
     @ObservationIgnored private let wcProxy = WatchConnectivityProxy()
     @ObservationIgnored private var discardOnEnd = false
-    @ObservationIgnored private var linkedSessionID: UUID?
     /// Métadonnées Foulée reçues avant que le builder existe : appliquées au démarrage.
     @ObservationIgnored private var pendingMetadata: [String: Any] = [:]
     @ObservationIgnored private var lastZoneSampleAt: Date?
+    @ObservationIgnored private var pendingRequest: (request: WatchStartRequest, summary: WatchProgramSummary?)?
+    @ObservationIgnored private var simTimer: Timer?
+    @ObservationIgnored private var simHeart = SimulatedHeartModel()
+    /// Coupure volontaire de la FC simulée (test de perte de FC), en secondes depuis le départ.
+    @ObservationIgnored var simulatedHeartGap: ClosedRange<Double>?
+    @ObservationIgnored var onEvent: ((String) -> Void)?
     @ObservationIgnored private static let boundsKey = "foulee.zoneBounds"
+    @ObservationIgnored private static let contextKey = "foulee.context"
 
     private init() {
+        simulated = ProcessInfo.processInfo.arguments.contains("-FouleeSimulated")
         zoneBounds = UserDefaults.standard.array(forKey: Self.boundsKey) as? [Int] ?? HeartZoneSettings().bounds
+        if let data = UserDefaults.standard.data(forKey: Self.contextKey), let c = try? WatchPhoneContext.decode(data) {
+            context = c
+        }
         proxy.owner = self
         wcProxy.owner = self
         if WCSession.isSupported() {
@@ -60,6 +91,120 @@ final class WorkoutManager {
         }
     }
 
+    var programs: [WatchProgramSummary] { context?.programs ?? [] }
+
+    // MARK: - Contexte de l'iPhone
+
+    fileprivate func connectivityActivated() {
+        phoneReachable = WCSession.default.isReachable
+        if let data = WCSession.default.receivedApplicationContext[WatchPhoneContext.key] as? Data {
+            apply(contextData: data)
+        }
+        requestContext()
+    }
+
+    fileprivate func reachabilityChanged() {
+        let was = phoneReachable
+        phoneReachable = WCSession.default.isReachable
+        if phoneReachable && !was { requestContext() }
+    }
+
+    func requestContext() {
+        send(.requestContext)
+    }
+
+    fileprivate func apply(contextData data: Data) {
+        guard let c = try? WatchPhoneContext.decode(data) else { return }
+        apply(context: c)
+    }
+
+    func apply(context c: WatchPhoneContext) {
+        if let old = context, old.sentAt > c.sentAt { return }
+        context = c
+        if c.zoneBounds.count == 6, c.zoneBounds != zoneBounds {
+            zoneBounds = c.zoneBounds
+            UserDefaults.standard.set(c.zoneBounds, forKey: Self.boundsKey)
+        }
+        if let data = try? c.encoded() { UserDefaults.standard.set(data, forKey: Self.contextKey) }
+        onEvent?("context:\(c.programs.count)")
+    }
+
+    /// L'iPhone a envoyé son état de séance il y a moins de 5 s.
+    func isPhoneLinked(now: Date = Date()) -> Bool {
+        guard let at = liveReceivedAt, live != nil else { return false }
+        return now.timeIntervalSince(at) < 5
+    }
+
+    /// Séance en cours sur l'iPhone que la montre ne suit pas encore.
+    var phoneSessionToFollow: (id: UUID, name: String)? {
+        guard !isActive, let c = context, let id = c.activeSessionID else { return nil }
+        return (id, c.activeProgramName ?? "Séance")
+    }
+
+    // MARK: - Lancement depuis la montre
+
+    /// Demande à l'iPhone de démarrer le programme (nil = séance libre) sur le tapis. L'exercice
+    /// de la montre ne démarre qu'une fois le tapis lancé.
+    func startProgram(_ summary: WatchProgramSummary?) {
+        guard !isActive else { return }
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable else {
+            launch = .refused("iPhone injoignable. Ouvrez Foulée sur l'iPhone, à proximité.")
+            return
+        }
+        let r = WatchStartRequest(programID: summary?.id, issuedAt: Date())
+        pendingRequest = (r, summary)
+        launch = .requesting(summary?.name ?? "Séance libre")
+        onEvent?("startRequest:\(summary?.name ?? "libre")")
+        guard let data = try? WatchMessage.startRequest(r).encoded() else { return }
+        WCSession.default.sendMessage([WatchMessage.wcKey: data], replyHandler: { _ in }, errorHandler: { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self, self.pendingRequest?.request.requestID == r.requestID else { return }
+                self.pendingRequest = nil
+                self.launch = .refused("iPhone injoignable : \(error.localizedDescription)")
+            }
+        })
+        DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
+            guard let self, self.pendingRequest?.request.requestID == r.requestID else { return }
+            self.pendingRequest = nil
+            self.launch = .refused("Pas de réponse de l'iPhone. Rien n'a été démarré.")
+        }
+    }
+
+    func dismissLaunchMessage() { launch = .none }
+
+    /// Tests (simulateur) : état de séance de démonstration, sans iPhone.
+    func injectDemo(live s: WatchLiveStatus) {
+        live = s
+        liveReceivedAt = Date()
+        zoneBounds = s.zoneBounds
+    }
+
+    private func handle(startResult res: WatchStartResult) {
+        guard let p = pendingRequest, p.request.requestID == res.requestID else { return }
+        pendingRequest = nil
+        onEvent?("startResult:\(res.accepted)")
+        guard res.accepted else {
+            launch = .refused(res.message)
+            return
+        }
+        launch = .none
+        linkedSessionID = res.sessionID
+        linkedTitle = p.summary?.name ?? "Séance libre"
+        Task { @MainActor in
+            await self.start(activity: (p.summary?.suggestsRunning ?? false) ? .running : .walking)
+        }
+    }
+
+    /// Suit une séance lancée sur l'iPhone : démarre l'exercice de la montre (FC).
+    func followPhoneSession() {
+        guard let s = phoneSessionToFollow else { return }
+        linkedSessionID = s.id
+        linkedTitle = s.name
+        Task { @MainActor in await self.start(activity: .walking) }
+    }
+
+    // MARK: - Exercice (HealthKit)
+
     func requestAuthorization() async {
         // Sans ces clés, HealthKit lève une exception Objective-C (plantage).
         for key in ["NSHealthShareUsageDescription", "NSHealthUpdateUsageDescription"] {
@@ -72,11 +217,22 @@ final class WorkoutManager {
         try? await healthStore.requestAuthorization(toShare: share, read: read)
     }
 
-    /// Démarre l'exercice (depuis la Watch ou à la demande de l'iPhone).
+    /// Démarre l'exercice (après un lancement accepté, depuis l'iPhone, ou exercice libre).
     @MainActor
     func start(activity: HKWorkoutActivityType) async {
         guard !isActive else { return }
         phase = .starting
+        heartRate = nil
+        steps = nil
+        activeEnergy = nil
+        localZoneSeconds = Array(repeating: 0, count: 6)
+        lastZoneSampleAt = nil
+        stopRequestedAt = nil
+        warning = nil
+        if simulated {
+            startSimulatedWorkout()
+            return
+        }
         await requestAuthorization()
         let config = HKWorkoutConfiguration()
         config.activityType = activity
@@ -92,12 +248,6 @@ final class WorkoutManager {
             session = s
             builder = b
             discardOnEnd = false
-            heartRate = nil
-            steps = nil
-            activeEnergy = nil
-            localZoneSeconds = Array(repeating: 0, count: 6)
-            lastZoneSampleAt = nil
-            stopRequestedAt = nil
             let date = Date()
             startDate = date
             s.startActivity(with: date)
@@ -120,41 +270,85 @@ final class WorkoutManager {
         }
     }
 
-    func pause() { session?.pause() }
-    func resume() { session?.resume() }
+    func pause() {
+        if simulated { if phase == .running { phase = .paused; send(.workoutState(.paused, startDate: startDate)) }; return }
+        session?.pause()
+    }
 
-    // MARK: - Tapis (via l'iPhone)
+    func resume() {
+        if simulated { if phase == .paused { phase = .running; send(.workoutState(.running, startDate: startDate)) }; return }
+        session?.resume()
+    }
 
-    /// L'iPhone a envoyé son état il y a moins de 5 s.
-    func isPhoneLinked(now: Date = Date()) -> Bool {
-        guard let at = liveReceivedAt, live != nil else { return false }
-        return now.timeIntervalSince(at) < 5
+    func end(discard: Bool = false) {
+        discardOnEnd = discard
+        if simulated {
+            simTimer?.invalidate()
+            simTimer = nil
+            phase = .ended(saved: false)
+            send(.workoutState(.ended, startDate: startDate))
+            onEvent?("ended")
+            return
+        }
+        phase = .ending
+        session?.end()
+    }
+
+    func reset() {
+        phase = .idle
+        session = nil
+        builder = nil
+        startDate = nil
+        linkedTitle = nil
+        linkedSessionID = nil
+        live = nil
+        liveReceivedAt = nil
+        stopRequestedAt = nil
+        warning = nil
+    }
+
+    // MARK: - Commandes de séance (le tapis est piloté par l'iPhone)
+
+    private var sessionIDForControl: UUID? { live?.sessionID ?? linkedSessionID ?? context?.activeSessionID }
+
+    private func sendControl(_ c: WatchRemoteCommand) {
+        send(.control(WatchControl(command: c, sessionID: sessionIDForControl, issuedAt: Date())))
+        onEvent?("control:\(c.rawValue)")
     }
 
     /// Pause : met en pause le tapis via l'iPhone (qui met ensuite l'exercice en pause),
     /// ou seulement l'exercice si l'iPhone n'est pas relié.
     func requestPause() {
-        if isPhoneLinked() { send(.remoteCommand(.pause)) } else { pause() }
+        if isPhoneLinked() { sendControl(.pause) } else { pause() }
     }
 
+    /// Reprise : toujours une action explicite ; jamais rejouée en retard par l'iPhone.
     func requestResume() {
-        if isPhoneLinked() { send(.remoteCommand(.resume)) }
+        if isPhoneLinked() { sendControl(.resume) }
         if phase == .paused { resume() }
     }
 
-    /// Arrêt : arrête le tapis via l'iPhone, qui termine ensuite l'exercice avec les
-    /// métadonnées Foulée. Sans réponse en 8 s (ou sans iPhone), l'exercice est terminé ici.
+    /// Arrêt : arrête le tapis via l'iPhone, qui termine ensuite l'exercice avec les métadonnées
+    /// Foulée. Sans réponse en 8 s, l'exercice est terminé ici. Sans iPhone : avertissement, car
+    /// le tapis ne peut être arrêté que par l'iPhone, son bouton ou la clé de sécurité.
     func requestStop() {
-        guard isPhoneLinked() else { end(); return }
+        guard isPhoneLinked() else {
+            if live != nil || linkedSessionID != nil {
+                warning = "iPhone injoignable : arrêtez le tapis avec son bouton ou la clé de sécurité."
+                sendControl(.stop)
+            }
+            end()
+            return
+        }
         stopRequestedAt = Date()
-        send(.remoteCommand(.stop))
+        sendControl(.stop)
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
             guard let self, self.stopRequestedAt != nil, self.isActive, self.phase != .ending else { return }
             self.end()
         }
     }
 
-    func requestAutopilot() { send(.remoteCommand(.resumeAutopilot)) }
+    func requestAutopilot() { sendControl(.resumeAutopilot) }
 
     /// Zone de la FC de la montre, avec les bornes reçues.
     var currentZone: Int? {
@@ -177,22 +371,39 @@ final class WorkoutManager {
         }
     }
 
-    func end(discard: Bool = false) {
-        discardOnEnd = discard
-        phase = .ending
-        session?.end()
+    // MARK: - Exercice simulé (simulateur)
+
+    /// Sans HealthKit : FC calculée à partir de la vitesse mesurée par l'iPhone, envoyée comme
+    /// une vraie mesure de la montre (même chemin WatchConnectivity).
+    private func startSimulatedWorkout() {
+        let date = Date()
+        startDate = date
+        phase = .running
+        simHeart = SimulatedHeartModel()
+        send(.workoutState(.running, startDate: date))
+        onEvent?("workoutStarted")
+        simTimer?.invalidate()
+        simTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            self?.simulatedTick()
+        }
     }
 
-    func reset() {
-        phase = .idle
-        session = nil
-        builder = nil
-        startDate = nil
-        linkedTitle = nil
-        linkedSessionID = nil
-        live = nil
-        liveReceivedAt = nil
-        stopRequestedAt = nil
+    private func simulatedTick() {
+        guard phase == .running || phase == .paused, let start = startDate else { return }
+        let now = Date()
+        let speed = isPhoneLinked(now: now) ? (live?.speedKmh ?? 0) : 0
+        let incline = live?.inclinePercent ?? 0
+        let bpm = simHeart.advance(dt: 2, speedKmh: speed, inclinePercent: incline)
+        let t = now.timeIntervalSince(start)
+        if let gap = simulatedHeartGap, gap.contains(t) {
+            heartRate = nil
+            return
+        }
+        heartRate = Double(bpm)
+        heartRateDate = now
+        accumulateZone(bpm: Double(bpm), at: now)
+        send(.heartRate(bpm: Double(bpm), sampleDate: now))
+        onEvent?("hr")
     }
 
     // MARK: - Échanges avec l'iPhone
@@ -201,16 +412,25 @@ final class WorkoutManager {
         guard let data = try? message.encoded() else { return }
         if mirroring, let s = session {
             s.sendToRemoteWorkoutSession(data: data) { [weak self] ok, _ in
-                if !ok { DispatchQueue.main.async { self?.sendViaConnectivity(data) } }
+                if !ok { DispatchQueue.main.async { self?.sendViaConnectivity(data, message: message) } }
             }
         } else {
-            sendViaConnectivity(data)
+            sendViaConnectivity(data, message: message)
         }
     }
 
-    private func sendViaConnectivity(_ data: Data) {
-        guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable else { return }
-        WCSession.default.sendMessage([WatchMessage.wcKey: data], replyHandler: nil, errorHandler: nil)
+    private func sendViaConnectivity(_ data: Data, message: WatchMessage) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage([WatchMessage.wcKey: data], replyHandler: nil) { _ in
+                // Un arrêt ou une pause non remis est mis en file (l'iPhone vérifie la séance et l'âge).
+                if case let .control(c) = message, c.command == .stop || c.command == .pause {
+                    _ = WCSession.default.transferUserInfo([WatchMessage.wcKey: data])
+                }
+            }
+        } else if case let .control(c) = message, c.command == .stop || c.command == .pause {
+            _ = WCSession.default.transferUserInfo([WatchMessage.wcKey: data])
+        }
     }
 
     fileprivate func receive(_ data: Data) {
@@ -247,11 +467,17 @@ final class WorkoutManager {
                 zoneBounds = s.zoneBounds
                 UserDefaults.standard.set(s.zoneBounds, forKey: Self.boundsKey)
             }
+            onEvent?("live:\(s.state.rawValue):\(s.phaseName ?? "-"):\(s.targetSpeedKmh)")
+        case let .context(c):
+            apply(context: c)
+        case let .startResult(r):
+            handle(startResult: r)
         case let .command(c):
+            onEvent?("command:\(c.rawValue)")
             switch c {
             case .pause: pause()
             case .resume: resume()
-            case .end: end()
+            case .end: stopRequestedAt = nil; end()
             case .discard: end(discard: true)
             }
         default:
@@ -369,10 +595,32 @@ private final class WorkoutProxy: NSObject, HKWorkoutSessionDelegate, HKLiveWork
 private final class WatchConnectivityProxy: NSObject, WCSessionDelegate {
     weak var owner: WorkoutManager?
 
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        DispatchQueue.main.async { self.owner?.connectivityActivated() }
+    }
+
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        DispatchQueue.main.async { self.owner?.reachabilityChanged() }
+    }
+
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        guard let data = applicationContext[WatchPhoneContext.key] as? Data else { return }
+        DispatchQueue.main.async { self.owner?.apply(contextData: data) }
+    }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let data = message[WatchMessage.wcKey] as? Data else { return }
+        DispatchQueue.main.async { self.owner?.receive(data) }
+    }
+
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        replyHandler([:])
+        guard let data = message[WatchMessage.wcKey] as? Data else { return }
+        DispatchQueue.main.async { self.owner?.receive(data) }
+    }
+
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let data = userInfo[WatchMessage.wcKey] as? Data else { return }
         DispatchQueue.main.async { self.owner?.receive(data) }
     }
 }

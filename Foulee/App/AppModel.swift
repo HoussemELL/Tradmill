@@ -37,6 +37,15 @@ final class AppModel {
     @ObservationIgnored private var finishingServices: [SessionService] = []
     @ObservationIgnored private var watchOwnedSessions: [UUID: Bool] = [:]
     @ObservationIgnored private var lastWatchStatusAt: TimeInterval = 0
+    @ObservationIgnored private var lastContextCheckAt: TimeInterval = 0
+    /// Démarrage demandé par la montre, en attente de la connexion du tapis.
+    @ObservationIgnored private var pendingWatchStart: (request: WatchStartRequest, deadline: TimeInterval)?
+    /// Dernière demande de démarrage traitée (une demande répétée n'est jamais rejouée).
+    @ObservationIgnored private var handledStartRequests: Set<UUID> = []
+    /// Bandeau d'information (ex. séance lancée depuis la montre).
+    var notice: String?
+    /// Scénario de test (simulateur), actif seulement avec `-FouleeScenario`.
+    @ObservationIgnored private var scenario: ScenarioRunner?
 
     init(modelContext: ModelContext) {
         let log = DiagnosticLog()
@@ -57,8 +66,15 @@ final class AppModel {
         log.log(.info, "Foulée démarrée")
         wireServices()
         seedTemplatesIfNeeded()
+        if ScenarioRunner.isActive {
+            let s = ScenarioRunner(model: self)
+            scenario = s
+            s.configure()
+        }
         recoverInterruptedSession()
         startLoop()
+        // Aussi utile quand iOS lance l'app en arrière-plan (demande de la montre).
+        connectRememberedDevices()
     }
 
     // MARK: - Câblage
@@ -80,6 +96,92 @@ final class AppModel {
         watch.onSteps = { [weak self] total in self?.sessionService?.session.ingestWatchSteps(total: total) }
         watch.onActiveEnergy = { [weak self] kcal in self?.sessionService?.session.ingestWatchActiveEnergy(kcal: kcal) }
         watch.onRemoteCommand = { [weak self] c in self?.handleWatchCommand(c) }
+        watch.onControl = { [weak self] c in self?.handleWatchControl(c) }
+        watch.onStartRequest = { [weak self] r in self?.handleWatchStart(r) }
+        watch.onContextRequested = { [weak self] in self?.publishWatchContext(force: true) }
+    }
+
+    // MARK: - Montre : catalogue, démarrage, commandes
+
+    /// Contexte publié pour la montre : programmes (dans l'ordre de l'iPhone), tapis, séance.
+    func watchContext() -> WatchPhoneContext {
+        let tm = treadmill
+        let brief = WatchTreadmillBrief(name: tm.deviceName, ready: tm.connection.isReady && tm.beltState != .linkLost,
+                                        simulated: tm.isSimulated, label: tm.connection.label)
+        let active = hasActiveSession ? sessionService?.session.record : nil
+        return WatchPhoneContext(programs: dataStore.allPrograms().map(WatchProgramSummary.init), treadmill: brief,
+                                 activeSessionID: active?.id, activeProgramName: active?.title,
+                                 zoneBounds: settings.session.zones.bounds, sentAt: Date())
+    }
+
+    /// Publie le contexte s'il a changé (vérifié toutes les 2 s, et immédiatement sur demande).
+    func publishWatchContext(force: Bool = false) {
+        let now = MonotonicClock.now()
+        guard force || now - lastContextCheckAt >= 2 else { return }
+        lastContextCheckAt = now
+        watch.publish(watchContext(), force: force)
+    }
+
+    /// Démarrage demandé depuis la montre. Le tapis doit être connecté (connexion au tapis
+    /// mémorisé tentée pendant 12 s au plus) ; une demande ancienne ou répétée est refusée.
+    private func handleWatchStart(_ r: WatchStartRequest) {
+        guard !handledStartRequests.contains(r.requestID) else { return }
+        handledStartRequests.insert(r.requestID)
+        if !treadmill.connection.isReady && !hasActiveSession {
+            connectRememberedDevices()
+            pendingWatchStart = (r, MonotonicClock.now() + 12)
+            log.log(.watch, "Démarrage Watch : attente de la connexion du tapis")
+            return
+        }
+        completeWatchStart(r)
+    }
+
+    private func checkPendingWatchStart() {
+        guard let p = pendingWatchStart else { return }
+        if treadmill.connection.isReady || MonotonicClock.now() > p.deadline {
+            pendingWatchStart = nil
+            completeWatchStart(p.request)
+        }
+    }
+
+    private func completeWatchStart(_ r: WatchStartRequest) {
+        let decision = WatchStartPolicy.evaluate(r, now: Date(), programs: dataStore.allPrograms(),
+                                                 treadmillReady: treadmill.connection.isReady,
+                                                 sessionActive: hasActiveSession, diagnosticRunning: isDiagnosticRunning,
+                                                 capabilities: treadmill.capabilities)
+        let result: WatchStartResult
+        switch decision {
+        case let .refuse(why):
+            result = WatchStartResult(requestID: r.requestID, accepted: false, sessionID: nil, message: why)
+        case let .start(program):
+            if sessionService?.session.status == .finished { closeFinishedSession() }
+            prepareSession(program: program)
+            if let e = startSession(fromWatch: true) {
+                discardPreparedSession()
+                result = WatchStartResult(requestID: r.requestID, accepted: false, sessionID: nil, message: e)
+            } else {
+                let title = program?.name ?? "Séance libre"
+                notice = "« \(title) » lancé depuis l'Apple Watch"
+                result = WatchStartResult(requestID: r.requestID, accepted: true, sessionID: sessionService?.session.record.id,
+                                          message: "\(title) : démarrage du tapis")
+            }
+        }
+        log.log(.watch, "Démarrage Watch : \(result.accepted ? "accepté" : "refusé") — \(result.message)")
+        watch.sendReliably(.startResult(result))
+        publishWatchContext(force: true)
+        sendWatchStatus(force: true)
+    }
+
+    /// Commande horodatée de la montre : ignorée si elle vise une autre séance ou si elle est
+    /// trop ancienne (une reprise n'est jamais rejouée en retard).
+    private func handleWatchControl(_ c: WatchControl) {
+        let current = sessionService?.session.record.id
+        guard c.isAcceptable(now: Date(), currentSessionID: current) else {
+            log.log(.watch, "Commande Watch « \(c.command.rawValue) » ignorée (ancienne ou pour une autre séance)")
+            sendWatchStatus(force: true)
+            return
+        }
+        handleWatchCommand(c.command)
     }
 
     /// Commandes reçues de la montre : mêmes actions que les boutons de l'iPhone.
@@ -154,6 +256,8 @@ final class AppModel {
         treadmill.tick(drivenBySession: driven)
         sessionService?.tick()
         sendWatchStatus()
+        publishWatchContext()
+        checkPendingWatchStart()
         finishingServices.forEach { $0.tick() }
         heartRate.refresh()
         if let d = diagnostic, case .running = d.state {
@@ -224,18 +328,20 @@ final class AppModel {
     }
 
     /// Démarrage explicite par l'utilisateur.
-    func startSession() -> String? {
+    /// - Parameter fromWatch: lancé depuis la montre, qui démarre elle-même son exercice.
+    func startSession(fromWatch: Bool = false) -> String? {
         guard let s = sessionService else { return "Aucune séance préparée" }
         switch s.session.start() {
         case .success:
             let (std, meta) = HealthWritePlan.watchMetadata(record: s.session.record)
             watch.beginSession(id: s.session.record.id, title: s.session.record.title,
                                metadata: .workoutMetadata(standard: std, foulee: meta))
-            if settings.startWatchWorkoutWithSession && watch.isAppInstalled && watch.linkState != .mirrored {
+            if !fromWatch && settings.startWatchWorkoutWithSession && watch.isAppInstalled && watch.linkState != .mirrored {
                 watch.launchWatchWorkout(running: (s.program?.maxSpeedKmh ?? s.session.effectiveTargets.speed) >= 8)
             }
             s.saveCheckpoint()
             updateIdleTimer()
+            publishWatchContext(force: true)
             return nil
         case let .failure(e):
             return e.description
@@ -245,18 +351,21 @@ final class AppModel {
     func pauseSession() {
         sessionService?.session.pause()
         sessionService?.saveCheckpoint()
-        if watch.linkState == .mirrored || watch.linkState == .connectivity { watch.send(.command(.pause)) }
+        if watch.linkState == .mirrored || watch.linkState == .connectivity || watch.isReachable { watch.send(.command(.pause)) }
+        sendWatchStatus(force: true)
     }
 
     func resumeSession() -> String? {
         guard let s = sessionService else { return nil }
         if case let .failure(e) = s.session.resume() { return e.description }
-        if watch.watchState == .paused { watch.send(.command(.resume)) }
+        if watch.watchState == .paused || watch.isReachable { watch.send(.command(.resume)) }
+        sendWatchStatus(force: true)
         return nil
     }
 
     func stopSession() {
         sessionService?.session.stop()
+        sendWatchStatus(force: true)
     }
 
     /// Fin de séance : sauvegarde locale immédiate. Si un exercice Watch a tourné, la Watch est
@@ -369,7 +478,7 @@ final class AppModel {
     /// Au premier lancement : demande les autorisations Santé (une fois), puis calcule les zones.
     @MainActor
     func prepareHealth() async {
-        guard health.isAvailable else { return }
+        guard health.isAvailable, !ScenarioRunner.isActive else { return }
         if settings.didRequestHealthAuthorization != true {
             _ = await health.requestAuthorization()
             settings.didRequestHealthAuthorization = true

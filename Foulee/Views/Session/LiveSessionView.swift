@@ -22,16 +22,22 @@ struct LiveSessionView: View {
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
+        .screenBackground()
         .safeAreaInset(edge: .bottom) { mainControls }
         .onChange(of: model.banner) { _, new in
             guard new != nil else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) { model.banner = nil }
+        }
+        .onChange(of: model.notice) { _, new in
+            guard new != nil else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { model.notice = nil }
         }
     }
 
     // MARK: Bandeaux
 
     @ViewBuilder private var banners: some View {
+        if let n = model.notice { Banner(text: n, color: Theme.accent, systemImage: "applewatch") }
         if isLinkLost {
             Banner(text: "Connexion perdue : l'état du tapis est inconnu. Utilisez son bouton ou la clé de sécurité. Rien ne redémarrera sans votre action.",
                    color: Theme.danger, systemImage: "antenna.radiowaves.left.and.right.slash")
@@ -81,28 +87,35 @@ struct LiveSessionView: View {
 
     private var phaseHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Circle().fill(Theme.phaseColor(snap.currentPhaseKind)).frame(width: 12, height: 12)
                 Text(snap.currentPhaseName ?? "—").font(.title3.bold()).lineLimit(1)
                 Spacer()
-                if let i = snap.phaseIndex { Text("\(i + 1)/\(snap.phaseCount)").font(.subheadline).foregroundStyle(.secondary) }
+                Text(Format.duration(snap.phaseRemaining))
+                    .font(.system(.title2, design: .rounded).bold()).monospacedDigit()
+                    .accessibilityLabel("Reste \(Format.duration(snap.phaseRemaining)) dans la phase")
             }
             if let el = snap.phaseElapsed, let rem = snap.phaseRemaining, el + rem > 0 {
                 ProgressView(value: el, total: el + rem).tint(Theme.phaseColor(snap.currentPhaseKind))
             }
-            HStack {
-                Text("Phase : \(Format.duration(snap.phaseRemaining))").monospacedDigit()
-                Spacer()
-                if let next = snap.nextPhaseName {
-                    Text("Ensuite : \(next) · \(snap.nextPhaseSummary ?? "")").lineLimit(1)
-                } else {
-                    Text("Dernière phase")
+            if let p = service.program {
+                ProgramTimeline(program: p, elapsed: Double(p.totalDurationSeconds) - (snap.programRemaining ?? 0))
+                    .frame(height: 10)
+                HStack {
+                    if let i = snap.phaseIndex { Text("Phase \(i + 1)/\(snap.phaseCount)") }
+                    Spacer()
+                    Text("Programme : reste \(Format.duration(snap.programRemaining))").monospacedDigit()
                 }
+                .font(.caption).foregroundStyle(.secondary)
             }
-            .font(.subheadline).foregroundStyle(.secondary)
+            if let next = snap.nextPhaseName {
+                Label("Ensuite : \(next) · \(snap.nextPhaseSummary ?? "")", systemImage: "arrow.right.circle")
+                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            } else {
+                Label("Dernière phase", systemImage: "flag.checkered").font(.subheadline).foregroundStyle(.secondary)
+            }
         }
-        .padding(12)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .card(padding: 12)
         .accessibilityElement(children: .combine)
     }
 
@@ -154,9 +167,9 @@ struct LiveSessionView: View {
         return LazyVGrid(columns: cols, spacing: 10) {
             MetricTile(title: "Vitesse réelle", value: Format.speed(freshSpeed), unit: "km/h",
                        detail: speedDetail, color: Theme.speed, large: true)
-            MetricTile(title: "Inclinaison réelle", value: Format.incline(freshIncline), unit: "%",
-                       detail: inclineDetail, color: Theme.incline, large: true)
             heartTile
+            MetricTile(title: "Inclinaison réelle", value: Format.incline(freshIncline), unit: "%",
+                       detail: inclineDetail, color: Theme.incline)
             MetricTile(title: "Zone", value: Theme.zoneName(snap.zone), detail: zoneDetail, color: Theme.zoneColor(snap.zone))
             MetricTile(title: "Pas", value: snap.steps.map { "\($0)" } ?? "—",
                        detail: snap.steps == nil ? "aucune source" : snap.stepsSource.label)
@@ -356,8 +369,10 @@ struct FinishedSessionView: View {
                     Text("Nouvelle séance").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
             }
             .padding()
         }
+        .screenBackground()
     }
 }

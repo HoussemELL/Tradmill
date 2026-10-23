@@ -66,6 +66,11 @@ struct ProgramListView: View {
                     model.dataStore.upsert(saved)
                 }
             }
+            .onAppear {
+                if let open = ScenarioRunner.value("-FouleeOpen"), open.hasPrefix("program:"), editing == nil {
+                    editing = programs.first { $0.name == String(open.dropFirst(8)) }?.program
+                }
+            }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
                 importFile(result)
             }

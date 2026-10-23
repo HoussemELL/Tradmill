@@ -1,15 +1,29 @@
 import SwiftUI
+import UIKit
 import TreadCore
 
+/// Palette adaptative (clair/sombre) : les couleurs vives du mode sombre sont assombries en mode
+/// clair pour garder un contraste suffisant sur fond blanc (texte et pictogrammes).
 enum Theme {
-    static let accent = Color(red: 0.20, green: 0.83, blue: 0.60)
-    static let card = Color(white: 0.11)
-    static let cardStrong = Color(white: 0.15)
-    static let warning = Color.orange
-    static let danger = Color(red: 0.95, green: 0.27, blue: 0.27)
-    static let speed = Color(red: 0.22, green: 0.74, blue: 0.97)
-    static let incline = Color(red: 0.98, green: 0.75, blue: 0.14)
-    static let heart = Color(red: 0.96, green: 0.30, blue: 0.40)
+    static func adaptive(light: UIColor, dark: UIColor) -> Color {
+        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
+
+    static let accent = adaptive(light: UIColor(red: 0.00, green: 0.55, blue: 0.38, alpha: 1),
+                                 dark: UIColor(red: 0.20, green: 0.83, blue: 0.60, alpha: 1))
+    /// Fond des écrans (groupé) et des cartes.
+    static let background = Color(uiColor: .systemGroupedBackground)
+    static let card = Color(uiColor: .secondarySystemGroupedBackground)
+    static let cardStrong = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let warning = adaptive(light: UIColor(red: 0.80, green: 0.42, blue: 0.00, alpha: 1), dark: .systemOrange)
+    static let danger = adaptive(light: UIColor(red: 0.80, green: 0.13, blue: 0.15, alpha: 1),
+                                 dark: UIColor(red: 0.95, green: 0.27, blue: 0.27, alpha: 1))
+    static let speed = adaptive(light: UIColor(red: 0.00, green: 0.45, blue: 0.80, alpha: 1),
+                                dark: UIColor(red: 0.22, green: 0.74, blue: 0.97, alpha: 1))
+    static let incline = adaptive(light: UIColor(red: 0.70, green: 0.45, blue: 0.00, alpha: 1),
+                                  dark: UIColor(red: 0.98, green: 0.75, blue: 0.14, alpha: 1))
+    static let heart = adaptive(light: UIColor(red: 0.82, green: 0.12, blue: 0.27, alpha: 1),
+                                dark: UIColor(red: 0.96, green: 0.30, blue: 0.40, alpha: 1))
 
     /// Couleurs des zones 0 (sous Z1) à 5.
     static func zoneColor(_ zone: Int?) -> Color {
@@ -19,8 +33,8 @@ enum Theme {
         case 3: return Color(red: 0.20, green: 0.80, blue: 0.45)
         case 4: return Color(red: 0.98, green: 0.62, blue: 0.10)
         case 5: return Color(red: 0.94, green: 0.25, blue: 0.30)
-        case 0: return Color(white: 0.35)
-        default: return Color(white: 0.25)
+        case 0: return Color(white: 0.5)
+        default: return Color(uiColor: .systemGray)
         }
     }
 
@@ -71,6 +85,36 @@ enum Format {
     }
 }
 
+extension View {
+    /// Fond d'écran groupé (les cartes se détachent en clair comme en sombre).
+    func screenBackground() -> some View {
+        background(Theme.background.ignoresSafeArea())
+    }
+
+    /// Carte standard.
+    func card(padding: CGFloat = 14) -> some View {
+        self.padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+/// Titre de section dans un écran défilant.
+struct SectionTitle: View {
+    let text: String
+    var trailing: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(text).font(.title3.bold())
+            Spacer()
+            if let trailing { Text(trailing).font(.subheadline).foregroundStyle(.secondary) }
+        }
+        .accessibilityAddTraits(.isHeader)
+        .padding(.top, 6)
+    }
+}
+
 /// Carte métrique à gros chiffres, lisible en marchant.
 struct MetricTile: View {
     let title: String
@@ -105,7 +149,7 @@ struct MetricTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(accessibilityValue ?? "\(value) \(unit) \(detail ?? "")")

@@ -56,7 +56,12 @@ def main():
     rt = json.loads(sh("xcrun", "simctl", "list", "runtimes", "-j").stdout)
     ios = pick_runtime(rt, "iOS")
     wos = pick_runtime(rt, "watchOS")
-    phone_type = pick_device_type(ios, r"^iPhone \d+ Pro$") or pick_device_type(ios, r"^iPhone")
+    phone_type = None
+    for name in ("iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"):
+        phone_type = pick_device_type(ios, "^" + re.escape(name) + "$")
+        if phone_type:
+            break
+    phone_type = phone_type or pick_device_type(ios, r"^iPhone")
     watch_type = pick_device_type(wos, r"Apple Watch Series \d+ \(46mm\)") or pick_device_type(wos, r"Apple Watch")
     log("Runtimes :", ios["name"], "/", wos["name"])
     log("Appareils :", phone_type["name"], "/", watch_type["name"])
@@ -93,7 +98,7 @@ def main():
                 elif kind == "contentsize":
                     sh("xcrun", "simctl", "ui", udid, "content_size", step["value"], check=False)
                 elif kind == "launch":
-                    args = step.get("args", [])
+                    args = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_FR"] + step.get("args", [])
                     r = sh("xcrun", "simctl", "launch", "--terminate-running-process", udid, bundles[target], *args, check=False)
                     log("lancement", target, args, r.returncode, r.stdout.strip(), r.stderr.strip()[-300:])
                     if r.returncode != 0:
@@ -109,6 +114,8 @@ def main():
                     res["screens"].append(fn if r.returncode == 0 else f"(capture impossible : {fn})")
                 elif kind == "collect":
                     collect(udid, bundles[target], f"{name}__{target}", res)
+                    for exp in step.get("expect", []):
+                        check(res, f"{name}__{target}", exp)
                 elif kind == "push":
                     payload = os.path.join(OUT, f"{name}_push.json")
                     json.dump(step["payload"], open(payload, "w"))
@@ -128,6 +135,64 @@ def main():
                "devices": [phone_type["name"], watch_type["name"]], "paired": pair.returncode == 0},
               open(os.path.join(OUT, "results.json"), "w"), indent=2, ensure_ascii=False)
     log("Crashs :", crashes or "aucun")
+    lines = ["# Résultats simulateurs", "", f"Simulateurs : {phone_type['name']} ({ios['name']}) + {watch_type['name']} ({wos['name']}), appairés : {pair.returncode == 0}", ""]
+    for r in results:
+        lines.append(f"## {r['name']} — {'OK' if r['ok'] else 'ÉCHEC'}")
+        lines.append(r.get("description", ""))
+        for c in r.get("checks", []):
+            lines.append(f"- {'✅' if c['ok'] else '❌'} {c['label']} → `{c['got']}`")
+        for n in r.get("notes", []):
+            lines.append(f"- note : {n}")
+        lines.append("")
+    lines.append(f"Crashs : {', '.join(crashes) if crashes else 'aucun'}")
+    open(os.path.join(OUT, "RESULTATS.md"), "w").write("\n".join(lines))
+
+
+def lookup(data, path):
+    cur = data
+    for part in path.split("."):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        else:
+            return None
+    return cur
+
+
+def check(res, prefix, exp):
+    """Vérifie une attente sur un rapport JSON de l'app : {file, path, op, value, label}."""
+    fn = os.path.join(OUT, f"{prefix}__{exp['file']}")
+    label = exp.get("label", f"{exp['path']} {exp['op']} {exp.get('value')}")
+    try:
+        data = json.load(open(fn))
+    except Exception as e:  # noqa: BLE001
+        res.setdefault("checks", []).append({"label": label, "ok": False, "got": f"rapport absent ({e})"})
+        res["ok"] = False
+        return
+    v = lookup(data, exp["path"])
+    op, want = exp["op"], exp.get("value")
+    if op == "eq":
+        ok = v == want
+    elif op == "ge":
+        ok = isinstance(v, (int, float)) and v >= want
+    elif op == "gt":
+        ok = isinstance(v, (int, float)) and v > want
+    elif op == "le":
+        ok = isinstance(v, (int, float)) and v <= want
+    elif op == "lenge":
+        ok = isinstance(v, list) and len(v) >= want
+    elif op == "contains":
+        ok = isinstance(v, list) and any(want in str(x) for x in v)
+    elif op == "notcontains":
+        ok = isinstance(v, list) and not any(want in str(x) for x in v)
+    elif op == "notnull":
+        ok = v is not None
+    else:
+        ok = False
+    shown = v if not isinstance(v, list) else (v if len(v) <= 12 else v[:12] + ["…"])
+    res.setdefault("checks", []).append({"label": label, "ok": ok, "got": shown})
+    log("  ", "OK " if ok else "ÉCHEC", label, "→", shown)
+    if not ok:
+        res["ok"] = False
 
 
 def collect(udid, bundle, prefix, res):

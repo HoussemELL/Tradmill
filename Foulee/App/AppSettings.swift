@@ -22,7 +22,7 @@ struct AppSettings: Codable, Equatable {
 
     var keepScreenOnDuringPrograms = true
     var keepScreenOnDuringFreeRun = true
-    var appearance: Appearance = .dark
+    var appearance: Appearance = .system
     var hapticAlerts = true
 
     /// Lancer l'exercice Apple Watch quand une séance démarre (cardio en direct).

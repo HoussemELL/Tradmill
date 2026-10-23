@@ -71,6 +71,12 @@ final class HeartRateService {
         refresh()
     }
 
+    /// Tests (simulateur) : FC simulée injectée comme une ceinture.
+    func ingestSimulated(bpm: Int) {
+        monitor.ingest(HeartRateReading(bpm: bpm, receivedAt: MonotonicClock.now(), source: .bleSensor))
+        refresh()
+    }
+
     /// Mesure Apple Watch. `sampleAge` = ancienneté de l'échantillon HealthKit à réception.
     func ingestWatch(bpm: Double, sampleAge: TimeInterval) {
         let now = MonotonicClock.now()

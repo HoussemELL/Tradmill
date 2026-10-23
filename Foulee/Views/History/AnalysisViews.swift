@@ -326,6 +326,7 @@ struct ProgressDetailView: View {
                 Text("Aucune séance pour ce protocole.").foregroundStyle(.secondary).padding()
             }
         }
+        .screenBackground()
         .navigationTitle(group?.name ?? "Progression")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -119,6 +119,27 @@ final class TreadmillService {
         refresh()
     }
 
+    /// Tests : coupure du lien Bluetooth simulé alors que le tapis simulé continue de tourner
+    /// (état réel inconnu pour l'app), puis reconnexion du lien — jamais de commande automatique.
+    func simulateLinkLoss() {
+        guard isSimulated, let sim = simLink, sim.isConnected else { return }
+        sim.disconnect()
+        connection = .reconnecting("SIMULATEUR")
+        refresh()
+    }
+
+    func simulateReconnect() {
+        guard isSimulated, let old = simLink, !old.isConnected else { return }
+        let sim = SimulatedFTMSLink(treadmill: old.treadmill, clock: MonotonicClock.now)
+        simLink = sim
+        sim.connect(to: controller)
+        connection = .ready("SIMULATEUR (aucun tapis réel)")
+        refresh()
+    }
+
+    /// Vitesse réelle du tapis simulé (vérification des tests, indépendante de la télémétrie).
+    var simulatedBeltSpeed: Double? { simLink?.treadmill.currentSpeed }
+
     private func disconnectSimulator() {
         guard let sim = simLink else { return }
         sim.disconnect()
