@@ -177,8 +177,10 @@ acquittées sans effet ; Treadmill Assistant fonctionne sur ce tapis.
 La séquence de démarrage n'est **pas** considérée comme la cause certaine du
 problème de vitesse (hypothèses détaillées dans [docs/FTMS.md](docs/FTMS.md)).
 Le profil applique donc les choix prudents :
-`Request Control → Set Target Speed 1,5 km/h → Start` → attente du mouvement →
-**attente d'une vitesse initiale stable 2 s** (max 8 s) → consigne du palier.
+`Request Control → Set Target Speed 1,0 km/h → Start` → attente du mouvement →
+**attente d'une vitesse stable 2 s** (max 8 s) → consigne du palier. Le tapis
+démarre toujours à 1,0 km/h : pendant ces quelques secondes, la vitesse réelle
+(1,0) diffère normalement de la consigne affichée en bas d'écran.
 Pas de nouveau Start lors des changements de vitesse. Si la vitesse n'est pas
 observée dans le délai calculé, **un seul** renvoi de la consigne, puis écart
 affiché et journalisé. Pas de séquences expérimentales pendant une séance :

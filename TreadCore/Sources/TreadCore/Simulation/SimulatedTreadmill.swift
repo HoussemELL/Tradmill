@@ -21,6 +21,9 @@ public final class SimulatedTreadmill {
         public var speedResponse: SpeedResponseMode = .normal
         /// Envoie le statut 0x05 « consigne vitesse modifiée » quand une consigne est appliquée.
         public var reportsSpeedStatus = true
+        /// Démarre toujours à la vitesse minimale, quelle que soit la consigne reçue à l'arrêt
+        /// (observé sur l'URTM047 le 23/10).
+        public var startsAtMinimumSpeed = false
         /// Ne répond jamais aux commandes (test des délais).
         public var dropsResponses = false
         /// Envoie l'extension Step Count (bit 13).
@@ -36,6 +39,7 @@ public final class SimulatedTreadmill {
             var q = Quirks()
             q.requiresSpeedBeforeStart = true
             q.ignoresSpeedDuringCountdown = true
+            q.startsAtMinimumSpeed = true
             q.reportsStepCount = false
             return q
         }
@@ -140,7 +144,7 @@ public final class SimulatedTreadmill {
             if quirks.requiresSpeedBeforeStart && targetSpeed == nil {
                 return // acquitté, sans effet
             }
-            if targetSpeed == nil { targetSpeed = speedRange.minKmh }
+            if targetSpeed == nil || quirks.startsAtMinimumSpeed { targetSpeed = speedRange.minKmh }
             if runState == .paused {
                 runState = .running
             } else {

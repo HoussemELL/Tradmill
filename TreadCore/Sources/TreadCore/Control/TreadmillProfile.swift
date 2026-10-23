@@ -87,7 +87,8 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
     /// - Request Control → Set Target Speed → Start produit un mouvement ;
     /// - Request Control → Start (avec ou sans vitesse ensuite) n'en a pas produit ;
     /// - une consigne de vitesse peut être acquittée sans effet observable ;
-    /// - Set Target Speed envoyé tapis arrêté peut rester sans réponse (essai Foulée du 23/10) ;
+    /// - Set Target Speed envoyé tapis arrêté peut rester sans réponse et le tapis démarre à
+    ///   1,0 km/h ; une fois en marche, les consignes sont appliquées (essai Foulée du 23/10) ;
     /// - Treadmill Assistant pilote correctement ce tapis (le firmware accepte donc un pilotage FTMS).
     /// La cause du problème de vitesse n'est PAS établie : la séquence de démarrage n'en est
     /// qu'une hypothèse. Le profil adopte les choix prudents (vitesse initiale explicite avant
@@ -100,7 +101,9 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
         namePrefixes: ["URTM047", "URTM"],
         startSteps: [.requestControl, .setInitialSpeed, .startOrResume],
         resumeSteps: [.requestControl, .setInitialSpeed, .startOrResume],
-        initialSpeedKmh: 1.5,
+        // Essai du 23/10 : le tapis démarre à 1,0 km/h (son minimum) quelle que soit la
+        // consigne envoyée tapis arrêté ; on envoie donc explicitement cette valeur.
+        initialSpeedKmh: 1.0,
         beltStartTimeout: 15,
         speedToleranceKmh: 0.15,
         inclineTolerancePercent: 0.6,

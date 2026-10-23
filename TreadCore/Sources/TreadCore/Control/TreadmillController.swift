@@ -184,6 +184,9 @@ public final class TreadmillController {
     private var settleDeadline: TimeInterval?
     /// Début de la période où la vitesse initiale est observée dans la tolérance.
     private var settleStableSince: TimeInterval?
+    /// Vitesse de référence pendant la stabilisation (le tapis peut démarrer à une autre
+    /// valeur que la consigne initiale : l'URTM047 démarre à 1,0 km/h).
+    private var settleReference: Double?
     /// Durée pendant laquelle la vitesse initiale doit rester stable avant la consigne du palier.
     public static let settleDwell: TimeInterval = 2
 
@@ -607,6 +610,7 @@ public final class TreadmillController {
         if profile.waitForInitialSpeedBeforeTarget, pendingFinal != nil, speed.verifying != nil {
             settleDeadline = now + profile.initialSpeedSettleTimeout
             settleStableSince = nil
+            settleReference = nil
             log.log(.session, "Attente de la vitesse initiale avant la consigne du palier (max \(Int(profile.initialSpeedSettleTimeout)) s)")
         } else {
             applyPendingFinal()
@@ -766,16 +770,27 @@ public final class TreadmillController {
                 zeroSpeedSince = nil
             }
             if let deadline = settleDeadline {
-                let initial = speed.verifying
-                let within = initial.flatMap { i in telemetry.speedKmh.map { abs($0 - i) <= profile.speedToleranceKmh } } ?? false
-                if within { settleStableSince = settleStableSince ?? now } else { settleStableSince = nil }
+                // Critère : vitesse mesurée stable (±0,05 km/h) pendant `settleDwell`, quelle que
+                // soit sa valeur. La consigne initiale n'est qu'une demande : on ne suppose pas
+                // que le tapis l'a appliquée.
+                if let v = telemetry.speedKmh, v >= 0.1 {
+                    if let ref = settleReference, abs(v - ref) <= 0.05 {
+                        settleStableSince = settleStableSince ?? now
+                    } else {
+                        settleReference = v
+                        settleStableSince = now
+                    }
+                }
                 let reached = settleStableSince.map { now - $0 >= Self.settleDwell } ?? false
                 if reached || now > deadline {
+                    let stableValue = settleReference
                     settleDeadline = nil
                     settleStableSince = nil
+                    settleReference = nil
+                    let initialText = speed.verifying.map { String(format: " (consigne initiale %.2f)", $0) } ?? ""
                     log.log(.session, reached
-                            ? String(format: "Vitesse initiale %.2f km/h observée : envoi de la consigne du palier", initial ?? 0)
-                            : "Vitesse initiale non stabilisée après \(Int(profile.initialSpeedSettleTimeout)) s : envoi de la consigne du palier")
+                            ? String(format: "Vitesse stable à %.2f km/h%@ : envoi de la consigne du palier", stableValue ?? 0, initialText)
+                            : "Vitesse non stabilisée après \(Int(profile.initialSpeedSettleTimeout)) s : envoi de la consigne du palier")
                     applyPendingFinal()
                 }
                 return

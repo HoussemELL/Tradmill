@@ -173,7 +173,7 @@ final class TreadmillControllerTests: XCTestCase {
         XCTAssertNoThrow(try h.controller.start(targetSpeed: 7, targetIncline: 2).get())
         h.run(seconds: 30)
         XCTAssertEqual(Array(h.sentCommands.prefix(3)),
-                       [.requestControl, .setTargetSpeed(kmh: 1.5), .startOrResume])
+                       [.requestControl, .setTargetSpeed(kmh: 1.0), .startOrResume])
         // La consigne du palier part après le mouvement observé, sans nouveau Start.
         XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1)
         XCTAssertTrue(h.sentCommands.contains(.setTargetSpeed(kmh: 7)))
@@ -335,9 +335,9 @@ final class StartSequenceDiagnosticTests: XCTestCase {
         XCTAssertNoThrow(try d.begin().get())
         run(h, d, seconds: 90)
         XCTAssertEqual(d.state, .finished(success: true), d.steps.map(\.detail).joined(separator: " | "))
-        XCTAssertEqual(d.testSpeed, 2.5)
+        XCTAssertEqual(d.testSpeed, 2.0)
         XCTAssertEqual(h.controller.state, .stopped)
-        XCTAssertEqual(Array(h.sentCommands.prefix(3)), [.requestControl, .setTargetSpeed(kmh: 1.5), .startOrResume])
+        XCTAssertEqual(Array(h.sentCommands.prefix(3)), [.requestControl, .setTargetSpeed(kmh: 1.0), .startOrResume])
     }
 
     func testDiagnosticReportsGenericSequenceFailure() {
@@ -409,9 +409,9 @@ final class SpeedHypothesisTests: XCTestCase {
         XCTAssertNoThrow(try d.begin().get())
         runDiag(h, d, seconds: 200)
         XCTAssertEqual(d.state, .finished(success: true), d.steps.map(\.detail).joined(separator: " | "))
-        XCTAssertEqual(d.measurements.map(\.target), [2.5, 3.5, 2.0])
+        XCTAssertEqual(d.measurements.map(\.target), [2.0, 3.0, 1.5])
         XCTAssertTrue(d.measurements.allSatisfy { $0.reached && !$0.resendNeeded })
-        XCTAssertEqual(d.measurements.first?.reportedByTreadmill, 2.5)
+        XCTAssertEqual(d.measurements.first?.reportedByTreadmill, 2.0)
         XCTAssertEqual(h.controller.state, .stopped)
         XCTAssertTrue(d.steps.last?.detail.contains("du premier coup") ?? false)
         XCTAssertEqual(h.sentCommands.filter { $0 == .startOrResume }.count, 1)
@@ -429,9 +429,12 @@ final class SpeedHypothesisTests: XCTestCase {
         _ = d.begin()
         runDiag(h, d, seconds: 200)
         XCTAssertEqual(d.state, .finished(success: false))
-        // La vitesse initiale elle-même n'est pas appliquée (tapis à 1,0) : le test s'arrête proprement.
+        // Démarrage à 1,0 km/h, puis la consigne en marche n'est jamais appliquée.
         XCTAssertEqual(h.controller.state, .stopped)
-        XCTAssertTrue(d.steps.contains { $0.title == "Démarrage" && !$0.ok })
+        XCTAssertTrue(d.steps.contains { $0.title == "Démarrage" && $0.ok })
+        XCTAssertEqual(d.measurements.count, 1)
+        XCTAssertFalse(d.measurements[0].reached)
+        XCTAssertEqual(d.measurements[0].finalObserved ?? 0, 1.0, accuracy: 0.01)
     }
 }
 
@@ -444,7 +447,7 @@ final class UnansweredSetpointTests: XCTestCase {
         let h = ControllerHarness(profile: .urtm047, quirks: q)
         XCTAssertNoThrow(try h.controller.start(targetSpeed: 3, targetIncline: nil).get())
         h.run(seconds: 45)
-        XCTAssertEqual(Array(h.sentCommands.prefix(3)), [.requestControl, .setTargetSpeed(kmh: 1.5), .startOrResume])
+        XCTAssertEqual(Array(h.sentCommands.prefix(3)), [.requestControl, .setTargetSpeed(kmh: 1.0), .startOrResume])
         XCTAssertEqual(h.controller.state, .running)
         XCTAssertEqual(h.controller.speed.status, .reached)
         XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 3, accuracy: 0.01)
@@ -514,5 +517,33 @@ final class UnansweredSetpointTests: XCTestCase {
         XCTAssertEqual(h.controller.speed.status, .reached)
         XCTAssertEqual(h.controller.speed.acknowledged, 3)
         XCTAssertTrue(h.log.entries.contains { $0.message.contains("acquittement tardif") })
+    }
+}
+
+/// Reproduction de l'essai réel du 23/10 : consigne initiale sans réponse tapis arrêté,
+/// démarrage à 1,0 km/h, puis consignes appliquées en marche.
+final class RealTrialRegressionTests: XCTestCase {
+    func testStartsAtMinimumThenAppliesTargetQuickly() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.speedResponse = .silentWhenStopped
+        q.reportsSpeedStatus = false
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 3, targetIncline: nil).get())
+        var movedAt: TimeInterval?
+        var targetSentAt: TimeInterval?
+        while h.now < 60 && targetSentAt == nil {
+            h.run(seconds: 0.1)
+            if movedAt == nil, h.controller.isMoving { movedAt = h.now }
+            if h.sentCommands.contains(.setTargetSpeed(kmh: 3)) { targetSentAt = h.now }
+        }
+        let moved = try! XCTUnwrap(movedAt)
+        let sent = try! XCTUnwrap(targetSentAt)
+        // Le tapis démarre à 1,0 ; la consigne part dès que la vitesse est stable, bien avant
+        // le délai maximal de 8 s.
+        XCTAssertLessThan(sent - moved, 5)
+        h.run(seconds: 30)
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 3, accuracy: 0.01)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertTrue(h.log.entries.contains { $0.message.contains("Vitesse stable à 1.00 km/h") })
     }
 }

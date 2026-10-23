@@ -197,7 +197,7 @@ final class FTMSDecodingTests: XCTestCase {
         XCTAssertEqual(TreadmillProfile.match(deviceName: "KS-ST-A1P").id, "generic-ftms")
         XCTAssertEqual(TreadmillProfile.match(deviceName: nil).id, "generic-ftms")
         let p = TreadmillProfile.urtm047
-        XCTAssertEqual(p.initialSpeed(target: 7, capabilities: p.fallbackCapabilities), 1.5)
-        XCTAssertEqual(p.initialSpeed(target: 1.2, capabilities: p.fallbackCapabilities), 1.2)
+        XCTAssertEqual(p.initialSpeed(target: 7, capabilities: p.fallbackCapabilities), 1.0)
+        XCTAssertEqual(p.initialSpeed(target: 1.2, capabilities: p.fallbackCapabilities), 1.0)
     }
 }

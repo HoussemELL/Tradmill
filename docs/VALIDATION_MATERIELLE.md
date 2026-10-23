@@ -59,9 +59,9 @@ journal, et des lignes `[DATA] v=0.00 …` environ une fois par seconde.
 
 1. *Diagnostic › Test de démarrage (hors du tapis)* → confirmer.
 2. Le test exécute exactement la séquence des séances :
-   `Request Control → Set Target Speed 1,5 km/h → Start → attente du mouvement →
-   Set Target Speed 2,5 km/h → observation 8 s → Stop`.
-3. Observer le tapis : il doit démarrer lentement, accélérer vers 2,5 km/h, puis
+   `Request Control → Set Target Speed 1,0 km/h → Start → attente du mouvement →
+   vitesse stable 2 s → Set Target Speed 2,0 km/h → observation 8 s → Stop`.
+3. Observer le tapis : il doit démarrer à 1,0 km/h, accélérer vers 2,0 km/h, puis
    s'arrêter.
 
 ✅ Attendu : « Test réussi » avec les lignes Mouvement, Consigne, Stabilité, Arrêt
@@ -75,7 +75,7 @@ n'est plus bloquant. Relevez s'il apparaît ensuite une « Réponse tardive » o
 ❌ Si « Start acquitté mais aucune vitesse observée » : le tapis n'a pas démarré
 avec cette séquence. **Ne relancez pas en boucle** : exportez le journal (étape 6).
 
-❌ Si « Consigne : 2,5 km/h acquittée mais mesure 1,5 » (ou 1,0) : le tapis
+❌ Si « Consigne : 2,0 km/h acquittée mais mesure 1,0 » : le tapis
 acquitte la commande sans l'appliquer — c'est le symptôme rapporté avec Kinni.
 L'app a fait **un seul** renvoi de la consigne, sans nouveau Start. Exportez le
 journal.
@@ -83,9 +83,9 @@ journal.
 ## 2 bis. Test de réponse en vitesse (actif, hors du tapis)
 
 1. *Diagnostic › Test de réponse en vitesse (hors du tapis)* → confirmer.
-2. Le tapis démarre à 1,5 km/h (séquence du profil), attend une vitesse stable,
-   puis reçoit **en marche** trois consignes successives : 2,5, 3,5 puis
-   2,0 km/h. Pour chacune, l'écran affiche : atteinte ou non, délai, renvoi
+2. Le tapis démarre à 1,0 km/h (séquence du profil), attend une vitesse stable,
+   puis reçoit **en marche** trois consignes successives : 2,0, 3,0 puis
+   1,5 km/h. Pour chacune, l'écran affiche : atteinte ou non, délai, renvoi
    nécessaire, consigne annoncée par le tapis, vitesse mesurée.
 3. Relancer une seconde fois avec l'option **Request Control avant chaque
    consigne** activée.

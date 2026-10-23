@@ -46,7 +46,8 @@ struct LiveSessionView: View {
                    systemImage: tm.beltState == .startUnconfirmed ? "exclamationmark.octagon.fill" : "hourglass")
         }
         if tm.settlingInitialSpeed {
-            Banner(text: String(format: "Stabilisation à %.1f km/h avant la consigne du palier", tm.speed.acknowledged ?? 0),
+            Banner(text: String(format: "Démarrage : le tapis se stabilise à %@ km/h, la consigne de %.1f km/h suit dans quelques secondes",
+                                Format.speed(freshSpeed), snap.targetSpeed),
                    color: Theme.accent, systemImage: "hourglass")
         }
         if tm.speed.status == .mismatch, let req = tm.speed.verifying {
@@ -137,7 +138,7 @@ struct LiveSessionView: View {
         case .pending: s += " · envoyée"
         case .acknowledged: s += " · acquittée"
         case .unanswered: s += " · sans réponse"
-        case .deferred: s += " · en attente"
+        case .deferred: s += tm.settlingInitialSpeed ? " · envoi après stabilisation" : " · en attente"
         default: break
         }
         return s
@@ -191,14 +192,14 @@ struct LiveSessionView: View {
 
     private var manualControls: some View {
         VStack(spacing: 10) {
-            adjustRow(title: "Vitesse", value: String(format: "%.1f km/h", snap.targetSpeed), color: Theme.speed,
+            adjustRow(title: "Consigne vitesse", value: String(format: "%.1f km/h", snap.targetSpeed), color: Theme.speed,
                       minus: { act { try service.session.adjustSpeed(by: -max(tm.capabilities.speed.incrementKmh, 0.1) * 5).get() } },
                       minusSmall: { act { try service.session.adjustSpeed(by: -max(tm.capabilities.speed.incrementKmh, 0.1)).get() } },
                       plusSmall: { act { try service.session.adjustSpeed(by: max(tm.capabilities.speed.incrementKmh, 0.1)).get() } },
                       plus: { act { try service.session.adjustSpeed(by: max(tm.capabilities.speed.incrementKmh, 0.1) * 5).get() } })
             if tm.capabilities.supportsInclinationControl {
                 let step = max(tm.capabilities.inclination?.incrementPercent ?? 1, 0.5)
-                adjustRow(title: "Inclinaison", value: String(format: "%.0f %%", snap.targetIncline), color: Theme.incline,
+                adjustRow(title: "Consigne inclinaison", value: String(format: "%.0f %%", snap.targetIncline), color: Theme.incline,
                           minus: nil,
                           minusSmall: { act { try service.session.adjustIncline(by: -step).get() } },
                           plusSmall: { act { try service.session.adjustIncline(by: step).get() } },
