@@ -1,0 +1,50 @@
+name: Simulateurs
+
+on:
+  push:
+    branches-ignore: [ci-sim-results]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  simulators:
+    name: Simulateurs iPhone + Apple Watch (scénarios, captures)
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+      - name: Inventaire
+        run: |
+          mkdir -p out
+          xcodebuild -version | tee out/xcode.txt
+          xcrun simctl list runtimes | tee out/runtimes.txt
+          xcrun simctl list devicetypes | grep -E "iPhone|Watch" | tee out/devicetypes.txt
+          xcrun simctl list pairs | tee out/pairs.txt
+      - name: Build (simulateur, signature locale)
+        run: |
+          status=0
+          xcodebuild -project Foulee.xcodeproj -scheme Foulee -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug -derivedDataPath build/dd \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= \
+            build > out/build.log 2>&1 || status=$?
+          grep -E "(error|warning): " out/build.log | sort -u | head -80 || true
+          tail -n 3 out/build.log
+          exit $status
+      - name: Scénarios
+        run: python3 scripts/sim/run_scenarios.py build/dd/Build/Products/Debug-iphonesimulator/Foulee.app out
+      - name: Publier les résultats (branche ci-sim-results)
+        if: always()
+        run: |
+          cp -R out /tmp/simout
+          git config user.name "ci-simulators"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan sim-results
+          git rm -rfq . > /dev/null
+          rm -rf ./*
+          cp -R /tmp/simout/. .
+          echo "${GITHUB_SHA}" > SOURCE_COMMIT
+          git add -A
+          git commit -qm "Résultats simulateurs pour ${GITHUB_SHA}"
+          git push -fq origin HEAD:refs/heads/ci-sim-results

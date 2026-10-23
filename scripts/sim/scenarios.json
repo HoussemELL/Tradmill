@@ -1,0 +1,15 @@
+[
+  {"name": "00-etat-initial", "description": "Lancement des deux apps dans leur état actuel (audit).",
+   "steps": [
+     {"do": "appearance", "on": "phone", "value": "dark"},
+     {"do": "launch", "on": "phone"},
+     {"do": "wait", "seconds": 8},
+     {"do": "shot", "on": "phone", "label": "iphone-accueil"},
+     {"do": "launch", "on": "watch"},
+     {"do": "wait", "seconds": 8},
+     {"do": "shot", "on": "watch", "label": "watch-accueil"},
+     {"do": "appearance", "on": "phone", "value": "light"},
+     {"do": "wait", "seconds": 3},
+     {"do": "shot", "on": "phone", "label": "iphone-accueil-clair"}
+   ]}
+]
