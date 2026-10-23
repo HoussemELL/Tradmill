@@ -43,6 +43,8 @@ final class AppModel {
     /// Dernière demande de démarrage traitée (une demande répétée n'est jamais rejouée).
     @ObservationIgnored private var handledStartRequests: Set<UUID> = []
     @ObservationIgnored private var lastStartResult: WatchStartResult?
+    /// Retour affiché sur la montre (ex. reprise refusée), pendant quelques secondes.
+    @ObservationIgnored private var watchFeedback: (text: String, until: TimeInterval)?
     @ObservationIgnored private var watchCatalog: (fingerprint: String, programs: [WatchProgramSummary])?
     /// Bandeau d'information (ex. séance lancée depuis la montre).
     var notice: String?
@@ -103,8 +105,8 @@ final class AppModel {
         watch.onContextRequested = { [weak self] in self?.publishWatchContext(force: true) }
         watch.contextProvider = { [unowned self] in self.watchContext() }
         watch.liveProvider = { [weak self] in
-            guard let s = self?.sessionService, s.session.status != .ready else { return nil }
-            return WatchLiveStatus.make(session: s.session, now: MonotonicClock.now(), date: Date())
+            guard let self, let s = self.sessionService, s.session.status != .ready else { return nil }
+            return self.liveStatusForWatch(s, now: MonotonicClock.now())
         }
     }
 
@@ -202,7 +204,13 @@ final class AppModel {
         guard let s = sessionService else { return }
         switch c {
         case .pause: pauseSession()
-        case .resume: _ = resumeSession()
+        case .resume:
+            if let e = resumeSession() {
+                // Ex. le tapis ralentit encore après la pause : refus sûr, mais expliqué sur la montre.
+                let text = "Reprise impossible : \(e). Réessayez dans quelques secondes."
+                log.log(.watch, text)
+                watchFeedback = (text, MonotonicClock.now() + 10)
+            }
         case .stop:
             if s.session.status != .finished { stopSession() }
         case .resumeAutopilot: s.session.resumeAutopilot()
@@ -216,7 +224,15 @@ final class AppModel {
         guard let s = sessionService, s.session.status != .ready, watch.canStreamToWatch,
               force || now - lastWatchStatusAt >= 1 else { return }
         lastWatchStatusAt = now
-        watch.send(.liveStatus(WatchLiveStatus.make(session: s.session, now: now, date: Date())), quiet: true)
+        watch.send(.liveStatus(liveStatusForWatch(s, now: now)), quiet: true)
+    }
+
+    private func liveStatusForWatch(_ s: SessionService, now: TimeInterval) -> WatchLiveStatus {
+        var st = WatchLiveStatus.make(session: s.session, now: now, date: Date())
+        if let f = watchFeedback {
+            if now < f.until { st.alert = f.text } else { watchFeedback = nil }
+        }
+        return st
     }
 
     /// Reconnexion automatique du lien (jamais de commande) aux appareils mémorisés.

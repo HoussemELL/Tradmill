@@ -527,7 +527,7 @@
      "-FouleeAutoStart",
      "Test Zone 2 Auto",
      "-FouleeScript",
-     "pause@150,resume@165,stop@300"
+     "pause@150,resume@180,stop@300"
     ]
    },
    {
@@ -588,12 +588,12 @@
    {
     "do": "shot",
     "on": "watch",
-    "label": "fin"
+    "label": "fin-watch"
    },
    {
     "do": "shot",
     "on": "phone",
-    "label": "fin"
+    "label": "fin-phone"
    },
    {
     "do": "collect",
@@ -626,6 +626,13 @@
       "op": "contains",
       "value": "paused",
       "label": "pause visible sur la montre"
+     },
+     {
+      "file": "watch.json",
+      "path": "states",
+      "op": "lenge",
+      "value": 5,
+      "label": "montre : en cours → pause → reprise → fin"
      },
      {
       "file": "watch.json",
@@ -702,6 +709,13 @@
       "op": "contains",
       "value": "paused(user)",
       "label": "séance mise en pause"
+     },
+     {
+      "file": "phone.json",
+      "path": "statuses",
+      "op": "contains",
+      "value": "resuming",
+      "label": "reprise depuis la montre"
      },
      {
       "file": "phone.json",

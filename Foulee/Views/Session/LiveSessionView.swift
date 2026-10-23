@@ -124,8 +124,8 @@ struct LiveSessionView: View {
     private var autopilotColor: Color {
         switch snap.autoMode {
         case .regulating?: return Theme.accent
-        case .heartRateLost?, .suspended?: return Theme.danger
-        case .heartRateGap?: return Theme.warning
+        case .heartRateLost?: return Theme.danger
+        case .heartRateGap?, .suspended?: return Theme.warning
         case .manual?: return Theme.speed
         default: return .secondary
         }
@@ -359,7 +359,13 @@ struct FinishedSessionView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds))
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters))
-                    if let steps = r.steps { MetricTile(title: "Pas", value: "\(steps)", detail: r.stepsSource.label) }
+                    // Sans podomètre : pas de case vide, l'inclinaison prend la ligne.
+                    if let steps = r.steps {
+                        MetricTile(title: "Pas", value: "\(steps)", detail: r.stepsSource.label)
+                        MetricTile(title: "Inclinaison moy.", value: Format.incline(r.avgIncline), unit: "%")
+                    }
+                }
+                if r.steps == nil {
                     MetricTile(title: "Inclinaison moy.", value: Format.incline(r.avgIncline), unit: "%")
                 }
                 SessionInsightsView(record: r)

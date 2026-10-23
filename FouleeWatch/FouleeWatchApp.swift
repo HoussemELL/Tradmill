@@ -465,6 +465,8 @@ struct MetricsPage: View {
     @ViewBuilder private func statusLine(_ l: WatchLiveStatus) -> some View {
         if l.treadmillLinkLost == true {
             Text("Tapis déconnecté").font(.caption2.bold()).foregroundStyle(.red)
+        } else if let a = l.alert, a.hasPrefix("Reprise impossible") {
+            Text("Reprise impossible").font(.caption2.bold()).foregroundStyle(.orange)
         } else if l.state == .paused {
             Text(l.stateLabel).font(.caption2.bold()).foregroundStyle(.orange).lineLimit(1)
         } else if let name = l.phaseName {
@@ -620,6 +622,9 @@ struct ControlsPage: View {
                       systemImage: manager.isPhoneLinked(now: now) ? "iphone.radiowaves.left.and.right" : "iphone.slash")
                     .font(.caption2).foregroundStyle(.secondary)
                 if let w = manager.warning { Text(w).font(.caption2).foregroundStyle(.red) }
+                if manager.isPhoneLinked(now: now), let a = manager.live?.alert {
+                    Text(a).font(.caption2).foregroundStyle(.orange)
+                }
             }
         }
     }
