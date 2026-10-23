@@ -44,6 +44,12 @@ jobs:
             echo "Watch $k = $(/usr/libexec/PlistBuddy -c "Print :$k" "$W/Info.plist")"
           done
           echo "iPhone CFBundleIdentifier = $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          for k in NSBluetoothAlwaysUsageDescription NSHealthShareUsageDescription NSHealthUpdateUsageDescription; do
+            /usr/libexec/PlistBuddy -c "Print :$k" "$APP/Info.plist" > /dev/null || { echo "iPhone : $k absent"; exit 1; }
+          done
+          for k in NSHealthShareUsageDescription NSHealthUpdateUsageDescription; do
+            /usr/libexec/PlistBuddy -c "Print :$k" "$W/Info.plist" > /dev/null || { echo "Watch : $k absent"; exit 1; }
+          done
           test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$W/Info.plist")" = \
                "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
       - name: Build watchOS (simulateur)

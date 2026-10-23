@@ -355,6 +355,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Foulee-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Foulée se connecte en Bluetooth à votre tapis de course (FTMS) et à votre ceinture cardio.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, votre poids, votre âge et vos séances pour calculer vos zones et éviter les doublons.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre vos séances de tapis dans Apple Santé (durée, distance, pas, énergie, fréquence cardiaque).";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -389,6 +392,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Foulee-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Foulée se connecte en Bluetooth à votre tapis de course (FTMS) et à votre ceinture cardio.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, votre poids, votre âge et vos séances pour calculer vos zones et éviter les doublons.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre vos séances de tapis dans Apple Santé (durée, distance, pas, énergie, fréquence cardiaque).";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -423,6 +429,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/FouleeWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, vos pas et votre énergie active pendant l'exercice pour les envoyer à l'iPhone.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre l'exercice de tapis de course dans Apple Santé.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_ID_PREFIX)";
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
@@ -453,6 +461,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/FouleeWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, vos pas et votre énergie active pendant l'exercice pour les envoyer à l'iPhone.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre l'exercice de tapis de course dans Apple Santé.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_ID_PREFIX)";
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;

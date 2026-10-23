@@ -53,15 +53,31 @@ final class HealthService {
 
     var sharingStatusLabel: String {
         guard isAvailable else { return "Santé indisponible sur cet appareil" }
+        let keys = Self.missingUsageKeys
+        if !keys.isEmpty { return "App mal configurée (\(keys.joined(separator: ", ")) absent de l'Info.plist) : rien ne sera enregistré" }
         let missing = missingWritePermissions
         if store.authorizationStatus(for: HKObjectType.workoutType()) == .notDetermined { return "Autorisations non demandées" }
         if missing.isEmpty { return "Écriture autorisée pour tous les types" }
         return "Ne seront pas enregistrés : " + missing.joined(separator: ", ")
     }
 
+    /// Clés exigées par HealthKit : sans elles, `requestAuthorization` lève une exception
+    /// Objective-C (plantage), qu'on ne peut pas intercepter en Swift.
+    static let requiredUsageKeys = ["NSHealthShareUsageDescription", "NSHealthUpdateUsageDescription"]
+
+    static var missingUsageKeys: [String] {
+        requiredUsageKeys.filter { (Bundle.main.object(forInfoDictionaryKey: $0) as? String)?.isEmpty ?? true }
+    }
+
     @MainActor
     func requestAuthorization() async -> Bool {
         guard isAvailable else { return false }
+        let missing = Self.missingUsageKeys
+        guard missing.isEmpty else {
+            lastError = "App mal configurée : \(missing.joined(separator: ", ")) absent de l'Info.plist. Santé est désactivé."
+            log.log(.error, "Autorisation Santé non demandée : \(missing.joined(separator: ", ")) absent de l'Info.plist")
+            return false
+        }
         do {
             try await store.requestAuthorization(toShare: Set(Self.writeTypes.map(\.0)), read: readTypes)
             authorizationRequested = true

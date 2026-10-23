@@ -49,6 +49,10 @@ final class WorkoutManager {
     }
 
     func requestAuthorization() async {
+        // Sans ces clés, HealthKit lève une exception Objective-C (plantage).
+        for key in ["NSHealthShareUsageDescription", "NSHealthUpdateUsageDescription"] {
+            guard let v = Bundle.main.object(forInfoDictionaryKey: key) as? String, !v.isEmpty else { return }
+        }
         let share: Set<HKSampleType> = [HKObjectType.workoutType()]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.stepCount),
                                        HKQuantityType(.activeEnergyBurned), HKQuantityType(.distanceWalkingRunning),
