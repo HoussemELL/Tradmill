@@ -72,6 +72,9 @@ public final class WorkoutSession {
 
     public var onAlert: ((String) -> Void)?
     public var onFinished: ((SessionRecord) -> Void)?
+    /// Appelé une fois la séance définitive : arrêt réel de la bande connu et, avec une
+    /// ceinture/brassard, 2 minutes de FC de récupération enregistrées après l'arrêt.
+    public var onRecordFinalized: ((SessionRecord) -> Void)?
     public var onChange: (() -> Void)?
 
     private var alerts: ZoneAlertDebouncer
@@ -85,6 +88,14 @@ public final class WorkoutSession {
     private let startMonotonic: TimeInterval
     private var hasDistanceCounter = false
     private var pauseStartedAt: TimeInterval?
+    private var hasEnergyCounter = false
+    private var lastHeartReadingAt: TimeInterval = -.infinity
+    private var finishedAt: TimeInterval?
+    private var beltStoppedAt: TimeInterval?
+    private var recoveryWithHeartRate = false
+    public private(set) var isFinalized = false
+    /// Délai maximal pour constater l'arrêt de la bande après « Arrêter ».
+    public static let beltStopObservationTimeout: TimeInterval = 20
 
     public init(program: WorkoutProgram?, controller: TreadmillController, heartRate: HeartRateMonitor,
                 settings: SessionSettings, treadmillName: String?, simulated: Bool, log: DiagnosticLog,
@@ -168,7 +179,7 @@ public final class WorkoutSession {
         let r = controller.resume(targetSpeed: t.speed, targetIncline: controller.capabilities.supportsInclinationControl ? t.incline : nil)
         if case .success = r {
             status = .resuming
-            event(.resume, "Reprise demandée")
+            event(.info, "Reprise demandée")
         } else if case let .failure(e) = r {
             message = "\(e)"
         }
@@ -255,6 +266,7 @@ public final class WorkoutSession {
         }
         if d.instantaneousSpeedKmh != nil { lastSpeedSampleAt = now }
         if let raw = d.totalEnergyKcal {
+            hasEnergyCounter = true
             if let a = energyCounter.ingest(UInt64(raw), at: now) { logAnomaly("énergie", a) }
         }
         if let raw = d.stepCountExtension {
@@ -322,12 +334,20 @@ public final class WorkoutSession {
         // Démarrage effectif du chrono quand le mouvement est observé.
         if status == .starting && controller.state == .running {
             status = .running
+            record.beltStartDate = record.date(at: now - startMonotonic)
             log.log(.session, "Chrono démarré (mouvement du tapis observé)")
             handle(engineEvents: engine.start(at: now))
         } else if status == .resuming && controller.state == .running {
             status = .running
             if let p = pauseStartedAt { record.pausedSeconds += now - p; pauseStartedAt = nil }
+            event(.resume, "Reprise (mouvement du tapis observé)")
             handle(engineEvents: engine.resume(at: now))
+        }
+        recordHeartReading(now: now)
+        if status == .finished {
+            trackRecovery(now: now)
+            changed()
+            return
         }
         if status == .running {
             handle(engineEvents: engine.update(at: now))
@@ -387,14 +407,69 @@ public final class WorkoutSession {
         let now = clock()
         if let p = pauseStartedAt { record.pausedSeconds += now - p; pauseStartedAt = nil }
         engine.finish(at: now)
+        closePhaseSpan(at: now)
         status = .finished
         appendSample(now: now)
         event(.finish, "Séance terminée")
         record = snapshotRecord()
         record.endDate = wallClock()
+        record.revision = 1
+        finishedAt = now
+        if !controller.isMoving && record.beltStartDate != nil {
+            beltStoppedAt = now
+            record.beltStopDate = record.date(at: now - startMonotonic)
+        }
+        if let src = heartRate.activeSource, src == .bleSensor || src == .treadmill,
+           let r = heartRate.latest[src], now - r.receivedAt < 10 {
+            recoveryWithHeartRate = true
+            log.log(.session, "Enregistrement de la FC de récupération pendant 2 minutes après l'arrêt de la bande")
+        }
         log.log(.session, String(format: "Séance terminée : %.0f s actives, %.0f m", record.activeSeconds, record.distanceMeters))
         changed()
         onFinished?(record)
+    }
+
+    /// Termine immédiatement la phase de récupération (ex. l'utilisateur relance une séance).
+    public func finalizeNow() {
+        guard status == .finished, !isFinalized else { return }
+        finalize(now: clock())
+    }
+
+    private func trackRecovery(now: TimeInterval) {
+        guard let fin = finishedAt, !isFinalized else { return }
+        if beltStoppedAt == nil, record.beltStartDate != nil, !controller.isMoving, controller.telemetry.isFresh(now: now) {
+            beltStoppedAt = now
+            record.beltStopDate = record.date(at: now - startMonotonic)
+            log.log(.session, "Arrêt de la bande observé")
+        }
+        let stopKnown = beltStoppedAt != nil || now - fin >= Self.beltStopObservationTimeout
+        let recoveryDone = !recoveryWithHeartRate || now - (beltStoppedAt ?? fin) >= HealthWritePlan.recoveryWindow
+        if stopKnown && recoveryDone { finalize(now: now) }
+    }
+
+    private func finalize(now: TimeInterval) {
+        isFinalized = true
+        if record.beltStopDate == nil, record.beltStartDate != nil, let fin = finishedAt {
+            // Arrêt non confirmé par la télémétrie : on retient l'instant de la commande d'arrêt.
+            record.beltStopDate = record.date(at: fin - startMonotonic)
+            event(.info, "Arrêt de la bande non observé : heure de fin = commande d'arrêt")
+        }
+        log.log(.session, "Séance finalisée (\(record.heartRateReadings?.count ?? 0) mesures de FC horodatées)")
+        onRecordFinalized?(record)
+    }
+
+    private func recordHeartReading(now: TimeInterval) {
+        guard status != .ready, !isFinalized, let src = heartRate.activeSource, let r = heartRate.latest[src],
+              r.receivedAt > lastHeartReadingAt, r.receivedAt >= startMonotonic else { return }
+        lastHeartReadingAt = r.receivedAt
+        if record.heartRateReadings == nil { record.heartRateReadings = [] }
+        record.heartRateReadings?.append(HeartRatePoint(t: r.receivedAt - startMonotonic, bpm: r.bpm, source: src))
+    }
+
+    private func closePhaseSpan(at now: TimeInterval) {
+        guard var spans = record.phaseSpans, let last = spans.indices.last, spans[last].end == nil else { return }
+        spans[last].end = now - startMonotonic
+        record.phaseSpans = spans
     }
 
     private func snapshotRecord() -> SessionRecord {
@@ -423,6 +498,12 @@ public final class WorkoutSession {
                     event(.phaseSkipped, "Phases écoulées sans être appliquées (app suspendue ?) : \(names)")
                 }
                 event(.phaseChange, String(format: "%@ — %.1f km/h, %.0f %%", sp.displayName, sp.phase.speedKmh, sp.phase.inclinePercent))
+                let now = clock()
+                closePhaseSpan(at: now)
+                if record.phaseSpans == nil { record.phaseSpans = [] }
+                record.phaseSpans?.append(PhaseSpan(index: index, name: sp.displayName, kind: sp.phase.kind,
+                                                    targetSpeedKmh: sp.phase.speedKmh, targetInclinePercent: sp.phase.inclinePercent,
+                                                    start: now - startMonotonic))
                 applyPhaseTargets(sp.phase)
             case .finished:
                 event(.info, "Programme terminé")
@@ -492,7 +573,8 @@ public final class WorkoutSession {
             distance: distanceMeters,
             steps: steps.value,
             phase: engine.currentIndex,
-            paused: status != .running))
+            paused: status != .running,
+            energy: hasEnergyCounter ? energyCounter.sessionTotal : nil))
     }
 
     private func event(_ kind: SessionEvent.Kind, _ detail: String) {

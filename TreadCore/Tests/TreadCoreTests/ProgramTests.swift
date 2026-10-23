@@ -171,7 +171,7 @@ final class ProgramTests: XCTestCase {
 
 final class HeartAndMetricsTests: XCTestCase {
     func testPercentOfMaxZones() {
-        let z = HeartZoneSettings(maxHR: 200)
+        let z = HeartZoneSettings(maxHR: 200, method: .percentOfMax)
         XCTAssertEqual(z.bounds, [100, 120, 140, 160, 180, 200])
         XCTAssertEqual(z.zone(for: 99), 0)
         XCTAssertEqual(z.zone(for: 100), 1)

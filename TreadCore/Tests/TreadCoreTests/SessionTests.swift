@@ -6,6 +6,7 @@ final class SessionHarness {
     let hr = HeartRateMonitor(preference: .automatic)
     var session: WorkoutSession!
     var finished: SessionRecord?
+    var finalized: SessionRecord?
 
     init(program: WorkoutProgram?, quirks: SimulatedTreadmill.Quirks = .urtm047Like, settings: SessionSettings = SessionSettings()) {
         h = ControllerHarness(profile: .urtm047, quirks: quirks)
@@ -15,6 +16,7 @@ final class SessionHarness {
         h.controller.onTelemetry = { [unowned self] d, t in self.session.handleTelemetry(d, at: t) }
         h.controller.onEvent = { [unowned self] e in self.h.events.append(e); self.session.handle(controllerEvent: e) }
         session.onFinished = { [unowned self] in self.finished = $0 }
+        session.onRecordFinalized = { [unowned self] in self.finalized = $0 }
     }
 
     func run(_ seconds: TimeInterval, hrBPM: Int? = nil) {
@@ -230,49 +232,284 @@ final class WorkoutSessionTests: XCTestCase {
             .workoutState(.running, startDate: nil),
             .linkSession(id: UUID(), title: "x"),
             .command(.end),
+            .workoutMetadata(standard: StandardWorkoutMetadata(syncIdentifier: "X", syncVersion: 2, indoor: true),
+                             foulee: ["FouleeProgram": .string("Collines"), "FouleeMaxSpeedKmh": .number(6.5)]),
         ]
         for m in msgs { XCTAssertEqual(try WatchMessage.decode(m.encoded()), m) }
     }
 }
 
-final class HealthSyncPlanTests: XCTestCase {
-    func record(hrSource: HeartRateSource?) -> SessionRecord {
-        var r = SessionRecord(startDate: Date(), program: nil, treadmillName: nil, profileID: nil, simulated: false)
-        r.activeSeconds = 600
-        r.distanceMeters = 800
-        r.distanceSource = .treadmill
-        r.calories.treadmillKcal = 50
-        r.samples = [SessionSample(t: 0, active: 0, speed: 5, incline: 0, targetSpeed: 5, targetIncline: 0, hr: 120,
-                                   hrSource: hrSource, zone: 2, distance: 0, steps: nil, phase: nil, paused: false)]
+
+/// Règles Apple Santé : propriétaire unique, séance, échantillons, métadonnées, anti-doublons.
+final class HealthWritePlanTests: XCTestCase {
+    let inputs = HealthWritePlan.Inputs(healthEnabled: true, watchWorkoutUsed: false, bodyMassKg: 70)
+
+    /// Séance réelle simulée : ceinture BLE, pas fournis par le tapis, arrêt puis 2 min de récupération.
+    func phoneSessionWithBelt(program: WorkoutProgram? = nil, minutes: Double = 5, pauseSeconds: Double = 0,
+                              speed: Double? = nil) -> SessionRecord {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.reportsStepCount = true
+        let s = SessionHarness(program: program, quirks: q)
+        XCTAssertNoThrow(try s.session.start().get())
+        s.run(15, hrBPM: 120)
+        if let v = speed { _ = s.session.setManualSpeed(v) }
+        if pauseSeconds > 0 {
+            s.run(minutes * 30, hrBPM: 130)
+            s.session.pause()
+            s.run(pauseSeconds, hrBPM: 110)
+            _ = s.session.resume()
+            s.run(minutes * 30, hrBPM: 135)
+        } else {
+            s.run(minutes * 60, hrBPM: 132)
+        }
+        if s.session.status != .finished { s.session.stop() }
+        s.run(150, hrBPM: 100)
+        var r = try! XCTUnwrap(s.finalized, "séance non finalisée")
+        r.simulated = false
         return r
     }
 
-    func testWatchOwnsWhenUsed() {
-        var s = HealthSettings(); s.enabled = true
-        let p = HealthSyncPlan.make(record: record(hrSource: .appleWatch), settings: s, watchWorkoutUsed: true)
-        XCTAssertEqual(p.owner, .watch)
-        XCTAssertFalse(p.writeDistance || p.writeHeartRate || p.writeEnergy || p.writeSteps)
-    }
-
-    func testPhoneOwnerWritesOnlyMissingData() {
-        var s = HealthSettings(); s.enabled = true
-        let p = HealthSyncPlan.make(record: record(hrSource: .bleSensor), settings: s, watchWorkoutUsed: false)
+    func testPhoneOwnerWithBeltWritesEverythingInShortChunks() {
+        let r = phoneSessionWithBelt()
+        let p = HealthWritePlan.make(record: r, inputs: inputs)
         XCTAssertEqual(p.owner, .phone)
-        XCTAssertTrue(p.writeHeartRate)
-        XCTAssertTrue(p.writeDistance)
-        XCTAssertFalse(p.writeEnergy, "énergie du tapis désactivée par défaut")
-        XCTAssertFalse(p.writeSteps)
+        XCTAssertEqual(p.activityType, .walking)
+        XCTAssertEqual(p.standard, StandardWorkoutMetadata(syncIdentifier: r.id.uuidString, syncVersion: 1, indoor: true))
+        XCTAssertEqual(p.fouleeMetadata[FouleeMetadataKey.sessionID], .string(r.id.uuidString))
+        XCTAssertEqual(p.fouleeMetadata[FouleeMetadataKey.program], .string("Séance libre"))
+        XCTAssertEqual(p.fouleeMetadata[FouleeMetadataKey.energySource], .string("acsm"))
+        XCTAssertNotNil(p.fouleeMetadata[FouleeMetadataKey.averageSpeed])
+        XCTAssertNotNil(p.fouleeMetadata[FouleeMetadataKey.maxSpeed])
+        // Début = démarrage réel de la bande (après le compte à rebours), pas l'appui sur Démarrer.
+        XCTAssertGreaterThan(p.start, r.startDate)
+        XCTAssertEqual(p.start, r.beltStartDate)
+        XCTAssertEqual(p.end, r.beltStopDate)
+        let kinds = Set(p.quantities.map(\.kind))
+        XCTAssertEqual(kinds, [.distanceWalkingRunning, .stepCount, .activeEnergyBurned, .heartRate])
+        // Tranches d'au plus 1 minute, jamais un bloc unique.
+        for q in p.quantities where q.kind != .heartRate {
+            XCTAssertLessThanOrEqual(q.end.timeIntervalSince(q.start), 60.001)
+            XCTAssertGreaterThan(q.value, 0, "jamais de 0 à la place d'une donnée")
+            XCTAssertTrue(q.start >= p.start && q.end <= p.end)
+        }
+        XCTAssertGreaterThan(p.quantities.filter { $0.kind == .distanceWalkingRunning }.count, 3)
+        let distance = p.quantities.filter { $0.kind == .distanceWalkingRunning }.map(\.value).reduce(0, +)
+        XCTAssertEqual(distance, r.distanceMeters, accuracy: 2)
+        let steps = p.quantities.filter { $0.kind == .stepCount }.map(\.value).reduce(0, +)
+        XCTAssertEqual(steps, Double(r.steps ?? 0), accuracy: 2)
+        // FC : ~1 mesure / 5 s, dont les 2 minutes après l'arrêt (non associées, hors séance).
+        let hr = p.quantities.filter { $0.kind == .heartRate }.sorted { $0.start < $1.start }
+        for (a, b) in zip(hr, hr.dropFirst()) { XCTAssertGreaterThanOrEqual(b.start.timeIntervalSince(a.start), 4.5) }
+        let post = hr.filter { !$0.associated }
+        XCTAssertGreaterThanOrEqual(post.count, 20)
+        XCTAssertTrue(post.allSatisfy { $0.start > p.end && $0.start <= p.end.addingTimeInterval(120) })
+        XCTAssertTrue(post.allSatisfy { $0.value == 100 })
+        XCTAssertEqual(p.sampleMetadata[FouleeMetadataKey.sessionID], .string(r.id.uuidString))
     }
 
-    func testIdempotentAndDisabled() {
-        var s = HealthSettings(); s.enabled = true
-        var r = record(hrSource: .bleSensor)
-        r.healthStatus = .saved(workoutUUID: "x")
-        XCTAssertEqual(HealthSyncPlan.make(record: r, settings: s, watchWorkoutUsed: false).owner, .none)
-        var sim = record(hrSource: .bleSensor)
-        sim.simulated = true
-        XCTAssertEqual(HealthSyncPlan.make(record: sim, settings: s, watchWorkoutUsed: false).owner, .none)
-        s.enabled = false
-        XCTAssertEqual(HealthSyncPlan.make(record: record(hrSource: nil), settings: s, watchWorkoutUsed: false).owner, .none)
+    func testWatchOwnerMeansPhoneWritesNothing() {
+        let r = phoneSessionWithBelt(minutes: 2)
+        let p = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: true, watchWorkoutUsed: true, bodyMassKg: 70))
+        XCTAssertEqual(p.owner, .watch)
+        XCTAssertTrue(p.quantities.isEmpty)
+        XCTAssertTrue(p.segments.isEmpty)
+        XCTAssertFalse(p.discardWatchWorkout)
+        let (std, meta) = HealthWritePlan.watchMetadata(record: r)
+        XCTAssertEqual(std.syncIdentifier, r.id.uuidString)
+        XCTAssertEqual(meta[FouleeMetadataKey.program], .string("Séance libre"))
+        XCTAssertNil(meta[FouleeMetadataKey.energySource], "l'énergie de la Watch est la sienne")
+    }
+
+    func testHIITProgramWithSegments() {
+        let program = WorkoutProgram(name: "Intervalles marche/course", items: [
+            .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 60, speedKmh: 4)),
+            .block(.init(name: "Sprints", repeatCount: 2, phases: [
+                .init(name: "Sprint", kind: .work, durationSeconds: 40, speedKmh: 8),
+                .init(name: "Récupération", kind: .recovery, durationSeconds: 40, speedKmh: 4.5),
+            ])),
+            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 40, speedKmh: 3.5)),
+        ])
+        let r = phoneSessionWithBelt(program: program, minutes: 6)
+        let p = HealthWritePlan.make(record: r, inputs: inputs)
+        XCTAssertEqual(p.activityType, .hiit)
+        XCTAssertEqual(p.segments.map(\.name), ["Échauffement", "Sprint · 1/2", "Récupération · 1/2", "Sprint · 2/2",
+                                                "Récupération · 2/2", "Retour au calme"])
+        XCTAssertEqual(p.segments[1].targetSpeedKmh, 8)
+        XCTAssertEqual(p.segments[1].end.timeIntervalSince(p.segments[1].start), 40, accuracy: 1)
+        XCTAssertTrue(p.segments.allSatisfy { $0.start >= p.start && $0.end <= p.end })
+    }
+
+    func testPausesExcludedFromDuration() {
+        let r = phoneSessionWithBelt(minutes: 2, pauseSeconds: 40)
+        let p = HealthWritePlan.make(record: r, inputs: inputs)
+        XCTAssertEqual(p.pauses.count, 1)
+        let pause = p.pauses[0].end.timeIntervalSince(p.pauses[0].start)
+        // Pause = de la demande de pause à la reprise effective de la bande (compte à rebours inclus).
+        XCTAssertGreaterThanOrEqual(pause, 40)
+        XCTAssertEqual(p.activeDuration, p.end.timeIntervalSince(p.start) - pause, accuracy: 0.01)
+    }
+
+    func testRunningDetectedFromSpeed() {
+        let r = phoneSessionWithBelt(minutes: 3, speed: 8)
+        XCTAssertEqual(HealthWritePlan.make(record: r, inputs: inputs).activityType, .running)
+    }
+
+    func testEnergyFromTreadmillWithoutBodyMass() {
+        let r = phoneSessionWithBelt(minutes: 2)
+        let p = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: true, watchWorkoutUsed: false, bodyMassKg: nil))
+        XCTAssertEqual(p.energySource, "tapis")
+        XCTAssertEqual(p.fouleeMetadata[FouleeMetadataKey.energySource], .string("tapis"))
+        XCTAssertFalse(p.quantities.filter { $0.kind == .activeEnergyBurned }.isEmpty)
+    }
+
+    func testNothingWrittenWhenShortSimulatedOrDisabled() {
+        var r = phoneSessionWithBelt(minutes: 2)
+        XCTAssertEqual(HealthWritePlan.make(record: r, inputs: .init(healthEnabled: false, watchWorkoutUsed: false, bodyMassKg: 70)).owner, .none)
+        r.simulated = true
+        XCTAssertEqual(HealthWritePlan.make(record: r, inputs: inputs).owner, .none)
+        r.simulated = false
+        r.beltStopDate = r.beltStartDate.map { $0.addingTimeInterval(45) }
+        let short = HealthWritePlan.make(record: r, inputs: inputs)
+        XCTAssertEqual(short.owner, .none)
+        XCTAssertTrue(short.reason.contains("moins d'1 minute"))
+        let watchShort = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: true, watchWorkoutUsed: true, bodyMassKg: 70))
+        XCTAssertTrue(watchShort.discardWatchWorkout)
+    }
+
+    func testNoTreadmillStepsMeansNoStepsWritten() {
+        let s = SessionHarness(program: nil)
+        _ = s.session.start()
+        s.run(120)
+        s.session.stop()
+        s.run(30)
+        var r = try! XCTUnwrap(s.finalized)
+        r.simulated = false
+        let p = HealthWritePlan.make(record: r, inputs: inputs)
+        XCTAssertFalse(p.quantities.contains { $0.kind == .stepCount })
+        XCTAssertFalse(p.quantities.contains { $0.kind == .heartRate })
+        XCTAssertTrue(p.notWritten.contains { $0.hasPrefix("Pas") })
+        XCTAssertTrue(p.notWritten.contains { $0.hasPrefix("FC") })
+    }
+
+    // MARK: - Anti-doublons
+
+    func plan(version: Int = 1) -> HealthWritePlan {
+        var r = SessionRecord(startDate: Date(timeIntervalSince1970: 0), program: nil, treadmillName: nil, profileID: nil, simulated: false)
+        r.beltStartDate = Date(timeIntervalSince1970: 100)
+        r.beltStopDate = Date(timeIntervalSince1970: 1_300)
+        r.revision = version
+        return HealthWritePlan.make(record: r, inputs: inputs)
+    }
+
+    func testSameSessionTwiceIsNotWrittenAgain() {
+        let p = plan()
+        let mine = ExistingHealthWorkout(uuid: "A", sourceName: "Foulée", syncIdentifier: p.standard.syncIdentifier, syncVersion: 1,
+                                         start: p.start, end: p.end)
+        XCTAssertEqual(HealthWriteDecision.decide(plan: p, existing: [mine]), .alreadySaved(uuid: "A"))
+        XCTAssertEqual(HealthWriteDecision.decide(plan: p, existing: []), .write(replacing: []))
+    }
+
+    func testCorrectionReplacesPreviousVersion() {
+        let p = plan(version: 2)
+        XCTAssertEqual(p.standard.syncVersion, 2)
+        let old = ExistingHealthWorkout(uuid: "A", sourceName: "Foulée", syncIdentifier: p.standard.syncIdentifier, syncVersion: 1,
+                                        start: p.start, end: p.end)
+        XCTAssertEqual(HealthWriteDecision.decide(plan: p, existing: [old]), .write(replacing: ["A"]))
+    }
+
+    func testOverlapOver50PercentBlocksWriting() {
+        let p = plan()
+        let watch = ExistingHealthWorkout(uuid: "W", sourceName: "Apple Watch de Houssem", syncIdentifier: nil, syncVersion: nil,
+                                          start: p.start.addingTimeInterval(-60), end: p.start.addingTimeInterval(800))
+        XCTAssertEqual(HealthWriteDecision.decide(plan: p, existing: [watch]), .overlapping(by: "Apple Watch de Houssem"))
+        let small = ExistingHealthWorkout(uuid: "U", sourceName: "UR", syncIdentifier: nil, syncVersion: nil,
+                                          start: p.start, end: p.start.addingTimeInterval(300))
+        XCTAssertEqual(HealthWriteDecision.decide(plan: p, existing: [small]), .write(replacing: []))
+        // Watch et iPhone en même temps : même si une ancienne version Foulée existe, la Watch gagne.
+        let mineOld = ExistingHealthWorkout(uuid: "A", sourceName: "Foulée", syncIdentifier: p.standard.syncIdentifier, syncVersion: 0,
+                                            start: p.start, end: p.end)
+        XCTAssertEqual(HealthWriteDecision.decide(plan: p, existing: [mineOld, watch]), .overlapping(by: "Apple Watch de Houssem"))
+    }
+
+    func testReportText() {
+        let r = phoneSessionWithBelt(minutes: 2)
+        let p = HealthWritePlan.make(record: r, inputs: inputs)
+        let rep = HealthWriteReport(plan: p, outcome: "écrit", workoutUUID: "X")
+        XCTAssertTrue(rep.text.contains("SyncVersion = 1"))
+        XCTAssertTrue(rep.text.contains("FouleeProgram = Séance libre"))
+        XCTAssertTrue(rep.quantities.allSatisfy { $0.kind == .heartRate || $0.maxChunkSeconds <= 60.001 })
+        let data = try! CoreJSON.encode(rep)
+        XCTAssertEqual(try! CoreJSON.decode(HealthWriteReport.self, from: data).text, rep.text)
+    }
+}
+
+/// Zones identiques à Rythme et calcul FC max / repos depuis Santé.
+final class RythmeZoneTests: XCTestCase {
+    func testDefaultMethodIsRythmeReserve() {
+        let z = HeartZoneSettings(maxHR: 190, restingHR: 60)
+        XCTAssertEqual(z.method, .rythme)
+        XCTAssertEqual(z.bounds, [0, 138, 151, 164, 177, 190])
+        XCTAssertEqual(z.zone(for: 40), 1, "pas de plancher en zone 1")
+        XCTAssertEqual(z.zone(for: 137), 1)
+        XCTAssertEqual(z.zone(for: 138), 2)
+        XCTAssertEqual(z.zone(for: 164), 4)
+        XCTAssertEqual(z.zone(for: 177), 5)
+        XCTAssertEqual(z.zone(for: 230), 5)
+        let noRest = HeartZoneSettings(maxHR: 190, restingHR: nil)
+        XCTAssertEqual(noRest.bounds, [0, 114, 133, 152, 171, 190])
+        XCTAssertTrue(noRest.methodDescription.contains("FC de repos indisponible"))
+    }
+
+    func testOldSettingsStillDecode() throws {
+        let json = #"{"maxHR":200,"method":"percentOfMax","percentBounds":[0.5,0.6,0.7,0.8,0.9,1],"customBounds":[100,120,140,160,180,200]}"#
+        let z = try JSONDecoder().decode(HeartZoneSettings.self, from: Data(json.utf8))
+        XCTAssertEqual(z.method, .percentOfMax)
+        XCTAssertFalse(z.maxHRIsUserValue)
+        let empty = try JSONDecoder().decode(HeartZoneSettings.self, from: Data("{}".utf8))
+        XCTAssertEqual(empty.method, .rythme)
+    }
+
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+    func pts(_ values: [(Double, Double)]) -> [ZoneProfileResolver.HRPoint] {
+        values.map { ZoneProfileResolver.HRPoint(date: now.addingTimeInterval(-86_400 * 30 + $0.0), bpm: $0.1) }
+    }
+
+    func testSustainedMaxIgnoresIsolatedSpikesAndAbove230() {
+        let p = pts([(0, 185), (60, 182), (10_000, 205), (20_000, 240), (20_030, 238)])
+        XCTAssertEqual(ZoneProfileResolver.sustainedMax(p)?.bpm, 185)
+        let neighbourBelow170 = pts([(0, 172), (90, 168)])
+        XCTAssertEqual(ZoneProfileResolver.sustainedMax(neighbourBelow170)?.bpm, 172)
+        let tooFar = pts([(0, 190), (130, 189)])
+        XCTAssertNil(ZoneProfileResolver.sustainedMax(tooFar))
+        // 190 isolé (voisin 6 bpm en dessous) est écarté ; 184 est confirmé par 190 → 184.
+        let tooLow = pts([(0, 190), (60, 184)])
+        XCTAssertEqual(ZoneProfileResolver.sustainedMax(tooLow)?.bpm, 184)
+    }
+
+    func testResolverRules() {
+        let birth = Calendar(identifier: .gregorian).date(byAdding: .year, value: -40, to: now)!
+        // 220 − 40 = 180 ; FC tenue 186 → 186.
+        var r = ZoneProfileResolver.resolve(userMax: nil, userResting: nil, birthDate: birth, now: now,
+                                            highHR: pts([(0, 186), (30, 183)]), restingHR: [58, 62, 60])
+        XCTAssertEqual(r.maxHR, 186)
+        XCTAssertEqual(r.restingHR, 60)
+        // FC tenue plus basse que 220 − âge → 180.
+        r = ZoneProfileResolver.resolve(userMax: nil, userResting: nil, birthDate: birth, now: now,
+                                        highHR: pts([(0, 175), (30, 174)]), restingHR: [])
+        XCTAssertEqual(r.maxHR, 180)
+        XCTAssertNil(r.restingHR)
+        // Valeur saisie prioritaire.
+        r = ZoneProfileResolver.resolve(userMax: 200, userResting: nil, birthDate: birth, now: now, highHR: [], restingHR: [55])
+        XCTAssertEqual(r.maxHR, 200)
+        XCTAssertEqual(r.maxSource, "saisie dans Foulée")
+        // FC repos incohérente ignorée (> FC max − 40, ou < 30).
+        r = ZoneProfileResolver.resolve(userMax: 150, userResting: nil, birthDate: nil, now: now, highHR: [], restingHR: [115])
+        XCTAssertNil(r.restingHR)
+        r = ZoneProfileResolver.resolve(userMax: 190, userResting: nil, birthDate: nil, now: now, highHR: [], restingHR: [25])
+        XCTAssertNil(r.restingHR)
+        // Rien dans Santé : valeur par défaut, signalée.
+        r = ZoneProfileResolver.resolve(userMax: nil, userResting: nil, birthDate: nil, now: now, highHR: [], restingHR: [])
+        XCTAssertEqual(r.maxHR, 200)
+        XCTAssertTrue(r.maxSource.contains("par défaut"))
     }
 }

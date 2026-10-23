@@ -17,9 +17,13 @@ public struct SessionSample: Codable, Equatable, Sendable {
     public var steps: Int?
     public var phase: Int?
     public var paused: Bool
+    /// Énergie cumulée annoncée par le tapis (kcal), si le tapis la fournit.
+    public var energy: Double?
 
     public init(t: Double, active: Double, speed: Double?, incline: Double?, targetSpeed: Double?, targetIncline: Double?,
-                hr: Int?, hrSource: HeartRateSource?, zone: Int?, distance: Double, steps: Int?, phase: Int?, paused: Bool) {
+                hr: Int?, hrSource: HeartRateSource?, zone: Int?, distance: Double, steps: Int?, phase: Int?, paused: Bool,
+                energy: Double? = nil) {
+        self.energy = energy
         self.t = t
         self.active = active
         self.speed = speed
@@ -33,6 +37,55 @@ public struct SessionSample: Codable, Equatable, Sendable {
         self.steps = steps
         self.phase = phase
         self.paused = paused
+    }
+}
+
+/// Phase effectivement exécutée (pour les événements « segment » de Santé).
+public struct PhaseSpan: Codable, Equatable, Sendable {
+    public var index: Int
+    public var name: String
+    public var kind: PhaseKind
+    public var targetSpeedKmh: Double
+    public var targetInclinePercent: Double
+    /// Secondes depuis le début de la séance (même base que les échantillons).
+    public var start: Double
+    public var end: Double?
+
+    public init(index: Int, name: String, kind: PhaseKind, targetSpeedKmh: Double, targetInclinePercent: Double,
+                start: Double, end: Double? = nil) {
+        self.index = index
+        self.name = name
+        self.kind = kind
+        self.targetSpeedKmh = targetSpeedKmh
+        self.targetInclinePercent = targetInclinePercent
+        self.start = start
+        self.end = end
+    }
+}
+
+/// Mesure de FC avec son heure réelle (secondes depuis le début de la séance).
+public struct HeartRatePoint: Codable, Equatable, Sendable {
+    public var t: Double
+    public var bpm: Int
+    public var source: HeartRateSource
+
+    public init(t: Double, bpm: Int, source: HeartRateSource) {
+        self.t = t
+        self.bpm = bpm
+        self.source = source
+    }
+}
+
+/// Type d'activité Santé.
+public enum HealthActivityType: String, Codable, CaseIterable, Sendable {
+    case walking, running, hiit
+
+    public var label: String {
+        switch self {
+        case .walking: return "Marche"
+        case .running: return "Course"
+        case .hiit: return "Entraînement fractionné (HIIT)"
+        }
     }
 }
 
@@ -66,14 +119,20 @@ public enum HealthSaveStatus: Codable, Equatable, Sendable {
     case saved(workoutUUID: String)
     case denied
     case failed(String)
+    /// Une autre séance Santé (Watch, Fitness, app du tapis…) couvre déjà ce créneau.
+    case alreadyRecorded(by: String)
+    /// Rien n'est écrit, volontairement (séance trop courte, simulée, Santé désactivé…).
+    case notWritten(String)
 
     public var label: String {
         switch self {
         case .notRequested: return "Non enregistré dans Santé"
-        case .ownedByWatch: return "Enregistré par l'Apple Watch"
-        case .saved: return "Enregistré dans Santé"
+        case .ownedByWatch: return "Enregistrée par l'Apple Watch (métadonnées Foulée ajoutées)"
+        case .saved: return "Enregistrée dans Santé par Foulée"
         case .denied: return "Accès Santé refusé"
         case let .failed(m): return "Échec Santé : \(m)"
+        case let .alreadyRecorded(by): return "Déjà enregistrée par \(by)"
+        case let .notWritten(why): return "Non enregistrée : \(why)"
         }
     }
 }
@@ -125,6 +184,24 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     public var events: [SessionEvent] = []
     public var healthStatus: HealthSaveStatus = .notRequested
 
+    // Champs ajoutés en V1.1 : tous optionnels pour relire les séances déjà enregistrées.
+    /// Démarrage réel de la bande (premier mouvement observé).
+    public var beltStartDate: Date?
+    /// Arrêt réel de la bande (vitesse nulle observée après l'arrêt).
+    public var beltStopDate: Date?
+    public var phaseSpans: [PhaseSpan]?
+    /// Mesures de FC horodatées (y compris les 2 minutes après l'arrêt de la bande).
+    public var heartRateReadings: [HeartRatePoint]?
+    /// Révision de la séance : 1 à l'enregistrement, +1 à chaque correction.
+    public var revision: Int?
+    /// Type d'activité choisi à la main (sinon déduit).
+    public var activityTypeOverride: HealthActivityType?
+    /// Version (HKMetadataKeySyncVersion) écrite dans Santé.
+    public var healthSyncVersion: Int?
+    /// Ce qui a été écrit dans Santé (pour vérification).
+    public var healthReport: HealthWriteReport?
+    public var elevationGainMeters: Double?
+
     public init(id: UUID = UUID(), startDate: Date, program: WorkoutProgram?, treadmillName: String?,
                 profileID: String?, simulated: Bool) {
         self.id = id
@@ -139,11 +216,25 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
 
     public var title: String { programName ?? "Séance libre" }
 
+    /// Date réelle correspondant à un instant de la séance.
+    public func date(at t: Double) -> Date { startDate.addingTimeInterval(t) }
+
     /// Recalcule les agrégats depuis les échantillons (pondération temporelle, hors pauses).
     public mutating func recomputeAggregates() {
         var speedSum = 0.0, speedTime = 0.0, inclSum = 0.0, inclTime = 0.0, hrSum = 0.0, hrTime = 0.0
         var mxS: Double?, mxI: Double?, mxH: Int?
         var sources: [HeartRateSource] = []
+        var elevation = 0.0
+        var hasIncline = false
+        for (i, s) in samples.enumerated() where i > 0 && !s.paused {
+            let prev = samples[i - 1]
+            if let incl = s.incline ?? prev.incline {
+                hasIncline = true
+                let dd = s.distance - prev.distance
+                if dd > 0 && dd < 50 && incl > 0 { elevation += dd * incl / 100 }
+            }
+        }
+        elevationGainMeters = hasIncline ? elevation : nil
         for (i, s) in samples.enumerated() where !s.paused {
             let dt: Double = i + 1 < samples.count ? max(0, min(samples[i + 1].t - s.t, 5)) : 1
             if let v = s.speed { speedSum += v * dt; speedTime += dt; mxS = max(mxS ?? v, v) }

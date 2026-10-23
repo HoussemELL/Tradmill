@@ -15,6 +15,9 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case linkSession(id: UUID, title: String)
     /// iPhone → Watch : commande.
     case command(WatchCommand)
+    /// iPhone → Watch : métadonnées à poser sur la séance de la Watch (propriétaire de
+    /// l'enregistrement Santé) : identifiant de synchronisation et informations Foulée.
+    case workoutMetadata(standard: StandardWorkoutMetadata, foulee: [String: MetadataValue])
 
     public func encoded() throws -> Data {
         let e = JSONEncoder()

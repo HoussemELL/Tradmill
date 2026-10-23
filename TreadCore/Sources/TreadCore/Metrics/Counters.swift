@@ -157,3 +157,14 @@ public enum EnergyEstimator {
         return vo2 * weightKg / 1000 * 5
     }
 }
+
+public extension EnergyEstimator {
+    /// Énergie active (kcal/min) : équation ACSM moins la dépense de repos (3,5 ml/kg/min),
+    /// pour ne pas compter la dépense de base dans « énergie active ».
+    static func activeKcalPerMinute(speedKmh: Double, gradePercent: Double, weightKg: Double) -> Double {
+        guard speedKmh > 0, weightKg > 0 else { return 0 }
+        let gross = kcalPerMinute(speedKmh: speedKmh, gradePercent: gradePercent, weightKg: weightKg)
+        let resting = 3.5 * weightKg / 1000 * 5
+        return max(0, gross - resting)
+    }
+}
