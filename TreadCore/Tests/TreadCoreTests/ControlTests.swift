@@ -434,3 +434,85 @@ final class SpeedHypothesisTests: XCTestCase {
         XCTAssertTrue(d.steps.contains { $0.title == "Démarrage" && !$0.ok })
     }
 }
+
+/// Cas observé sur l'URTM047 (essai du 23/10) : Set Target Speed tapis arrêté sans réponse.
+final class UnansweredSetpointTests: XCTestCase {
+    func testURTM047StartsWhenInitialSpeedGetsNoResponse() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.speedResponse = .silentWhenStopped
+        q.reportsSpeedStatus = false
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 3, targetIncline: nil).get())
+        h.run(seconds: 45)
+        XCTAssertEqual(Array(h.sentCommands.prefix(3)), [.requestControl, .setTargetSpeed(kmh: 1.5), .startOrResume])
+        XCTAssertEqual(h.controller.state, .running)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 3, accuracy: 0.01)
+        XCTAssertTrue(h.log.entries.contains { $0.message.contains("sans réponse : profil tolérant") })
+    }
+
+    func testGenericProfileStaysStrictOnMissingResponse() {
+        var q = SimulatedTreadmill.Quirks()
+        q.speedResponse = .silent
+        q.reportsSpeedStatus = false
+        let h = ControllerHarness(profile: .genericFTMS, quirks: q)
+        _ = h.controller.start(targetSpeed: 3, targetIncline: nil)
+        h.run(seconds: 40)
+        // Start acquitté (générique), mais la consigne sans réponse est un échec affiché.
+        guard case .failed = h.controller.speed.status else {
+            return XCTFail("statut attendu : échec, obtenu \(h.controller.speed.status)")
+        }
+    }
+
+    func testSilentSpeedCommandVerifiedByTelemetryWhileRunning() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.speedResponse = .silent
+        q.reportsSpeedStatus = false
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        _ = h.controller.start(targetSpeed: 4, targetIncline: nil)
+        h.run(seconds: 50)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertNil(h.controller.speed.acknowledged, "jamais présentée comme acquittée")
+        XCTAssertEqual(h.controller.speed.unanswered, 4)
+    }
+
+    func testSilentAndIgnoredSpeedIsReportedAsMismatch() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.speedResponse = .silent
+        q.reportsSpeedStatus = false
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        _ = h.controller.start(targetSpeed: 1.5, targetIncline: nil)
+        h.run(seconds: 30)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        h.link.treadmill.quirks.ignoresAllSpeedCommands = true
+        h.controller.setTargetSpeed(4, origin: .user)
+        h.run(seconds: 120)
+        XCTAssertEqual(h.controller.speed.status, .mismatch)
+        XCTAssertEqual(h.controller.telemetry.speedKmh ?? 0, 1.5, accuracy: 0.01)
+        XCTAssertTrue(h.controller.lastMessage?.contains("sans réponse") ?? false)
+    }
+
+    func testStatusEchoActsAsImplicitAcknowledgement() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.speedResponse = .silent
+        q.reportsSpeedStatus = true
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        _ = h.controller.start(targetSpeed: 3, targetIncline: nil)
+        h.run(seconds: 45)
+        XCTAssertEqual(h.controller.speed.acknowledged, 3)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertTrue(h.log.entries.contains { $0.message.contains("acquittement implicite") })
+    }
+
+    func testLateResponseUpgradesUnansweredToAcknowledged() {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.speedResponse = .late(seconds: 6)
+        q.reportsSpeedStatus = false
+        let h = ControllerHarness(profile: .urtm047, quirks: q)
+        _ = h.controller.start(targetSpeed: 3, targetIncline: nil)
+        h.run(seconds: 60)
+        XCTAssertEqual(h.controller.speed.status, .reached)
+        XCTAssertEqual(h.controller.speed.acknowledged, 3)
+        XCTAssertTrue(h.log.entries.contains { $0.message.contains("acquittement tardif") })
+    }
+}

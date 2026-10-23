@@ -203,8 +203,9 @@ public final class SpeedResponseDiagnostic: ActiveDiagnostic {
     private func commandLabel(_ s: TargetTracking.Status) -> String {
         switch s {
         case .reached: return "atteinte"
-        case .mismatch: return "acquittée sans effet observé"
+        case .mismatch: return controller.speed.unanswered != nil ? "sans réponse ni effet observé" : "acquittée sans effet observé"
         case .acknowledged: return "acquittée, pas encore atteinte"
+        case .unanswered: return "sans réponse, pas encore atteinte"
         case .pending: return "sans réponse"
         case let .failed(m): return "échec (\(m))"
         case .deferred, .none: return "non envoyée"

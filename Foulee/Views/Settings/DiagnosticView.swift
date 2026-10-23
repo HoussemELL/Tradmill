@@ -152,7 +152,7 @@ struct DiagnosticView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.headline)
             Text("Demandée : \(f(t.requested)) · \(statusLabel(t.status))").font(.caption)
-            Text("Acquittée : \(f(t.acknowledged)) · annoncée : \(f(t.machineReported))").font(.caption)
+            Text("Acquittée : \(f(t.acknowledged)) · sans réponse : \(f(t.unanswered)) · annoncée : \(f(t.machineReported))").font(.caption)
             Text("Mesurée : \(f(observed))").font(.caption.bold())
         }
     }
@@ -162,6 +162,7 @@ struct DiagnosticView: View {
         case .none: return "—"
         case .pending: return "envoyée"
         case .acknowledged: return "acquittée, en attente de mesure"
+        case .unanswered: return "envoyée SANS RÉPONSE, vérification par la mesure"
         case .reached: return "atteinte"
         case .mismatch: return "ÉCART"
         case let .failed(m): return "échec (\(m))"

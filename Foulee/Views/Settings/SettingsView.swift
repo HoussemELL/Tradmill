@@ -127,7 +127,10 @@ struct HeartRateSettingsView: View {
             }
             Section {
                 LabeledContent("Watch", value: model.watch.linkState.label)
-                LabeledContent("App installée", value: model.watch.isAppInstalled ? "Oui" : "Non / inconnu")
+                LabeledContent("App Watch", value: model.watch.installationStatus)
+                if !model.watch.isAppInstalled {
+                    Text(WatchBridge.installHelp).font(.caption).foregroundStyle(Theme.warning)
+                }
                 Toggle("Lancer l'exercice Watch avec la séance", isOn: $model.settings.startWatchWorkoutWithSession)
                 Toggle("Terminer l'exercice Watch avec la séance", isOn: $model.settings.endWatchWorkoutWithSession)
                 Button("Lancer l'exercice sur la Watch maintenant") { model.watch.launchWatchWorkout(running: false) }

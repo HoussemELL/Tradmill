@@ -42,6 +42,10 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
     /// Après le démarrage, attendre que la vitesse initiale soit observée (ou le délai
     /// `initialSpeedSettleTimeout`) avant d'envoyer la consigne du palier. Hypothèse prudente :
     /// certains tapis acquittent sans l'appliquer une consigne reçue pendant leur accélération.
+    /// Une consigne (vitesse/inclinaison) restée sans réponse du Control Point n'est pas un échec
+    /// bloquant : son effet est vérifié par la télémétrie. Observé sur l'URTM047 : Set Target Speed
+    /// tapis arrêté peut ne recevoir aucune réponse. Start/Stop/Pause/Request Control restent stricts.
+    public var tolerateUnansweredSetpoints: Bool
     public var waitForInitialSpeedBeforeTarget: Bool
     public var initialSpeedSettleTimeout: TimeInterval
     public var responseTimeout: TimeInterval
@@ -65,6 +69,7 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
         inclineRampPercentPerSecond: 0.3,
         inclineSettleBase: 8,
         maxTargetResends: 0,
+        tolerateUnansweredSetpoints: false,
         waitForInitialSpeedBeforeTarget: false,
         initialSpeedSettleTimeout: 0,
         responseTimeout: 4,
@@ -82,6 +87,7 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
     /// - Request Control → Set Target Speed → Start produit un mouvement ;
     /// - Request Control → Start (avec ou sans vitesse ensuite) n'en a pas produit ;
     /// - une consigne de vitesse peut être acquittée sans effet observable ;
+    /// - Set Target Speed envoyé tapis arrêté peut rester sans réponse (essai Foulée du 23/10) ;
     /// - Treadmill Assistant pilote correctement ce tapis (le firmware accepte donc un pilotage FTMS).
     /// La cause du problème de vitesse n'est PAS établie : la séquence de démarrage n'en est
     /// qu'une hypothèse. Le profil adopte les choix prudents (vitesse initiale explicite avant
@@ -103,6 +109,7 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
         inclineRampPercentPerSecond: 0.25,
         inclineSettleBase: 10,
         maxTargetResends: 1,
+        tolerateUnansweredSetpoints: true,
         waitForInitialSpeedBeforeTarget: true,
         initialSpeedSettleTimeout: 8,
         responseTimeout: 4,

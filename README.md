@@ -48,7 +48,7 @@ TreadCore/                Paquet Swift local, sans dépendance Apple-only :
   Session/                  séance, enregistrement, export, reprise, plan Santé
   Diagnostics/              journal horodaté, test de démarrage
   Simulation/               tapis FTMS simulé au niveau des octets
-  Tests/                    84 tests XCTest
+  Tests/                    90 tests XCTest
 Foulee/                   App iOS (SwiftUI, CoreBluetooth, HealthKit, SwiftData, Charts)
 FouleeWatch/              App watchOS (HKWorkoutSession, HKLiveWorkoutBuilder, miroir)
 docs/FTMS.md              Formats d'octets, règles de la file de commandes
@@ -263,7 +263,7 @@ voir l'onglet *Actions* du dépôt ; aucun avertissement du compilateur Swift :
 La signature réelle (votre équipe, profils, capacité HealthKit) n'est pas
 vérifiable en CI : elle se fait dans Xcode sur votre Mac.
 
-**Testé automatiquement** (84 tests, sous Linux et macOS) :
+**Testé automatiquement** (90 tests, sous Linux et macOS) :
 - décodage FTMS : flags optionnels, bit More Data inversé, valeurs « non
   disponible », paquets tronqués et octets en trop, plages, Feature, statuts,
   Control Point, FC (uint8/uint16, contact, RR) ;
@@ -275,6 +275,10 @@ vérifiable en CI : elle se fait dans Xcode sur votre Mac.
   stabilisation aucune consigne n'est perdue, sans elle seul le renvoi la
   rattrape ; test de réponse en vitesse sur tapis sain et sur tapis qui ignore
   les consignes ;
+- consigne sans réponse (cas réel URTM047 du 23/10) : démarrage qui continue et
+  vitesse vérifiée par la télémétrie, profil générique strict, acquittement
+  implicite par statut, acquittement tardif, absence de réponse + absence
+  d'effet signalée comme écart ;
 - séquence URTM047 (ordre exact, pas de Start supplémentaire), séquence
   générique sans mouvement, commande acquittée mais vitesse non observée (un
   seul renvoi puis écart), pause/reprise/arrêt confirmé par la télémétrie, clé
@@ -335,7 +339,14 @@ vos observations écrites. Exportez le journal de diagnostic après la
   HealthKit (ou vider `Config/*.entitlements`). Le tapis, la ceinture, les
   programmes et l'historique fonctionnent ; Santé et le cardio Apple Watch sont
   alors indisponibles.
-- **L'app Watch n'apparaît pas** : installer avec le scheme **FouleeWatch** et la
-  Watch comme destination ; vérifier que les deux identifiants partagent le
-  même préfixe.
+- **« Unable to launch watch app » / « App Foulée non installée »** : l'app
+  n'est pas sur la montre. Activer le Mode développeur de la Watch, puis
+  l'installer via l'app Watch de l'iPhone (*Mes montres › Apps disponibles*) ou
+  depuis Xcode (scheme **FouleeWatch**, destination la Watch). Les deux
+  identifiants partagent le même préfixe ; la CI vérifie que l'app Watch est
+  bien embarquée dans l'app iPhone.
+- **« Démarrage interrompu : Set Target Speed (initiale) sans réponse »** :
+  comportement observé sur l'URTM047 avec une version antérieure de l'app ;
+  le profil URTM047 tolère désormais une consigne sans réponse et la vérifie
+  par la télémétrie. Mettez à jour (git pull) et recompilez.
 - **Identifiant déjà utilisé** : changer `BUNDLE_ID_PREFIX`.

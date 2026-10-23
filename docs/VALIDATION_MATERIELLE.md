@@ -21,6 +21,23 @@ le test et restez à portée du bouton d'arrêt physique.
 3. Dans Foulée : *Réglages › Diagnostic et journaux › Exporter › Effacer le journal*
    pour repartir d'un journal propre.
 
+## 0. Installer l'app sur la Watch (si « App Foulée non installée »)
+
+Le message « Unable to launch watch app » signifie en général que l'app n'est
+pas installée sur la montre (ou que la montre est verrouillée / hors de portée).
+
+1. Sur la Watch : *Réglages › Confidentialité et sécurité › Mode développeur*
+   activé (redémarrage), montre déverrouillée et sur le poignet.
+2. Méthode A : sur l'iPhone, app **Watch › Mes montres › Apps disponibles ›
+   Foulée › Installer** (l'app Watch est embarquée dans l'app iPhone installée
+   depuis Xcode).
+3. Méthode B (la plus fiable) : dans Xcode, scheme **FouleeWatch**, destination
+   votre Apple Watch (via l'iPhone), ⌘R. La première fois, Xcode prépare la
+   montre pour le développement (quelques minutes, montre en charge).
+4. Dans Foulée : *Réglages › Source cardio › App Watch* doit afficher
+   « Installée ». Ouvrir une fois l'app sur la montre et accepter les
+   autorisations Santé.
+
 ## 1. Connexion et capacités (passif, aucune commande)
 
 1. *Réglages › Tapis › Rechercher un tapis* → choisir **URTM047**.
@@ -49,6 +66,11 @@ journal, et des lignes `[DATA] v=0.00 …` environ une fois par seconde.
 
 ✅ Attendu : « Test réussi » avec les lignes Mouvement, Consigne, Stabilité, Arrêt
 en vert.
+
+ℹ️ Le journal peut indiquer « Set Target Speed 1.50 km/h sans réponse : profil
+tolérant, la séquence continue » : c'est le comportement observé le 23/10, il
+n'est plus bloquant. Relevez s'il apparaît ensuite une « Réponse tardive » ou un
+« acquittement implicite ».
 
 ❌ Si « Start acquitté mais aucune vitesse observée » : le tapis n'a pas démarré
 avec cette séquence. **Ne relancez pas en boucle** : exportez le journal (étape 6).

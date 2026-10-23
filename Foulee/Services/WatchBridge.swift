@@ -34,6 +34,8 @@ final class WatchBridge {
     private(set) var lastMessageAt: Date?
     /// Vrai si un exercice Watch a fourni des données pendant la séance en cours.
     private(set) var usedDuringSession = false
+    /// Incrémenté quand WatchConnectivity signale un changement (jumelage, installation).
+    private(set) var connectivityRevision = 0
 
     @ObservationIgnored private let healthStore: HKHealthStore
     @ObservationIgnored private let log: DiagnosticLog
@@ -68,8 +70,22 @@ final class WatchBridge {
     }
 
     var isAppInstalled: Bool {
-        WCSession.isSupported() && WCSession.default.activationState == .activated && WCSession.default.isWatchAppInstalled
+        _ = connectivityRevision
+        return WCSession.isSupported() && WCSession.default.activationState == .activated && WCSession.default.isWatchAppInstalled
     }
+
+    /// État d'installation lisible, avec la marche à suivre.
+    var installationStatus: String {
+        _ = connectivityRevision
+        guard WCSession.isSupported() else { return "Apple Watch non prise en charge sur cet appareil" }
+        guard WCSession.default.activationState == .activated else { return "Vérification en cours…" }
+        guard WCSession.default.isPaired else { return "Aucune Apple Watch jumelée" }
+        guard WCSession.default.isWatchAppInstalled else { return "App Foulée non installée sur la Watch" }
+        return "Installée"
+    }
+
+    static let installHelp = "Installez l'app Watch : sur l'iPhone, app Watch › Mes montres › Apps disponibles › Foulée › Installer. Ou depuis Xcode : scheme FouleeWatch, destination votre Apple Watch (Mode développeur activé sur la montre)."
+
 
     func beginSession(id: UUID, title: String) {
         usedDuringSession = false
@@ -85,6 +101,11 @@ final class WatchBridge {
     /// démarrer l'exercice depuis la Watch.
     func launchWatchWorkout(running: Bool) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
+        if WCSession.isSupported(), WCSession.default.activationState == .activated, !WCSession.default.isWatchAppInstalled {
+            linkState = .failed(WCSession.default.isPaired ? "app non installée sur la montre" : "aucune montre jumelée")
+            log.log(.warning, "Lancement Watch impossible : \(installationStatus). \(Self.installHelp)")
+            return
+        }
         let config = HKWorkoutConfiguration()
         config.activityType = running ? .running : .walking
         config.locationType = .indoor
@@ -95,7 +116,9 @@ final class WatchBridge {
                 if ok {
                     self.log.log(.watch, "Demande de lancement de l'exercice Watch envoyée")
                 } else {
-                    self.linkState = .failed(error?.localizedDescription ?? "lancement impossible")
+                    // iOS renvoie « Unable to launch watch app » si l'app n'est pas installée,
+                    // si la montre est verrouillée/hors de portée ou si Santé n'est pas autorisé.
+                    self.linkState = .failed("lancement impossible (app installée ? montre déverrouillée et à portée ?)")
                     self.log.log(.warning, "Lancement Watch impossible : \(error?.localizedDescription ?? "?")")
                 }
             }
@@ -126,6 +149,10 @@ final class WatchBridge {
     }
 
     // MARK: - Réception
+
+    fileprivate func connectivityChanged() {
+        connectivityRevision += 1
+    }
 
     fileprivate func attach(_ session: HKWorkoutSession) {
         mirrored = session
@@ -202,7 +229,12 @@ private final class MirrorProxy: NSObject, HKWorkoutSessionDelegate {
 private final class ConnectivityProxy: NSObject, WCSessionDelegate {
     weak var owner: WatchBridge?
 
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        DispatchQueue.main.async { self.owner?.connectivityChanged() }
+    }
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        DispatchQueue.main.async { self.owner?.connectivityChanged() }
+    }
     func sessionDidBecomeInactive(_ session: WCSession) {}
     func sessionDidDeactivate(_ session: WCSession) { session.activate() }
 

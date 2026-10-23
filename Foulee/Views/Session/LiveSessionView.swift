@@ -49,11 +49,12 @@ struct LiveSessionView: View {
             Banner(text: String(format: "Stabilisation à %.1f km/h avant la consigne du palier", tm.speed.acknowledged ?? 0),
                    color: Theme.accent, systemImage: "hourglass")
         }
-        if tm.speed.status == .mismatch, let req = tm.speed.acknowledged {
-            Banner(text: String(format: "Écart vitesse : consigne %.1f acquittée, mesure %@ km/h", req, Format.speed(tm.telemetry.speedKmh))
+        if tm.speed.status == .mismatch, let req = tm.speed.verifying {
+            Banner(text: String(format: "Écart vitesse : consigne %.1f %@, mesure %@ km/h", req,
+                                tm.speed.unanswered != nil ? "sans réponse" : "acquittée", Format.speed(tm.telemetry.speedKmh))
                    + (tm.speed.machineReported.map { String(format: " · le tapis annonce %.1f", $0) } ?? ""))
         }
-        if tm.incline.status == .mismatch, let req = tm.incline.acknowledged {
+        if tm.incline.status == .mismatch, let req = tm.incline.verifying {
             Banner(text: String(format: "Écart inclinaison : consigne %.0f %%, mesure %@ %%", req, Format.incline(tm.telemetry.inclinePercent)))
         }
         if case let .failed(m) = tm.speed.status { Banner(text: "Vitesse : \(m)", color: Theme.danger) }
@@ -135,6 +136,7 @@ struct LiveSessionView: View {
         switch tm.speed.status {
         case .pending: s += " · envoyée"
         case .acknowledged: s += " · acquittée"
+        case .unanswered: s += " · sans réponse"
         case .deferred: s += " · en attente"
         default: break
         }

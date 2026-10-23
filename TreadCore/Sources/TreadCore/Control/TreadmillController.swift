@@ -11,7 +11,10 @@ public struct TargetTracking: Equatable, Sendable {
         case acknowledged
         /// Valeur observée dans la télémétrie, dans la tolérance.
         case reached
-        /// Acquittée mais non observée dans le délai attendu.
+        /// Envoyée sans réponse du Control Point (profil tolérant) : l'effet est vérifié
+        /// uniquement par la télémétrie, jamais supposé.
+        case unanswered
+        /// Acquittée (ou sans réponse) mais non observée dans le délai attendu.
         case mismatch
         /// Envoi refusé, sans réponse ou annulé.
         case failed(String)
@@ -21,6 +24,8 @@ public struct TargetTracking: Equatable, Sendable {
 
     public var requested: Double?
     public var acknowledged: Double?
+    /// Valeur envoyée restée sans réponse (vérifiée par la télémétrie).
+    public var unanswered: Double?
     public var machineReported: Double?
     public var status: Status = .none
     public var origin: CommandOrigin?
@@ -30,6 +35,9 @@ public struct TargetTracking: Equatable, Sendable {
     var observedAtSend: Double?
 
     public init() {}
+
+    /// Valeur dont l'effet est en cours de vérification (sans réponse prioritaire sur un ancien acquittement).
+    public var verifying: Double? { unanswered ?? acknowledged }
 }
 
 /// Dernières valeurs reçues du tapis (fusion des paquets partiels « More Data »).
@@ -187,6 +195,7 @@ public final class TreadmillController {
         self.queue = CommandQueue(configuration: .init(responseTimeout: profile.responseTimeout,
                                                        minimumSpacing: profile.commandSpacing))
         queue.log = log
+        queue.onLateResponse = { [weak self] r in self?.handleLateResponse(r) }
     }
 
     // MARK: - Cycle de vie du lien
@@ -293,9 +302,12 @@ public final class TreadmillController {
             }
         case let .targetSpeedChanged(v):
             speed.machineReported = v
+            // Le tapis annonce exactement la consigne en attente de réponse : acquittement implicite.
+            queue.resolveInFlight(.setTargetSpeed(kmh: v), reason: "statut « consigne vitesse modifiée » du tapis", now: clock())
             emit(.machineTargetReported(speed: v, incline: nil))
         case let .targetInclinationChanged(v):
             incline.machineReported = v
+            queue.resolveInFlight(.setTargetInclination(percent: v), reason: "statut « consigne inclinaison modifiée » du tapis", now: clock())
             emit(.machineTargetReported(speed: nil, incline: v))
         case .other:
             break
@@ -545,6 +557,11 @@ public final class TreadmillController {
                 guard let self, seq == self.sequenceID else { return }
                 if outcome.isSuccess {
                     self.speed.acknowledged = s
+                    self.speed.unanswered = nil
+                    next()
+                } else if outcome == .timeout && self.profile.tolerateUnansweredSetpoints {
+                    self.speed.unanswered = s
+                    self.log.log(.warning, String(format: "Set Target Speed %.2f km/h sans réponse : profil tolérant, la séquence continue ; l'effet sera vérifié par la télémétrie", s))
                     next()
                 } else { fail(outcome) }
             }
@@ -569,8 +586,25 @@ public final class TreadmillController {
         emit(.startFailed(lastMessage!))
     }
 
+    /// Réponse arrivée après le délai : si elle confirme une consigne restée sans réponse,
+    /// elle devient acquittée (la vérification par la télémétrie continue).
+    private func handleLateResponse(_ r: ControlPointResponse) {
+        guard r.result == .success else { return }
+        if r.requestOpCode == ControlOpCode.setTargetSpeed.rawValue, let v = speed.unanswered {
+            speed.acknowledged = v
+            speed.unanswered = nil
+            if speed.status == .unanswered { speed.status = .acknowledged }
+            log.log(.response, String(format: "Vitesse %.2f km/h : acquittement tardif reçu", v))
+        } else if r.requestOpCode == ControlOpCode.setTargetInclination.rawValue, let v = incline.unanswered {
+            incline.acknowledged = v
+            incline.unanswered = nil
+            if incline.status == .unanswered { incline.status = .acknowledged }
+            log.log(.response, String(format: "Inclinaison %.1f %% : acquittement tardif reçu", v))
+        }
+    }
+
     private func beginSettleOrApply(now: TimeInterval) {
-        if profile.waitForInitialSpeedBeforeTarget, pendingFinal != nil, speed.acknowledged != nil {
+        if profile.waitForInitialSpeedBeforeTarget, pendingFinal != nil, speed.verifying != nil {
             settleDeadline = now + profile.initialSpeedSettleTimeout
             settleStableSince = nil
             log.log(.session, "Attente de la vitesse initiale avant la consigne du palier (max \(Int(profile.initialSpeedSettleTimeout)) s)")
@@ -587,10 +621,10 @@ public final class TreadmillController {
         pendingFinal = nil
         settleDeadline = nil
         if let s = final.speed {
-            if let ack = speed.acknowledged, abs(ack - s) < 0.001 {
+            if let ack = speed.verifying, abs(ack - s) < 0.001 {
                 // Vitesse initiale = cible : il reste à vérifier qu'elle est observée.
                 speed.requested = s
-                speed.status = .acknowledged
+                speed.status = speed.unanswered != nil ? .unanswered : .acknowledged
                 speed.deadline = clock() + profile.speedSettleTime(from: telemetry.speedKmh, to: s)
             } else {
                 sendSpeed(s, origin: .startSequence)
@@ -608,13 +642,21 @@ public final class TreadmillController {
         speed.deadline = nil
         speed.outOfToleranceSince = nil
         speed.observedAtSend = telemetry.speedKmh
+        speed.unanswered = nil
         if !isResend { speed.resendsUsed = 0 }
         queue.enqueue(.setTargetSpeed(kmh: value), origin: origin, now: clock()) { [weak self] outcome in
             guard let self, self.speed.requested == value else { return }
             if outcome.isSuccess {
                 self.speed.acknowledged = value
+                self.speed.unanswered = nil
                 self.speed.status = .acknowledged
                 self.speed.deadline = self.clock() + self.profile.speedSettleTime(from: self.speed.observedAtSend, to: value)
+                self.evaluate(now: self.clock())
+            } else if outcome == .timeout && self.profile.tolerateUnansweredSetpoints {
+                self.speed.unanswered = value
+                self.speed.status = .unanswered
+                self.speed.deadline = self.clock() + self.profile.speedSettleTime(from: self.speed.observedAtSend, to: value)
+                self.log.log(.warning, String(format: "Vitesse %.2f km/h sans réponse : vérification par la télémétrie", value))
                 self.evaluate(now: self.clock())
             } else if case .cancelled = outcome {
                 // Remplacée par une consigne plus récente ou annulée par un arrêt : rien à signaler.
@@ -632,13 +674,21 @@ public final class TreadmillController {
         incline.deadline = nil
         incline.outOfToleranceSince = nil
         incline.observedAtSend = telemetry.inclinePercent
+        incline.unanswered = nil
         if !isResend { incline.resendsUsed = 0 }
         queue.enqueue(.setTargetInclination(percent: value), origin: origin, now: clock()) { [weak self] outcome in
             guard let self, self.incline.requested == value else { return }
             if outcome.isSuccess {
                 self.incline.acknowledged = value
+                self.incline.unanswered = nil
                 self.incline.status = .acknowledged
                 self.incline.deadline = self.clock() + self.profile.inclineSettleTime(from: self.incline.observedAtSend, to: value)
+                self.evaluate(now: self.clock())
+            } else if outcome == .timeout && self.profile.tolerateUnansweredSetpoints {
+                self.incline.unanswered = value
+                self.incline.status = .unanswered
+                self.incline.deadline = self.clock() + self.profile.inclineSettleTime(from: self.incline.observedAtSend, to: value)
+                self.log.log(.warning, String(format: "Inclinaison %.1f %% sans réponse : vérification par la télémétrie", value))
                 self.evaluate(now: self.clock())
             } else if case .cancelled = outcome {
             } else {
@@ -716,7 +766,7 @@ public final class TreadmillController {
                 zeroSpeedSince = nil
             }
             if let deadline = settleDeadline {
-                let initial = speed.acknowledged
+                let initial = speed.verifying
                 let within = initial.flatMap { i in telemetry.speedKmh.map { abs($0 - i) <= profile.speedToleranceKmh } } ?? false
                 if within { settleStableSince = settleStableSince ?? now } else { settleStableSince = nil }
                 let reached = settleStableSince.map { now - $0 >= Self.settleDwell } ?? false
@@ -746,11 +796,11 @@ public final class TreadmillController {
     }
 
     private func verifySpeed(now: TimeInterval) {
-        guard let goal = speed.acknowledged, speed.requested == goal else { return }
+        guard let goal = speed.verifying, speed.requested == goal else { return }
         let obs = telemetry.speedKmh
         let within = obs.map { abs($0 - goal) <= profile.speedToleranceKmh } ?? false
         switch speed.status {
-        case .acknowledged:
+        case .acknowledged, .unanswered:
             if within {
                 speed.status = .reached
                 log.log(.session, String(format: "Vitesse %.2f km/h observée", goal))
@@ -765,8 +815,9 @@ public final class TreadmillController {
                     speed.resendsUsed = used
                 } else {
                     speed.status = .mismatch
-                    lastMessage = String(format: "Écart vitesse : consigne %.1f km/h acquittée, mesure %@ km/h",
-                                         goal, obs.map { String(format: "%.1f", $0) } ?? "—")
+                    lastMessage = String(format: "Écart vitesse : consigne %.1f km/h %@, mesure %@ km/h",
+                                         goal, speed.unanswered != nil ? "envoyée sans réponse" : "acquittée",
+                                         obs.map { String(format: "%.1f", $0) } ?? "—")
                     log.log(.warning, lastMessage!)
                     emit(.speedMismatch(target: goal, observed: obs))
                 }
@@ -796,11 +847,11 @@ public final class TreadmillController {
     }
 
     private func verifyIncline(now: TimeInterval) {
-        guard let goal = incline.acknowledged, incline.requested == goal else { return }
+        guard let goal = incline.verifying, incline.requested == goal else { return }
         let obs = telemetry.inclinePercent
         let within = obs.map { abs($0 - goal) <= profile.inclineTolerancePercent } ?? false
         switch incline.status {
-        case .acknowledged:
+        case .acknowledged, .unanswered:
             if within {
                 incline.status = .reached
                 emit(.inclineReached(goal))

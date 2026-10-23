@@ -110,6 +110,20 @@ ont pas produit ; une consigne de vitesse peut être acquittée sans changement
 observé ; avec Kinni, 7 km/h revient à 1 km/h ; **Treadmill Assistant pilote
 correctement ce tapis**, donc le firmware accepte bien un pilotage FTMS.
 
+**Essai Foulée (23/10)** : `Request Control` acquitté, puis `Set Target Speed`
+(vitesse initiale, tapis arrêté) **sans aucune réponse en 4 s** ; la séquence
+stricte s'arrêtait avant `Start`. Un client qui n'attend pas la réponse (ce que
+fait vraisemblablement Kinni) enchaîne quand même sur `Start`.
+
+Conséquence dans le profil URTM047 (`tolerateUnansweredSetpoints`) : une
+consigne vitesse/inclinaison **sans réponse n'est plus bloquante** ; elle est
+affichée « sans réponse » (jamais « acquittée ») et son effet est vérifié par la
+télémétrie (puis un renvoi unique, puis écart signalé). Un statut 0x05/0x06 du
+tapis annonçant exactement la consigne en attente vaut acquittement implicite ;
+une réponse arrivée après le délai la fait passer à « acquittée ».
+`Request Control`, `Start`, `Stop` et `Pause` restent stricts. Le profil FTMS
+générique reste strict partout.
+
 **La cause du problème de vitesse n'est pas établie.** La séquence de démarrage
 n'est qu'une hypothèse parmi d'autres :
 
@@ -120,6 +134,7 @@ n'est qu'une hypothèse parmi d'autres :
 | H3 | consigne mal encodée par le client (résolution 0,1 au lieu de 0,01 → 7 km/h = 0,70 km/h, ramené au minimum 1 km/h) | encodage 0,01 km/h conforme à la spécification, octets visibles dans chaque `[TX]` | journal : `[TX] Set Target Speed 7.00 km/h | 02 BC 02` |
 | H4 | le contrôle doit être redemandé avant certaines commandes | Request Control au démarrage/reprise ; option du test : Request Control avant chaque consigne | comparer le test avec et sans l'option |
 | H5 | le tapis annonce la consigne (statut 0x05) sans l'appliquer | consigne « annoncée » affichée séparément de la mesure | colonne « tapis annonce » du test |
+| H6 | le tapis ne répond pas (ou tard) à Set Target Speed, au moins tapis arrêté ; un client qui attend la réponse abandonne | consigne sans réponse vérifiée par la télémétrie, acquittement implicite/tardif accepté | journal : `[TX] Set Target Speed` sans `[REP]`, `Réponse tardive`, `acquittement implicite` |
 
 La comparaison la plus décisive reste une capture du trafic de Treadmill
 Assistant (voir docs/VALIDATION_MATERIELLE.md, étape 7).

@@ -31,10 +31,21 @@ jobs:
           status=0
           xcodebuild -project Foulee.xcodeproj -scheme Foulee \
             -destination 'generic/platform=iOS Simulator' -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO build > ios.log 2>&1 || status=$?
+            -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build > ios.log 2>&1 || status=$?
           grep -E "(error|warning): " ios.log | grep -v "^ld: warning" | sort -u | head -150 || true
           tail -n 3 ios.log
           exit $status
+      - name: Vérifier l'app Watch embarquée dans l'app iPhone
+        run: |
+          APP=build/dd/Build/Products/Debug-iphonesimulator/Foulee.app
+          W="$APP/Watch/FouleeWatch.app"
+          test -d "$W" || { echo "App Watch absente de $APP/Watch"; ls -R "$APP" | head -40; exit 1; }
+          for k in CFBundleIdentifier WKCompanionAppBundleIdentifier WKApplication CFBundleShortVersionString CFBundleVersion; do
+            echo "Watch $k = $(/usr/libexec/PlistBuddy -c "Print :$k" "$W/Info.plist")"
+          done
+          echo "iPhone CFBundleIdentifier = $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$W/Info.plist")" = \
+               "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
       - name: Build watchOS (simulateur)
         run: |
           status=0

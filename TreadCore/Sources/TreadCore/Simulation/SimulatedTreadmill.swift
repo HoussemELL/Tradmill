@@ -17,6 +17,10 @@ public final class SimulatedTreadmill {
         /// Consignes reçues pendant une accélération/décélération : acquittées mais ignorées
         /// (une des hypothèses pour le symptôme « acquittée sans effet »).
         public var ignoresSpeedWhileRamping = false
+        /// Réponse du Control Point à Set Target Speed (cas observé : aucune réponse tapis arrêté).
+        public var speedResponse: SpeedResponseMode = .normal
+        /// Envoie le statut 0x05 « consigne vitesse modifiée » quand une consigne est appliquée.
+        public var reportsSpeedStatus = true
         /// Ne répond jamais aux commandes (test des délais).
         public var dropsResponses = false
         /// Envoie l'extension Step Count (bit 13).
@@ -35,6 +39,13 @@ public final class SimulatedTreadmill {
             q.reportsStepCount = false
             return q
         }
+    }
+
+    public enum SpeedResponseMode: Equatable, Sendable {
+        case normal
+        case silentWhenStopped
+        case silent
+        case late(seconds: TimeInterval)
     }
 
     public enum RunState: Equatable, Sendable { case idle, countdown(until: TimeInterval), running, paused, stopped }
@@ -102,14 +113,20 @@ public final class SimulatedTreadmill {
             guard kmh >= speedRange.minKmh - 0.001, kmh <= speedRange.maxKmh + 0.001 else {
                 respond(op, .invalidParameter, now: now); return
             }
-            respond(op, .success, now: now)
+            let stopped = runState != .running && !isCountdown
+            switch quirks.speedResponse {
+            case .normal: respond(op, .success, now: now)
+            case .silentWhenStopped: if !stopped { respond(op, .success, now: now) }
+            case .silent: break
+            case let .late(delay): respond(op, .success, now: now + delay)
+            }
             let ramping = runState == .running && abs(currentSpeed - (targetSpeed ?? 0)) > 0.05
             let ignored = quirks.ignoresAllSpeedCommands
                 || (quirks.ignoresSpeedDuringCountdown && isCountdown)
                 || (quirks.ignoresSpeedWhileRamping && ramping)
             if !ignored {
                 targetSpeed = kmh
-                status(.targetSpeedChanged(kmh: kmh), now: now)
+                if quirks.reportsSpeedStatus { status(.targetSpeedChanged(kmh: kmh), now: now) }
             }
         case let .setTargetInclination(p):
             guard p >= inclinationRange.minPercent - 0.001, p <= inclinationRange.maxPercent + 0.001 else {
@@ -217,6 +234,7 @@ public final class SimulatedTreadmill {
 
     private func respond(_ op: UInt8, _ code: ControlResultCode, now: TimeInterval) {
         outbox.append((now + quirks.responseLatency, 0, ControlPointResponse(requestOpCode: op, result: code).encode()))
+        outbox.sort { $0.at < $1.at }
     }
 
     private func status(_ s: MachineStatus, now: TimeInterval) {

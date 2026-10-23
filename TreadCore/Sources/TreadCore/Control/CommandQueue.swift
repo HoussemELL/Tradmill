@@ -75,6 +75,8 @@ public final class CommandQueue {
     public var configuration: Configuration
     public weak var writer: ControlPointWriter?
     public var log: DiagnosticLog?
+    /// Réponse reçue après expiration du délai de la commande correspondante.
+    public var onLateResponse: ((ControlPointResponse) -> Void)?
 
     /// Vrai quand les indications du Control Point sont actives (prérequis FTMS).
     public private(set) var isLinkReady = false
@@ -184,7 +186,8 @@ public final class CommandQueue {
         guard let current = inFlight, current.command.opCode.rawValue == response.requestOpCode else {
             if let i = lateResponseOpCodes.firstIndex(of: response.requestOpCode) {
                 lateResponseOpCodes.remove(at: i)
-                log?.log(.response, "Réponse tardive ignorée : \(opLabel) → \(response.result)", bytes: bytes)
+                log?.log(.response, "Réponse tardive : \(opLabel) → \(response.result)", bytes: bytes)
+                onLateResponse?(response)
             } else {
                 log?.log(.warning, "Réponse inattendue : \(opLabel) → \(response.result)", bytes: bytes)
             }
@@ -218,6 +221,16 @@ public final class CommandQueue {
             return
         }
         pump(now: now)
+    }
+
+    /// Acquittement implicite : le tapis a confirmé l'effet de la commande en vol par un autre
+    /// canal (statut). Sans effet si une autre commande est en vol.
+    @discardableResult
+    public func resolveInFlight(_ command: ControlCommand, reason: String, now: TimeInterval) -> Bool {
+        guard let f = inFlight, f.command == command else { return false }
+        log?.log(.response, "\(f.command) → acquittement implicite (\(reason))")
+        complete(.success, now: now)
+        return true
     }
 
     public func cancelAll(reason: String, outcome: CommandOutcome? = nil) {
