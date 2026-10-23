@@ -24,7 +24,9 @@ struct HistoryListView: View {
                     pendingDelete = idx.first.flatMap { sessions[$0].record }
                 }
                 if sessions.isEmpty {
-                    Text("Aucune séance enregistrée.").foregroundStyle(.secondary)
+                    ContentUnavailableView("Aucune séance", systemImage: "figure.walk.treadmill",
+                                           description: Text("Vos séances apparaîtront ici avec leurs courbes, leurs intervalles et leur progression."))
+                        .listRowBackground(Color.clear)
                 }
             }
             .navigationTitle("Historique")

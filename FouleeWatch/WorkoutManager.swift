@@ -89,9 +89,13 @@ final class WorkoutManager {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.poll() }
     }
 
+    /// Un contexte de l'iPhone a été reçu depuis le lancement (le contexte mémorisé ou de
+    /// démonstration ne compte pas).
+    @ObservationIgnored private var hasFreshContext = false
+
     private func poll() {
         let now = Date()
-        var urgent = context == nil
+        var urgent = context == nil || !hasFreshContext
         if case .requesting = launch { urgent = true }
         if isActive, !(liveReceivedAt.map { now.timeIntervalSince($0) < 2.5 } ?? false) { urgent = true }
         let interval: TimeInterval = urgent ? (isActive ? 1 : 2) : 15
@@ -141,6 +145,7 @@ final class WorkoutManager {
 
     fileprivate func apply(contextData data: Data) {
         guard let c = try? WatchPhoneContext.decode(data) else { return }
+        hasFreshContext = true
         apply(context: c)
     }
 
@@ -498,6 +503,7 @@ final class WorkoutManager {
             onEvent?("live:\(s.state.rawValue):\(s.phaseName ?? "-"):\(s.targetSpeedKmh)")
             followPhoneState(s)
         case let .context(c):
+            hasFreshContext = true
             apply(context: c)
         case let .startResult(r):
             handle(startResult: r)

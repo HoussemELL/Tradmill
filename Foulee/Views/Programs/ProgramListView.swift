@@ -22,6 +22,7 @@ struct ProgramListView: View {
                     } label: {
                         ProgramRow(entity: entity)
                     }
+                    .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) { delete(entity) } label: { Label("Supprimer", systemImage: "trash") }
                         Button { duplicate(entity) } label: { Label("Dupliquer", systemImage: "plus.square.on.square") }
@@ -167,7 +168,7 @@ struct ProgramRow: View {
             if let p = entity.program {
                 Text("\(p.schedule.count) phases · \(Format.duration(TimeInterval(p.totalDurationSeconds))) · max \(Format.speed(p.maxSpeedKmh)) km/h")
                     .font(.caption).foregroundStyle(.secondary)
-                ProgramChart(program: p).frame(height: 44).allowsHitTesting(false)
+                ProgramChart(program: p, compact: true).frame(height: 36).allowsHitTesting(false)
             }
         }
         .padding(.vertical, 4)

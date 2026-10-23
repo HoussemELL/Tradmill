@@ -13,7 +13,25 @@ import TreadCore
 ///
 /// Un rapport est écrit chaque seconde dans Documents/scenario/phone.json.
 final class ScenarioRunner {
-    static let args = ProcessInfo.processInfo.arguments
+    private static let storedKey = "foulee.scenario.args"
+    private static let storedAtKey = "foulee.scenario.at"
+
+    /// Arguments du scénario. Une relance de l'app par iOS (message de la montre, arrière-plan)
+    /// n'a pas d'arguments : on reprend alors ceux du dernier lancement de test, pendant 20 min.
+    static let args: [String] = {
+        let launch = ProcessInfo.processInfo.arguments
+        let d = UserDefaults.standard
+        if launch.contains("-FouleeScenario") {
+            d.set(launch, forKey: storedKey)
+            d.set(Date(), forKey: storedAtKey)
+            return launch
+        }
+        if let stored = d.array(forKey: storedKey) as? [String], let at = d.object(forKey: storedAtKey) as? Date,
+           Date().timeIntervalSince(at) < 20 * 60 {
+            return stored + ["-FouleeRelaunched"]
+        }
+        return launch
+    }()
     static var isActive: Bool { args.contains("-FouleeScenario") }
 
     static func value(_ key: String) -> String? {
@@ -55,6 +73,8 @@ final class ScenarioRunner {
         var watchPaired = false
         var watchAppInstalled = false
         var watchReachable = false
+        /// Lancements de l'app pendant le scénario (relance par iOS comprise).
+        var launches: [String] = []
         var log: [String] = []
         var updatedAt = Date()
     }
@@ -76,6 +96,15 @@ final class ScenarioRunner {
     init(model: AppModel) {
         self.model = model
         report = Report(scenario: Self.value("-FouleeScenario") ?? "?")
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("scenario/phone.json")
+        if Self.args.contains("-FouleeRelaunched"), let url = dir, let data = try? Data(contentsOf: url),
+           let old = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let launches = old["launches"] as? [String], old["scenario"] as? String == report.scenario {
+            report.launches = launches
+        }
+        report.launches.append("\(ISO8601DateFormatter().string(from: Date())) pid \(ProcessInfo.processInfo.processIdentifier)"
+                               + (Self.args.contains("-FouleeRelaunched") ? " (relance par iOS, sans arguments)" : ""))
         model.log.onAppend = { [weak self] e in
             guard let self else { return }
             if e.category == .tx, e.message.hasPrefix("Start"), self.linkLostAt != nil { self.report.startCommandsAfterLinkLoss += 1 }

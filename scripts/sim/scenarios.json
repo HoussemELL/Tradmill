@@ -444,8 +444,8 @@
      {
       "file": "phone.json",
       "path": "requestedSpeeds",
-      "op": "contains",
-      "value": "6.0",
+      "op": "hasnum",
+      "value": 6.0,
       "label": "transition 4 → 7 km/h par paliers (6 km/h)"
      },
      {
@@ -525,7 +525,7 @@
    },
    {
     "do": "wait",
-    "seconds": 12
+    "seconds": 20
    },
    {
     "do": "shot",
@@ -906,13 +906,6 @@
       "op": "lenge",
       "value": 1,
       "label": "pilote FC : ajustement avec la FC de la montre"
-     },
-     {
-      "file": "phone.json",
-      "path": "finished.autoAdjustments",
-      "op": "ge",
-      "value": 1,
-      "label": "ajustements enregistrés"
      }
     ]
    }

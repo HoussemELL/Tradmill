@@ -192,6 +192,8 @@ def check(res, prefix, exp):
         ok = isinstance(v, (int, float)) and v <= want
     elif op == "lenge":
         ok = isinstance(v, list) and len(v) >= want
+    elif op == "hasnum":
+        ok = isinstance(v, list) and any(isinstance(x, (int, float)) and abs(x - want) < 1e-6 for x in v)
     elif op == "contains":
         ok = isinstance(v, list) and any(want in str(x) for x in v)
     elif op == "notcontains":

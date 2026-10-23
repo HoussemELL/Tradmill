@@ -5,6 +5,8 @@ import TreadCore
 /// Prévisualisation vitesse (aires) et inclinaison (ligne) d'un programme.
 struct ProgramChart: View {
     let program: WorkoutProgram
+    /// Version miniature (listes) : sans axes.
+    var compact = false
 
     private struct Point: Identifiable {
         let id: Int
@@ -46,8 +48,9 @@ struct ProgramChart: View {
                     .foregroundStyle(Theme.accent.opacity(0.18))
             }
             ForEach(points) { p in
-                AreaMark(x: .value("Minute", p.minute), y: .value("Vitesse", p.speed))
-                    .foregroundStyle(Theme.speed.opacity(0.35))
+                // yStart/yEnd : pas d'empilement aux changements de phase (deux points à la même minute).
+                AreaMark(x: .value("Minute", p.minute), yStart: .value("Base", 0.0), yEnd: .value("Vitesse", p.speed))
+                    .foregroundStyle(Theme.speed.opacity(0.3))
                     .interpolationMethod(.linear)
                 LineMark(x: .value("Minute", p.minute), y: .value("Vitesse", p.speed), series: .value("Série", "Vitesse"))
                     .foregroundStyle(Theme.speed)
@@ -56,7 +59,9 @@ struct ProgramChart: View {
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
             }
         }
-        .chartXAxisLabel("min")
+        .chartXAxis(compact ? .hidden : .automatic)
+        .chartYAxis(compact ? .hidden : .automatic)
+        .chartXAxisLabel(compact ? "" : "min")
         .chartLegend(.hidden)
         .accessibilityLabel("Graphique du programme : vitesse en bleu, inclinaison en jaune")
     }
