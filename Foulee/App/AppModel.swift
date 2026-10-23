@@ -36,6 +36,7 @@ final class AppModel {
     /// Séances terminées qui enregistrent encore la FC de récupération.
     @ObservationIgnored private var finishingServices: [SessionService] = []
     @ObservationIgnored private var watchOwnedSessions: [UUID: Bool] = [:]
+    @ObservationIgnored private var lastWatchStatusAt: TimeInterval = 0
 
     init(modelContext: ModelContext) {
         let log = DiagnosticLog()
@@ -78,6 +79,30 @@ final class AppModel {
         watch.onHeartRate = { [weak self] bpm, age in self?.heartRate.ingestWatch(bpm: bpm, sampleAge: age) }
         watch.onSteps = { [weak self] total in self?.sessionService?.session.ingestWatchSteps(total: total) }
         watch.onActiveEnergy = { [weak self] kcal in self?.sessionService?.session.ingestWatchActiveEnergy(kcal: kcal) }
+        watch.onRemoteCommand = { [weak self] c in self?.handleWatchCommand(c) }
+    }
+
+    /// Commandes reçues de la montre : mêmes actions que les boutons de l'iPhone.
+    /// La reprise reste une action explicite de l'utilisateur (bouton sur la montre).
+    private func handleWatchCommand(_ c: WatchRemoteCommand) {
+        guard let s = sessionService else { return }
+        switch c {
+        case .pause: pauseSession()
+        case .resume: _ = resumeSession()
+        case .stop:
+            if s.session.status != .finished { stopSession() }
+        case .resumeAutopilot: s.session.resumeAutopilot()
+        }
+        sendWatchStatus(force: true)
+    }
+
+    /// État en direct vers la montre (≈ 1 Hz) pendant une séance.
+    private func sendWatchStatus(force: Bool = false) {
+        let now = MonotonicClock.now()
+        guard let s = sessionService, s.session.status != .ready, watch.canStreamToWatch,
+              force || now - lastWatchStatusAt >= 1 else { return }
+        lastWatchStatusAt = now
+        watch.send(.liveStatus(WatchLiveStatus.make(session: s.session, now: now, date: Date())), quiet: true)
     }
 
     /// Reconnexion automatique du lien (jamais de commande) aux appareils mémorisés.
@@ -109,6 +134,8 @@ final class AppModel {
         }
         sessionService?.session.settings.zones = settings.session.zones
         sessionService?.session.settings.zoneAlertsEnabled = settings.session.zoneAlertsEnabled
+        sessionService?.session.settings.smoothTransitions = settings.session.smoothTransitions
+        sessionService?.session.settings.maxSpeedStepKmh = settings.session.maxSpeedStepKmh
         updateIdleTimer()
     }
 
@@ -126,6 +153,7 @@ final class AppModel {
         let driven = sessionService.map { $0.session.status != .finished } ?? false
         treadmill.tick(drivenBySession: driven)
         sessionService?.tick()
+        sendWatchStatus()
         finishingServices.forEach { $0.tick() }
         heartRate.refresh()
         if let d = diagnostic, case .running = d.state {
@@ -422,12 +450,43 @@ final class AppModel {
 
     func dismissRecoveredNotice() { recoveredNotice = nil }
 
+    /// Installe les programmes prédéfinis jamais proposés (y compris pour une installation existante).
+    /// Un programme prédéfini supprimé par l'utilisateur n'est pas réinstallé automatiquement.
     private func seedTemplatesIfNeeded() {
-        guard !settings.didSeedTemplates else { return }
-        if dataStore.allPrograms().isEmpty {
-            WorkoutProgram.templates.forEach { dataStore.upsert($0) }
+        var seeded = Set(settings.seededTemplateIDs ?? [])
+        let existing = Set(dataStore.allPrograms().compactMap(\.templateID))
+        var added = 0
+        for t in WorkoutProgram.templates {
+            guard let id = t.templateID, !seeded.contains(id) else { continue }
+            if !existing.contains(id) {
+                dataStore.upsert(t)
+                added += 1
+            }
+            seeded.insert(id)
         }
+        if added > 0 { log.log(.info, "\(added) programme(s) prédéfini(s) ajouté(s)") }
+        settings.seededTemplateIDs = Array(seeded).sorted()
         settings.didSeedTemplates = true
+    }
+
+    /// Réinstalle les programmes prédéfinis absents (ou les remet à l'état d'origine).
+    @discardableResult
+    func restoreTemplates(resetExisting: Bool) -> Int {
+        let programs = dataStore.allPrograms()
+        var count = 0
+        for t in WorkoutProgram.templates {
+            if let current = programs.first(where: { $0.templateID == t.templateID }) {
+                guard resetExisting else { continue }
+                var fresh = t
+                fresh.id = current.id
+                fresh.createdAt = current.createdAt
+                dataStore.upsert(fresh)
+            } else {
+                dataStore.upsert(t)
+            }
+            count += 1
+        }
+        return count
     }
 
     // MARK: - Diagnostic

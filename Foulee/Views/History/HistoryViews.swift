@@ -46,6 +46,13 @@ struct HistoryListView: View {
                 if let e = sessions.first(where: { $0.id == id }) { HistoryDetailView(entity: e) }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        ProgressListView()
+                    } label: {
+                        Label("Progression", systemImage: "chart.line.uptrend.xyaxis")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         let records = sessions.compactMap(\.record)
@@ -122,11 +129,11 @@ struct HistoryDetailView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds), detail: "pauses : \(Format.duration(r.pausedSeconds))")
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters), detail: r.distanceSource.label)
-                    MetricTile(title: "Vitesse", value: Format.speed(r.avgSpeed), unit: "km/h", detail: "max \(Format.speed(r.maxSpeed))")
                     MetricTile(title: "Inclinaison", value: Format.incline(r.avgIncline), unit: "%", detail: "max \(Format.incline(r.maxIncline))")
-                    MetricTile(title: "FC", value: r.avgHR.map { "\($0)" } ?? "—", unit: "bpm", detail: hrDetail(r))
+                    MetricTile(title: "Source FC", value: r.hrSources.first?.shortLabel ?? "—", detail: hrDetail(r))
                     MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
                 }
+                SessionInsightsView(record: r)
                 caloriesCard(r)
                 chartCard("Fréquence cardiaque", r, .heartRate)
                 chartCard("Vitesse (mesure / cible)", r, .speed)

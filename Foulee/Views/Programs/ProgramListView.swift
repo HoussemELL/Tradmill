@@ -11,6 +11,7 @@ struct ProgramListView: View {
     @State private var showImporter = false
     @State private var exportDoc: ExportDocument?
     @State private var alert: String?
+    @State private var confirmReset = false
 
     var body: some View {
         NavigationStack {
@@ -46,6 +47,14 @@ struct ProgramListView: View {
                         Button { showImporter = true } label: { Label("Importer (JSON)", systemImage: "square.and.arrow.down") }
                         Button { export(programs) } label: { Label("Tout exporter (JSON)", systemImage: "square.and.arrow.up") }
                             .disabled(programs.isEmpty)
+                        Divider()
+                        Button {
+                            let n = model.restoreTemplates(resetExisting: false)
+                            alert = n == 0 ? "Tous les programmes prédéfinis sont déjà présents." : "\(n) programme(s) prédéfini(s) restauré(s)."
+                        } label: { Label("Restaurer les programmes prédéfinis", systemImage: "arrow.counterclockwise") }
+                        Button(role: .destructive) { confirmReset = true } label: {
+                            Label("Réinitialiser les programmes prédéfinis", systemImage: "arrow.uturn.backward")
+                        }
                     } label: {
                         Image(systemName: "plus.circle.fill").font(.title3)
                     }
@@ -62,6 +71,15 @@ struct ProgramListView: View {
             }
             .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }),
                           document: exportDoc, contentType: .json, defaultFilename: exportDoc?.filename) { _ in }
+            .confirmationDialog("Remettre les programmes prédéfinis à leur état d'origine ?", isPresented: $confirmReset,
+                                titleVisibility: .visible) {
+                Button("Réinitialiser", role: .destructive) {
+                    let n = model.restoreTemplates(resetExisting: true)
+                    alert = "\(n) programme(s) prédéfini(s) réinitialisé(s). Vos copies et programmes personnels ne changent pas."
+                }
+            } message: {
+                Text("Vos modifications des programmes prédéfinis seront perdues (Cardio Baseline est reverrouillé).")
+            }
             .alert("Programmes", isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert = nil } })) {
                 Button("OK") { alert = nil }
             } message: { Text(alert ?? "") }
@@ -132,7 +150,15 @@ struct ProgramRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(entity.name).font(.headline).foregroundStyle(.primary)
+            HStack(spacing: 6) {
+                Text(entity.name).font(.headline).foregroundStyle(.primary)
+                if entity.program?.isLocked == true {
+                    Image(systemName: "lock.fill").font(.caption).foregroundStyle(Theme.warning).accessibilityLabel("verrouillé")
+                }
+                if entity.program?.hasAutoSpeed == true {
+                    StatusPill(text: "FC auto", systemImage: "heart.circle", color: Theme.accent)
+                }
+            }
             if let p = entity.program {
                 Text("\(p.schedule.count) phases · \(Format.duration(TimeInterval(p.totalDurationSeconds))) · max \(Format.speed(p.maxSpeedKmh)) km/h")
                     .font(.caption).foregroundStyle(.secondary)

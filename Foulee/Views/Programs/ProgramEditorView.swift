@@ -10,6 +10,10 @@ struct ProgramEditorView: View {
 
     @State private var editingPhase: PhaseEditTarget?
     @State private var editingBlockIndex: Int?
+    @State private var confirmUnlock = false
+
+    /// Un protocole verrouillé (Cardio Baseline) ne se modifie qu'après déverrouillage explicite.
+    private var phasesEditable: Bool { !program.isLocked }
 
     struct PhaseEditTarget: Identifiable {
         let itemIndex: Int
@@ -44,28 +48,7 @@ struct ProgramEditorView: View {
                     LabeledContent("Durée totale", value: Format.duration(TimeInterval(program.totalDurationSeconds)))
                     LabeledContent("Phases (blocs déroulés)", value: "\(program.schedule.count)")
                 } header: { Text("Aperçu") }
-                Section {
-                    ForEach(Array(program.items.enumerated()), id: \.element.id) { index, item in
-                        itemRow(index: index, item: item)
-                    }
-                    .onMove { program.items.move(fromOffsets: $0, toOffset: $1) }
-                    .onDelete { program.items.remove(atOffsets: $0) }
-                    Menu {
-                        Button("Échauffement") { addPhase(kind: .warmup) }
-                        Button("Phase d'effort") { addPhase(kind: .work) }
-                        Button("Récupération") { addPhase(kind: .recovery) }
-                        Button("Allure stable") { addPhase(kind: .steady) }
-                        Button("Retour au calme") { addPhase(kind: .cooldown) }
-                        Divider()
-                        Button("Bloc répété") { addBlock() }
-                    } label: {
-                        Label("Ajouter", systemImage: "plus.circle.fill")
-                    }
-                } header: {
-                    Text("Phases")
-                } footer: {
-                    Text("Glissez pour réorganiser (bouton Modifier), balayez pour supprimer.")
-                }
+                if phasesEditable { phasesSection } else { lockedSection }
                 if !structureErrors.isEmpty || !treadmillIssues.isEmpty {
                     Section("À corriger") {
                         ForEach(structureErrors + treadmillIssues) { i in
@@ -90,6 +73,12 @@ struct ProgramEditorView: View {
                 }
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
             }
+            .alert("Déverrouiller le protocole ?", isPresented: $confirmUnlock) {
+                Button("Déverrouiller", role: .destructive) { program.locked = false }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Les séances faites après une modification ne seront plus comparées aux précédentes (protocole différent).")
+            }
             .sheet(item: $editingPhase) { target in
                 PhaseEditorView(phase: target.phase, capabilities: model.treadmill.capabilities) { updated in
                     apply(updated, to: target)
@@ -103,6 +92,46 @@ struct ProgramEditorView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var lockedSection: some View {
+        Section {
+            ProgramSegmentsView(program: program)
+            Button {
+                confirmUnlock = true
+            } label: {
+                Label("Déverrouiller pour modifier", systemImage: "lock.open")
+            }
+        } header: {
+            Label("Protocole de référence verrouillé", systemImage: "lock.fill")
+        } footer: {
+            Text("Gardé strictement identique pour comparer votre FC à effort égal au fil des semaines. Pour une variante, dupliquez-le plutôt.")
+        }
+    }
+
+    private var phasesSection: some View {
+        Section {
+            ForEach(Array(program.items.enumerated()), id: \.element.id) { index, item in
+                itemRow(index: index, item: item)
+            }
+            .onMove { program.items.move(fromOffsets: $0, toOffset: $1) }
+            .onDelete { program.items.remove(atOffsets: $0) }
+            Menu {
+                Button("Échauffement") { addPhase(kind: .warmup) }
+                Button("Phase d'effort") { addPhase(kind: .work) }
+                Button("Récupération") { addPhase(kind: .recovery) }
+                Button("Allure stable") { addPhase(kind: .steady) }
+                Button("Retour au calme") { addPhase(kind: .cooldown) }
+                Divider()
+                Button("Bloc répété") { addBlock() }
+            } label: {
+                Label("Ajouter", systemImage: "plus.circle.fill")
+            }
+        } header: {
+            Text("Phases")
+        } footer: {
+            Text("Glissez pour réorganiser (bouton Modifier), balayez pour supprimer.")
         }
     }
 
@@ -125,7 +154,7 @@ struct ProgramEditorView: View {
                         Text(Format.duration(TimeInterval(item.durationSeconds))).foregroundStyle(.secondary)
                     }
                     ForEach(b.phases) { p in
-                        Text("  • \(p.name) \(Format.duration(TimeInterval(p.durationSeconds))) · \(Format.speed(p.speedKmh)) km/h · \(Format.incline(p.inclinePercent)) %")
+                        Text("  • \(p.name) \(Format.duration(TimeInterval(p.durationSeconds))) · \(PhaseText.summary(p))")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -171,9 +200,8 @@ struct PhaseRow: View {
             RoundedRectangle(cornerRadius: 3).fill(Theme.phaseColor(phase.kind)).frame(width: 6)
             VStack(alignment: .leading) {
                 Text(phase.name).font(.headline).foregroundStyle(.primary)
-                Text("\(Format.speed(phase.speedKmh)) km/h · \(Format.incline(phase.inclinePercent)) %"
-                     + (phase.targetZone.map { " · Z\($0)" } ?? ""))
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(PhaseText.summary(phase))
+                    .font(.caption).foregroundStyle(phase.isAuto ? Theme.accent : .secondary)
             }
             Spacer()
             Text(Format.duration(TimeInterval(phase.durationSeconds))).monospacedDigit().foregroundStyle(.secondary)
@@ -204,6 +232,53 @@ struct PhaseEditorView: View {
         Binding(get: { phase.durationSeconds % 60 }, set: { phase.durationSeconds = (phase.durationSeconds / 60) * 60 + $0 })
     }
 
+    enum SpeedMode: String, CaseIterable, Identifiable {
+        case fixed, ramp, auto
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .fixed: return "Fixe"
+            case .ramp: return "Progressive"
+            case .auto: return "Pilotée par la FC"
+            }
+        }
+    }
+
+    private var speedMode: Binding<SpeedMode> {
+        Binding(get: {
+            if phase.autoSpeed != nil { return .auto }
+            return phase.endSpeedKmh != nil ? .ramp : .fixed
+        }, set: { mode in
+            switch mode {
+            case .fixed:
+                phase.endSpeedKmh = nil
+                phase.autoSpeed = nil
+            case .ramp:
+                phase.autoSpeed = nil
+                phase.endSpeedKmh = phase.endSpeedKmh ?? phase.speedKmh
+            case .auto:
+                phase.endSpeedKmh = nil
+                let a = phase.autoSpeed ?? AutoSpeedSettings()
+                phase.autoSpeed = a
+                phase.speedKmh = min(max(phase.speedKmh, a.minKmh), a.maxKmh)
+                phase.targetZone = a.targetZone
+            }
+        })
+    }
+
+    private var speedStep: Double { max(capabilities.speed.incrementKmh, 0.1) }
+
+    private func auto<T>(_ kp: WritableKeyPath<AutoSpeedSettings, T>) -> Binding<T> {
+        Binding(get: { (phase.autoSpeed ?? AutoSpeedSettings())[keyPath: kp] },
+                set: { v in
+                    var a = phase.autoSpeed ?? AutoSpeedSettings()
+                    a[keyPath: kp] = v
+                    phase.autoSpeed = a
+                })
+    }
+
+    private var autoError: String? { phase.autoSpeed?.validationError() }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -218,8 +293,18 @@ struct PhaseEditorView: View {
                     Stepper("\(seconds.wrappedValue) s", value: seconds, in: 0...55, step: 5)
                 }
                 Section {
-                    Stepper(value: $phase.speedKmh, in: 0.1...30, step: max(capabilities.speed.incrementKmh, 0.1)) {
-                        LabeledContent("Vitesse", value: String(format: "%.1f km/h", phase.speedKmh))
+                    Picker("Vitesse", selection: speedMode) {
+                        ForEach(SpeedMode.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    Stepper(value: $phase.speedKmh, in: 0.1...30, step: speedStep) {
+                        LabeledContent(phase.endSpeedKmh != nil || phase.autoSpeed != nil ? "Vitesse de départ" : "Vitesse",
+                                       value: String(format: "%.1f km/h", phase.speedKmh))
+                    }
+                    if let end = phase.endSpeedKmh {
+                        Stepper(value: Binding(get: { end }, set: { phase.endSpeedKmh = $0 }), in: 0.1...30, step: speedStep) {
+                            LabeledContent("Vitesse de fin", value: String(format: "%.1f km/h", end))
+                        }
                     }
                     Stepper(value: $phase.inclinePercent, in: -10...30, step: max(capabilities.inclination?.incrementPercent ?? 1, 0.5)) {
                         LabeledContent("Inclinaison", value: "\(Format.incline(phase.inclinePercent)) %")
@@ -230,13 +315,17 @@ struct PhaseEditorView: View {
                     Text(String(format: "Tapis actuel : %.1f–%.1f km/h", capabilities.speed.minKmh, capabilities.speed.maxKmh)
                          + (capabilities.inclination.map { String(format: ", %.0f–%.0f %%", $0.minPercent, $0.maxPercent) } ?? ", inclinaison non pilotable"))
                 }
-                Section {
-                    Picker("Zone cible", selection: $phase.targetZone) {
-                        Text("Aucune").tag(Int?.none)
-                        ForEach(1...5, id: \.self) { Text("Zone \($0)").tag(Optional($0)) }
+                if phase.autoSpeed != nil {
+                    autoSection
+                } else {
+                    Section {
+                        Picker("Zone cible", selection: $phase.targetZone) {
+                            Text("Aucune").tag(Int?.none)
+                            ForEach(1...5, id: \.self) { Text("Zone \($0)").tag(Optional($0)) }
+                        }
+                    } footer: {
+                        Text("Indication et alertes uniquement : dans une phase à vitesse fixe ou progressive, la FC ne pilote jamais le tapis.")
                     }
-                } footer: {
-                    Text("Indication et alertes uniquement : la FC ne pilote pas le tapis.")
                 }
             }
             .navigationTitle("Phase")
@@ -245,14 +334,47 @@ struct PhaseEditorView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("OK") {
+                        if let a = phase.autoSpeed { phase.targetZone = a.targetZone }
                         phase.speedKmh = (phase.speedKmh * 100).rounded() / 100
                         phase.inclinePercent = (phase.inclinePercent * 10).rounded() / 10
                         onSave(phase)
                         dismiss()
                     }
-                    .disabled(phase.durationSeconds <= 0 || phase.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(phase.durationSeconds <= 0 || phase.name.trimmingCharacters(in: .whitespaces).isEmpty || autoError != nil)
                 }
             }
+        }
+    }
+
+    private var autoSection: some View {
+        Section {
+            Picker("Zone visée", selection: auto(\.targetZone)) {
+                ForEach(1...5, id: \.self) { Text("Zone \($0)").tag($0) }
+            }
+            Stepper(String(format: "Vitesse auto min : %.1f km/h", auto(\.minKmh).wrappedValue),
+                    value: auto(\.minKmh), in: 0.5...20, step: speedStep)
+            Stepper(String(format: "Vitesse auto max : %.1f km/h", auto(\.maxKmh).wrappedValue),
+                    value: auto(\.maxKmh), in: 0.5...20, step: speedStep)
+            Stepper(String(format: "Palier : %.1f km/h", auto(\.stepKmh).wrappedValue),
+                    value: auto(\.stepKmh), in: speedStep...1, step: speedStep)
+            Stepper("Entre deux accélérations : \(Int(auto(\.increaseInterval).wrappedValue)) s",
+                    value: auto(\.increaseInterval), in: 30...240, step: 10)
+            Stepper("Entre deux ralentissements : \(Int(auto(\.decreaseInterval).wrappedValue)) s",
+                    value: auto(\.decreaseInterval), in: 10...90, step: 5)
+            Stepper("FC filtrée sur \(Int(auto(\.filterSeconds).wrappedValue)) s",
+                    value: auto(\.filterSeconds), in: 10...30, step: 1)
+            Stepper("Marge sous la limite haute : \(auto(\.upperMarginBpm).wrappedValue) bpm",
+                    value: auto(\.upperMarginBpm), in: 0...10)
+            Toggle("Viser le milieu de la zone", isOn: auto(\.nudgeTowardMiddle))
+            Stepper(String(format: "Allure de sécurité sans FC : %.1f km/h", auto(\.fallbackKmh).wrappedValue),
+                    value: auto(\.fallbackKmh), in: 1...8, step: speedStep)
+            if let e = autoError {
+                Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.danger)
+            }
+        } header: {
+            Text("Pilotage par la FC")
+        } footer: {
+            Text("Sous la zone : +palier, au plus une accélération par délai. Dans la zone : vitesse maintenue. Au-dessus de (limite haute − marge) pendant le délai de ralentissement : −palier (−2 paliers si la FC dépasse la zone de plus de 5 bpm). Sans FC : plus d'accélération, retour progressif à l'allure de sécurité. Les boutons de vitesse reprennent toujours la main. Les limites du tapis s'appliquent en plus.")
         }
     }
 }

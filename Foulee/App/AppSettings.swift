@@ -34,6 +34,8 @@ struct AppSettings: Codable, Equatable {
     /// Optionnel pour rester lisible par les réglages enregistrés avant son ajout.
     var didRequestHealthAuthorization: Bool?
     var didSeedTemplates = false
+    /// Programmes prédéfinis déjà proposés (par `templateID`) : un programme supprimé n'est pas réinstallé.
+    var seededTemplateIDs: [String]?
 }
 
 final class SettingsStore {

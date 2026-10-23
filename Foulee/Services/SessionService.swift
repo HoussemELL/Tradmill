@@ -31,6 +31,16 @@ struct SessionSnapshot: Equatable {
     var message: String?
     var lastAlert: String?
     var isFreeRun = true
+    /// Phase pilotée par la FC en cours.
+    var autoActive = false
+    var autoMode: ZoneAutopilot.Mode?
+    var autoStatus: String?
+    var autoFilteredBPM: Int?
+    var autoAdjustments = 0
+    var autoZone: ZoneRange?
+    /// Protocole de référence verrouillé (Cardio Baseline) et modifié pendant la séance.
+    var lockedProtocol = false
+    var protocolModified = false
 }
 
 /// Orchestration d'une séance : relie TreadCore.WorkoutSession aux services de l'app
@@ -113,6 +123,16 @@ final class SessionService {
         n.zoneSeconds = s.zoneTime.seconds
         n.message = s.message
         n.lastAlert = s.lastAlert
+        if let a = s.autopilot, s.isAutoPhase {
+            n.autoActive = true
+            n.autoMode = a.mode
+            n.autoStatus = a.status
+            n.autoFilteredBPM = a.lastFilteredBPM.map { Int($0.rounded()) }
+            n.autoAdjustments = s.record.autoAdjustments?.count ?? 0
+            n.autoZone = s.settings.zones.zones.first { $0.zone == a.settings.targetZone }
+        }
+        n.lockedProtocol = s.program?.isLocked ?? false
+        n.protocolModified = (s.record.manualChanges ?? 0) + (s.record.skippedPhases ?? 0) > 0
         if n != snapshot { snapshot = n }
     }
 }

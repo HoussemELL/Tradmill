@@ -76,10 +76,14 @@ struct PrepareSessionView: View {
         return programs.first { $0.id == id }?.program
     }
 
-    private var issues: [ProgramIssue] {
+    private var allIssues: [ProgramIssue] {
         guard let p = selectedProgram else { return [] }
         return ProgramValidator.validate(p, against: model.treadmill.capabilities)
     }
+
+    /// Erreurs bloquantes (les avertissements n'empêchent pas le départ).
+    private var issues: [ProgramIssue] { allIssues.filter { $0.severity == .error } }
+    private var warnings: [ProgramIssue] { allIssues.filter { $0.severity == .warning } }
 
     var body: some View {
         ScrollView {
@@ -99,6 +103,9 @@ struct PrepareSessionView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
                     .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+                }
+                ForEach(warnings) { w in
+                    Banner(text: "\(w.phaseName.map { "\($0) : " } ?? "")\(w.message)", color: Theme.warning)
                 }
                 if let error { Banner(text: error, color: Theme.danger) }
                 startButton
@@ -152,6 +159,22 @@ struct PrepareSessionView: View {
                 ProgramChart(program: p).frame(height: 120)
                 Text("\(p.schedule.count) phases · \(Format.duration(TimeInterval(p.totalDurationSeconds)))")
                     .font(.caption).foregroundStyle(.secondary)
+                if p.isLocked {
+                    Label("Protocole de référence : gardez-le identique. Modifier la vitesse ou passer une phase rend la séance non comparable.",
+                          systemImage: "lock.fill")
+                        .font(.caption).foregroundStyle(Theme.warning)
+                }
+                if p.hasAutoSpeed {
+                    Label(autoText(p), systemImage: "heart.circle")
+                        .font(.caption).foregroundStyle(Theme.accent)
+                }
+                if !p.notes.isEmpty {
+                    Text(p.notes).font(.caption).foregroundStyle(.secondary)
+                }
+                DisclosureGroup("Étapes") {
+                    ProgramSegmentsView(program: p).padding(.top, 4)
+                }
+                .font(.subheadline)
             } else {
                 Text(String(format: "Départ à %.1f km/h, réglages manuels pendant la séance.", model.settings.session.freeRunStartSpeed))
                     .font(.caption).foregroundStyle(.secondary)
@@ -160,6 +183,18 @@ struct PrepareSessionView: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func autoText(_ p: WorkoutProgram) -> String {
+        let hr: String
+        switch model.heartRate.status {
+        case .live: hr = "FC disponible"
+        default: hr = "aucune FC en direct pour l'instant : connectez la ceinture ou lancez l'exercice sur la Watch"
+        }
+        let z = p.schedule.first { $0.phase.isAuto }?.phase.autoSpeed?.targetZone ?? 2
+        let range = model.settings.session.zones.zones.first { $0.zone == z }
+        let bounds = range.map { " (\($0.lower)–\($0.upper) bpm)" } ?? ""
+        return "Vitesse pilotée par la FC pour rester en zone \(z)\(bounds). \(hr)."
     }
 
     private var startButton: some View {

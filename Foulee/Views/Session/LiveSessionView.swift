@@ -15,6 +15,7 @@ struct LiveSessionView: View {
             VStack(spacing: 12) {
                 banners
                 if !snap.isFreeRun { phaseHeader }
+                if snap.autoActive { autopilotCard }
                 metricsGrid
                 manualControls
             }
@@ -59,8 +60,12 @@ struct LiveSessionView: View {
             Banner(text: String(format: "Écart inclinaison : consigne %.0f %%, mesure %@ %%", req, Format.incline(tm.telemetry.inclinePercent)))
         }
         if case let .failed(m) = tm.speed.status { Banner(text: "Vitesse : \(m)", color: Theme.danger) }
-        if snap.overrideActive {
+        if snap.overrideActive && !snap.autoActive {
             Banner(text: "Consigne manuelle jusqu'au prochain palier", color: Theme.speed, systemImage: "hand.raised.fill")
+        }
+        if snap.lockedProtocol && snap.protocolModified {
+            Banner(text: "Test de référence modifié pendant la séance : elle ne sera pas comparée aux autres.",
+                   color: Theme.warning, systemImage: "lock.open.fill")
         }
         if let a = model.banner { Banner(text: a, color: Theme.heart, systemImage: "heart.text.square.fill") }
         if let e = actionError { Banner(text: e, color: Theme.danger) }
@@ -99,6 +104,47 @@ struct LiveSessionView: View {
         .padding(12)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Pilotage FC
+
+    private var autopilotColor: Color {
+        switch snap.autoMode {
+        case .regulating?: return Theme.accent
+        case .heartRateLost?, .suspended?: return Theme.danger
+        case .manual?: return Theme.speed
+        default: return .secondary
+        }
+    }
+
+    private var autopilotCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "heart.circle.fill").foregroundStyle(autopilotColor)
+                Text("Pilotage FC · zone \(snap.autoZone?.zone ?? 2)").font(.headline)
+                Spacer()
+                Text("\(snap.autoAdjustments) ajust.").font(.caption).foregroundStyle(.secondary)
+            }
+            if let z = snap.autoZone {
+                Text("Zone visée \(z.lower)–\(z.upper) bpm · FC filtrée \(snap.autoFilteredBPM.map(String.init) ?? "—")")
+                    .font(.subheadline).monospacedDigit()
+            }
+            Text(snap.autoStatus ?? "").font(.subheadline).foregroundStyle(autopilotColor)
+            if snap.autoMode == .manual {
+                Button {
+                    service.session.resumeAutopilot()
+                } label: {
+                    Label("Réactiver le pilotage FC", systemImage: "arrow.uturn.backward.circle").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                Text("Les boutons de vitesse reprennent la main immédiatement.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: Indicateurs
@@ -299,9 +345,10 @@ struct FinishedSessionView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds))
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters))
-                    MetricTile(title: "FC moy.", value: r.avgHR.map { "\($0)" } ?? "—", unit: "bpm")
                     MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
+                    MetricTile(title: "Inclinaison moy.", value: Format.incline(r.avgIncline), unit: "%")
                 }
+                SessionInsightsView(record: r)
                 ZoneBars(seconds: r.zoneSeconds)
                 Button {
                     model.closeFinishedSession()

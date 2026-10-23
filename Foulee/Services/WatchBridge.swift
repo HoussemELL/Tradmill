@@ -48,6 +48,8 @@ final class WatchBridge {
     @ObservationIgnored var onHeartRate: ((Double, TimeInterval) -> Void)?
     @ObservationIgnored var onSteps: ((Double) -> Void)?
     @ObservationIgnored var onActiveEnergy: ((Double) -> Void)?
+    /// Commande du tapis demandée depuis la montre.
+    @ObservationIgnored var onRemoteCommand: ((WatchRemoteCommand) -> Void)?
 
     init(healthStore: HKHealthStore, log: DiagnosticLog) {
         self.healthStore = healthStore
@@ -133,25 +135,32 @@ final class WatchBridge {
         }
     }
 
-    func send(_ message: WatchMessage) {
+    /// La montre peut recevoir l'état en direct (miroir établi ou app Watch joignable).
+    var canStreamToWatch: Bool {
+        mirrored != nil || (WCSession.isSupported() && WCSession.default.activationState == .activated && WCSession.default.isReachable)
+    }
+
+    /// - Parameter quiet: n'écrit pas les échecs dans le journal (état en direct envoyé chaque seconde).
+    func send(_ message: WatchMessage, quiet: Bool = false) {
         guard let data = try? message.encoded() else { return }
         if let s = mirrored {
             s.sendToRemoteWorkoutSession(data: data) { [weak self] ok, error in
                 if !ok {
                     DispatchQueue.main.async {
-                        self?.log.log(.warning, "Envoi vers la Watch (miroir) échoué : \(error?.localizedDescription ?? "?")")
-                        self?.sendViaConnectivity(data)
+                        if !quiet { self?.log.log(.warning, "Envoi vers la Watch (miroir) échoué : \(error?.localizedDescription ?? "?")") }
+                        self?.sendViaConnectivity(data, quiet: quiet)
                     }
                 }
             }
         } else {
-            sendViaConnectivity(data)
+            sendViaConnectivity(data, quiet: quiet)
         }
     }
 
-    private func sendViaConnectivity(_ data: Data) {
+    private func sendViaConnectivity(_ data: Data, quiet: Bool = false) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable else { return }
         WCSession.default.sendMessage([WatchMessage.wcKey: data], replyHandler: nil) { [weak self] error in
+            guard !quiet else { return }
             DispatchQueue.main.async { self?.log.log(.warning, "WatchConnectivity : \(error.localizedDescription)") }
         }
     }
@@ -208,7 +217,10 @@ final class WatchBridge {
             watchState = state
             if state == .running, pendingLink != nil { usedDuringSession = true }
             log.log(.watch, "Exercice Watch : \(state.rawValue)")
-        case .linkSession, .command, .workoutMetadata:
+        case let .remoteCommand(c):
+            log.log(.watch, "Commande depuis la Watch : \(c.rawValue)")
+            onRemoteCommand?(c)
+        case .linkSession, .command, .workoutMetadata, .liveStatus:
             break
         }
     }

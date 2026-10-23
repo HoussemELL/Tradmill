@@ -21,6 +21,15 @@ final class WorkoutManager {
     private(set) var startDate: Date?
     private(set) var mirroring = false
     private(set) var linkedTitle: String?
+    /// Dernier état reçu de l'iPhone (tapis, programme, zones).
+    private(set) var live: WatchLiveStatus?
+    private(set) var liveReceivedAt: Date?
+    /// Bornes des zones (reçues de l'iPhone, mémorisées pour une séance sans iPhone).
+    private(set) var zoneBounds: [Int]
+    /// Temps par zone mesuré par la montre (utilisé quand l'iPhone n'est pas relié).
+    private(set) var localZoneSeconds: [Double] = Array(repeating: 0, count: 6)
+    /// Arrêt demandé à l'iPhone (le tapis s'arrête, puis l'iPhone termine l'exercice).
+    private(set) var stopRequestedAt: Date?
 
     @ObservationIgnored let healthStore = HKHealthStore()
     @ObservationIgnored private var session: HKWorkoutSession?
@@ -31,8 +40,11 @@ final class WorkoutManager {
     @ObservationIgnored private var linkedSessionID: UUID?
     /// Métadonnées Foulée reçues avant que le builder existe : appliquées au démarrage.
     @ObservationIgnored private var pendingMetadata: [String: Any] = [:]
+    @ObservationIgnored private var lastZoneSampleAt: Date?
+    @ObservationIgnored private static let boundsKey = "foulee.zoneBounds"
 
     private init() {
+        zoneBounds = UserDefaults.standard.array(forKey: Self.boundsKey) as? [Int] ?? HeartZoneSettings().bounds
         proxy.owner = self
         wcProxy.owner = self
         if WCSession.isSupported() {
@@ -83,6 +95,9 @@ final class WorkoutManager {
             heartRate = nil
             steps = nil
             activeEnergy = nil
+            localZoneSeconds = Array(repeating: 0, count: 6)
+            lastZoneSampleAt = nil
+            stopRequestedAt = nil
             let date = Date()
             startDate = date
             s.startActivity(with: date)
@@ -108,6 +123,60 @@ final class WorkoutManager {
     func pause() { session?.pause() }
     func resume() { session?.resume() }
 
+    // MARK: - Tapis (via l'iPhone)
+
+    /// L'iPhone a envoyé son état il y a moins de 5 s.
+    func isPhoneLinked(now: Date = Date()) -> Bool {
+        guard let at = liveReceivedAt, live != nil else { return false }
+        return now.timeIntervalSince(at) < 5
+    }
+
+    /// Pause : met en pause le tapis via l'iPhone (qui met ensuite l'exercice en pause),
+    /// ou seulement l'exercice si l'iPhone n'est pas relié.
+    func requestPause() {
+        if isPhoneLinked() { send(.remoteCommand(.pause)) } else { pause() }
+    }
+
+    func requestResume() {
+        if isPhoneLinked() { send(.remoteCommand(.resume)) }
+        if phase == .paused { resume() }
+    }
+
+    /// Arrêt : arrête le tapis via l'iPhone, qui termine ensuite l'exercice avec les
+    /// métadonnées Foulée. Sans réponse en 8 s (ou sans iPhone), l'exercice est terminé ici.
+    func requestStop() {
+        guard isPhoneLinked() else { end(); return }
+        stopRequestedAt = Date()
+        send(.remoteCommand(.stop))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            guard let self, self.stopRequestedAt != nil, self.isActive, self.phase != .ending else { return }
+            self.end()
+        }
+    }
+
+    func requestAutopilot() { send(.remoteCommand(.resumeAutopilot)) }
+
+    /// Zone de la FC de la montre, avec les bornes reçues.
+    var currentZone: Int? {
+        guard let bpm = heartRate else { return nil }
+        return WatchLiveStatus.zone(for: Int(bpm.rounded()), bounds: zoneBounds)
+    }
+
+    /// Temps par zone : celui de l'iPhone s'il est relié, sinon celui mesuré par la montre.
+    var zoneSeconds: [Double] {
+        if isPhoneLinked(), let l = live { return l.zoneSeconds }
+        return localZoneSeconds
+    }
+
+    private func accumulateZone(bpm: Double, at date: Date) {
+        defer { lastZoneSampleAt = date }
+        guard phase == .running, let last = lastZoneSampleAt else { return }
+        let dt = min(max(date.timeIntervalSince(last), 0), 5)
+        if let z = WatchLiveStatus.zone(for: Int(bpm.rounded()), bounds: zoneBounds), z < localZoneSeconds.count {
+            localZoneSeconds[z] += dt
+        }
+    }
+
     func end(discard: Bool = false) {
         discardOnEnd = discard
         phase = .ending
@@ -121,6 +190,9 @@ final class WorkoutManager {
         startDate = nil
         linkedTitle = nil
         linkedSessionID = nil
+        live = nil
+        liveReceivedAt = nil
+        stopRequestedAt = nil
     }
 
     // MARK: - Échanges avec l'iPhone
@@ -167,6 +239,13 @@ final class WorkoutManager {
                 b.addMetadata(meta) { _, _ in }
             } else {
                 pendingMetadata.merge(meta) { _, new in new }
+            }
+        case let .liveStatus(s):
+            live = s
+            liveReceivedAt = Date()
+            if s.zoneBounds.count == 6, s.zoneBounds != zoneBounds {
+                zoneBounds = s.zoneBounds
+                UserDefaults.standard.set(s.zoneBounds, forKey: Self.boundsKey)
             }
         case let .command(c):
             switch c {
@@ -242,6 +321,7 @@ final class WorkoutManager {
                     let bpm = q.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
                     heartRate = bpm
                     heartRateDate = date
+                    accumulateZone(bpm: bpm, at: date)
                     send(.heartRate(bpm: bpm, sampleDate: date))
                 }
             case HKQuantityType(.stepCount):

@@ -13,18 +13,38 @@ struct ProgramChart: View {
         let incline: Double
     }
 
+    private struct Band: Identifiable {
+        let id: Int
+        let from: Double
+        let to: Double
+        let low: Double
+        let high: Double
+    }
+
     private var points: [Point] {
         var out: [Point] = []
         for sp in program.schedule {
             let a = Double(sp.start) / 60, b = Double(sp.end) / 60
             out.append(Point(id: out.count, minute: a, speed: sp.phase.speedKmh, incline: sp.phase.inclinePercent))
-            out.append(Point(id: out.count, minute: b, speed: sp.phase.speedKmh, incline: sp.phase.inclinePercent))
+            out.append(Point(id: out.count, minute: b, speed: sp.phase.endSpeedKmh ?? sp.phase.speedKmh, incline: sp.phase.inclinePercent))
         }
         return out
     }
 
+    /// Plage de vitesse des phases pilotées par la FC.
+    private var bands: [Band] {
+        program.schedule.compactMap { sp in
+            sp.phase.autoSpeed.map { Band(id: sp.index, from: Double(sp.start) / 60, to: Double(sp.end) / 60, low: $0.minKmh, high: $0.maxKmh) }
+        }
+    }
+
     var body: some View {
         Chart {
+            ForEach(bands) { b in
+                RectangleMark(xStart: .value("Début", b.from), xEnd: .value("Fin", b.to),
+                              yStart: .value("Min", b.low), yEnd: .value("Max", b.high))
+                    .foregroundStyle(Theme.accent.opacity(0.18))
+            }
             ForEach(points) { p in
                 AreaMark(x: .value("Minute", p.minute), y: .value("Vitesse", p.speed))
                     .foregroundStyle(Theme.speed.opacity(0.35))

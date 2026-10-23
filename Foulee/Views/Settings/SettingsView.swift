@@ -205,6 +205,19 @@ struct ZoneSettingsView: View {
             } header: { Text("FC max et FC de repos") } footer: {
                 Text("Sans saisie : FC max = la plus haute de « 220 − âge » (date de naissance dans Santé) et de la FC tenue la plus haute des 12 derniers mois (mesure ≥ 170 bpm confirmée par une autre, à 5 bpm près, dans les 2 minutes ; > 230 ignoré). FC de repos = moyenne Santé sur 30 jours, ignorée si < 30 ou > FC max − 40.")
             }
+            Section {
+                Button {
+                    var z = model.settings.session.zones
+                    z.customBounds = z.bounds.enumerated().map { i, v in i == 0 && v == 0 ? max(40, z.bounds[1] - 30) : v }
+                    z.method = .customBPM
+                    model.settings.session.zones = z
+                } label: {
+                    Label("Partir de ces zones pour saisir mes seuils", systemImage: "slider.horizontal.3")
+                }
+                .disabled(zones.effectiveMethod == .customBPM)
+            } header: { Text("Zones de l'Apple Watch") } footer: {
+                Text("Apple ne permet pas aux apps de lire les zones personnalisées réglées dans l'app Exercice de la montre. Foulée calcule par défaut les mêmes zones que l'Apple Watch (réserve cardiaque, depuis votre FC max et votre FC de repos lues dans Santé). Si vous avez modifié vos zones sur la montre, recopiez-les ici en seuils personnalisés : elles seront utilisées sur l'iPhone, sur la Watch et par le programme Zone 2 Auto.")
+            }
             if zones.effectiveMethod == .customBPM {
                 Section("Seuils (bpm)") {
                     ForEach(0..<6, id: \.self) { i in
@@ -241,7 +254,7 @@ struct ZoneSettingsView: View {
                         value: $model.settings.session.zoneAlertCooldown, in: 30...600, step: 15)
                 Toggle("Vibration", isOn: $model.settings.hapticAlerts)
             } header: { Text("Alertes") } footer: {
-                Text("Une alerte n'est émise qu'après un séjour continu hors de la zone cible de la phase, pour ignorer les oscillations. Pas de pilotage du tapis par la FC en V1.")
+                Text("Une alerte n'est émise qu'après un séjour continu hors de la zone cible de la phase, pour ignorer les oscillations. Les alertes ne changent jamais la vitesse : seul un programme à phase « pilotée par la FC » (Zone 2 Auto) règle le tapis selon la FC.")
             }
         }
         .navigationTitle("Zones cardiaques")
@@ -306,6 +319,15 @@ struct SessionPreferencesView: View {
                 Toggle("Arrêter le tapis en fin de programme", isOn: $model.settings.session.stopTreadmillAtProgramEnd)
             } footer: {
                 Text("Désactivé : la dernière consigne est maintenue et vous arrêtez vous-même.")
+            }
+            Section {
+                Toggle("Transitions progressives", isOn: $model.settings.session.smoothTransitions)
+                if model.settings.session.smoothTransitions {
+                    Stepper(String(format: "Palier maximal : %.1f km/h", model.settings.session.maxSpeedStepKmh),
+                            value: $model.settings.session.maxSpeedStepKmh, in: 0.5...3, step: 0.5)
+                }
+            } header: { Text("Changements de vitesse") } footer: {
+                Text("Entre deux phases (ex. 5 → 9 km/h), la consigne monte ou descend par paliers ; le palier suivant part quand le tapis a rejoint le précédent (6 s au plus). Les consignes restent dans les limites du tapis. Arrêter et Pause restent immédiats. Vos réglages manuels (+/−) s'appliquent tout de suite.")
             }
             Section {
                 Toggle("Estimer les pas sans autre source", isOn: $model.settings.session.stepEstimationEnabled)
