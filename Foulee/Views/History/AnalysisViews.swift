@@ -421,8 +421,11 @@ struct PerceivedExertionCard: View {
         case 2: return "Facile"
         case 3: return "Modéré"
         case 4: return "Un peu difficile"
-        case 5, 6: return "Difficile"
-        case 7, 8: return "Très difficile"
+        // Un libellé distinct par valeur (6 et 8 sont des paliers intermédiaires de l'échelle CR10).
+        case 5: return "Difficile"
+        case 6: return "Vraiment difficile"
+        case 7: return "Très difficile"
+        case 8: return "Très, très difficile"
         case 9: return "Extrêmement difficile"
         default: return "Maximal"
         }
