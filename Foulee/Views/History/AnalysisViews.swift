@@ -403,48 +403,45 @@ struct ProgressChart: View {
 
 // MARK: - Ressenti de l'effort
 
-/// Ressenti de l'effort (échelle CR10 de Borg), saisi après la séance et exporté pour Rythme.
+/// Ressenti de l'effort, saisi après la séance en 5 niveaux. La valeur enregistrée et exportée
+/// pour Rythme reste sur l'échelle CR10 de Borg (0–10) : contrat `perceivedExertion` inchangé.
 struct PerceivedExertionCard: View {
     @Environment(AppModel.self) private var model
     let recordID: UUID
-    @State private var value: Int?
+    /// Niveau 1…5 (nil = non renseigné).
+    @State private var level: Int?
 
     init(recordID: UUID, initial: Int?) {
         self.recordID = recordID
-        _value = State(initialValue: initial)
+        _level = State(initialValue: initial.map(Self.level(forCR10:)))
     }
 
-    static func label(_ v: Int) -> String {
+    static let labels = ["Très facile", "Facile", "Modéré", "Difficile", "Très difficile"]
+    /// Valeur CR10 enregistrée pour chaque niveau (libellés de Borg correspondants).
+    static let cr10 = [1, 2, 3, 5, 7]
+
+    /// Niveau d'une valeur CR10 déjà enregistrée (anciennes saisies 0–10 comprises).
+    static func level(forCR10 v: Int) -> Int {
         switch v {
-        case 0: return "Repos"
-        case 1: return "Très facile"
-        case 2: return "Facile"
-        case 3: return "Modéré"
-        case 4: return "Un peu difficile"
-        // Un libellé distinct par valeur (6 et 8 sont des paliers intermédiaires de l'échelle CR10).
-        case 5: return "Difficile"
-        case 6: return "Vraiment difficile"
-        case 7: return "Très difficile"
-        case 8: return "Très, très difficile"
-        case 9: return "Extrêmement difficile"
-        default: return "Maximal"
+        case ...1: return 1
+        case 2: return 2
+        case 3, 4: return 3
+        case 5, 6: return 4
+        default: return 5
         }
     }
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Ressenti de l'effort").font(.headline)
-                Text("Échelle 0–10 (Borg CR10)").font(.caption).foregroundStyle(.secondary)
-            }
+            Text("Ressenti de l'effort").font(.headline)
             Spacer()
-            Picker("Ressenti", selection: $value) {
+            Picker("Ressenti", selection: $level) {
                 Text("Non renseigné").tag(Int?.none)
-                ForEach(0...10, id: \.self) { v in Text("\(v) · \(Self.label(v))").tag(Optional(v)) }
+                ForEach(1...5, id: \.self) { l in Text(Self.labels[l - 1]).tag(Optional(l)) }
             }
             .pickerStyle(.menu)
         }
         .card()
-        .onChange(of: value) { _, v in model.setPerceivedExertion(v, for: recordID) }
+        .onChange(of: level) { _, l in model.setPerceivedExertion(l.map { Self.cr10[$0 - 1] }, for: recordID) }
     }
 }

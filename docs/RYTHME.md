@@ -45,7 +45,7 @@ consigne ni 0. Les heures relatives `t` sont en secondes depuis `session.startDa
 | `autoAdjustments[]` | pilote FC : `t`, `fromKmh`, `toKmh`, `filteredBPM`, `kind` (`increase`, `decrease`, `safety`), `reason` |
 | `interruptions` | nombre de pauses, pertes de connexion, arrêts par le tapis, consignes manuelles, phases passées, reprise après fermeture |
 | `recovery` | FC à l'arrêt de la bande, après 60 s et 120 s |
-| `perceivedExertion` | ressenti saisi après la séance, échelle CR10 de Borg 0–10 (`null` si non renseigné) |
+| `perceivedExertion` | ressenti saisi après la séance, échelle CR10 de Borg 0–10 (`null` si non renseigné). Saisie en 5 niveaux, enregistrés en CR10 : très facile 1, facile 2, modéré 3, difficile 5, très difficile 7 |
 | `events[]` | journal de séance (pauses, reprises, phases, consignes manuelles, écarts, déconnexions, pilote FC) |
 | `distanceMeters`, `steps`, `avgHR`, `maxHR` | totaux (distance du tapis ou intégrée, voir `events`) |
 
