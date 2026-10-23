@@ -1,0 +1,19 @@
+Runtimes : iOS 26.2 / watchOS 26.2
+Appareils : iPhone 17 Pro / Apple Watch Series 10 (46mm)
+Appairage : 0 67330526-784A-4325-9F16-165901DFD6F3 
+Bundles : {'phone': 'com.example.foulee', 'watch': 'com.example.foulee.watchkitapp'}
+Installation Watch : directe (repli) 0 
+Scénarios retenus : ['01-iphone-ecrans']
+
+=== Scénario 01-iphone-ecrans ===
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '0'] 0 com.example.foulee: 23696 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '1'] 0 com.example.foulee: 24657 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '1', '-FouleeOpen', 'program:Zone 2 Auto'] 0 com.example.foulee: 24956 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '1', '-FouleeOpen', 'program:Cardio Baseline'] 0 com.example.foulee: 25269 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '2'] 0 com.example.foulee: 25839 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '3'] 0 com.example.foulee: 25884 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '0'] 0 com.example.foulee: 26521 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '1'] 0 com.example.foulee: 26886 
+lancement phone ['-AppleLanguages', '(fr)', '-AppleLocale', 'fr_FR', '-FouleeScenario', 'screens', '-FouleeTestPrograms', '-FouleeAppearance', 'system', '-FouleeTab', '0'] 0 com.example.foulee: 27625 
+   OK  rapport écrit, app sans crash → screens
+Crashs : aucun

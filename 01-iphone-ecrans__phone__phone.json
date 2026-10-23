@@ -1,0 +1,43 @@
+{
+  "adjustments" : [
+
+  ],
+  "alerts" : [
+
+  ],
+  "autopilotModes" : [
+
+  ],
+  "hrSources" : [
+
+  ],
+  "launches" : [
+    "2026-10-23T19:44:16Z pid 27625"
+  ],
+  "log" : [
+
+  ],
+  "maxBeltSpeed" : 0,
+  "phases" : [
+
+  ],
+  "requestedSpeedIncreasedWhileLinkLost" : false,
+  "requestedSpeeds" : [
+
+  ],
+  "scenario" : "screens",
+  "simulatedHeartRates" : 0,
+  "startCommandsAfterLinkLoss" : 0,
+  "statuses" : [
+
+  ],
+  "updatedAt" : "2026-10-23T19:44:34Z",
+  "watchAppInstalled" : false,
+  "watchControls" : [
+
+  ],
+  "watchHeartRates" : 0,
+  "watchPaired" : true,
+  "watchReachable" : false,
+  "watchStartRequests" : 0
+}

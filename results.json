@@ -1,0 +1,65 @@
+{
+  "results": [
+    {
+      "name": "01-iphone-ecrans",
+      "description": "iPhone : navigation dans tous les onglets et écrans principaux (sombre, clair, grand texte).",
+      "screens": [
+        "01-iphone-ecrans__accueil-sombre.png",
+        "01-iphone-ecrans__programmes.png",
+        "01-iphone-ecrans__editeur-zone2auto.png",
+        "01-iphone-ecrans__editeur-baseline-verrouille.png",
+        "01-iphone-ecrans__historique.png",
+        "01-iphone-ecrans__reglages.png",
+        "01-iphone-ecrans__accueil-clair.png",
+        "01-iphone-ecrans__programmes-clair.png",
+        "01-iphone-ecrans__accueil-grand-texte.png"
+      ],
+      "ok": true,
+      "notes": [],
+      "reports": [
+        {
+          "adjustments": [],
+          "alerts": [],
+          "autopilotModes": [],
+          "hrSources": [],
+          "launches": [
+            "2026-10-23T19:44:16Z pid 27625"
+          ],
+          "log": [],
+          "maxBeltSpeed": 0,
+          "phases": [],
+          "requestedSpeedIncreasedWhileLinkLost": false,
+          "requestedSpeeds": [],
+          "scenario": "screens",
+          "simulatedHeartRates": 0,
+          "startCommandsAfterLinkLoss": 0,
+          "statuses": [],
+          "updatedAt": "2026-10-23T19:44:34Z",
+          "watchAppInstalled": false,
+          "watchControls": [],
+          "watchHeartRates": 0,
+          "watchPaired": true,
+          "watchReachable": false,
+          "watchStartRequests": 0
+        }
+      ],
+      "checks": [
+        {
+          "label": "rapport écrit, app sans crash",
+          "ok": true,
+          "got": "screens"
+        }
+      ]
+    }
+  ],
+  "crashes": [],
+  "runtimes": [
+    "iOS 26.2",
+    "watchOS 26.2"
+  ],
+  "devices": [
+    "iPhone 17 Pro",
+    "Apple Watch Series 10 (46mm)"
+  ],
+  "paired": true
+}
