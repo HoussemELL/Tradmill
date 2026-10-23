@@ -2,68 +2,39 @@ import SwiftUI
 import Charts
 import TreadCore
 
-/// Prévisualisation vitesse (aires) et inclinaison (ligne) d'un programme.
-struct ProgramChart: View {
+/// Aperçu d'un programme : profil d'intensité en barres (même dessin que les cartes), repères
+/// de durée et de vitesse, légende des types d'étape présents.
+struct ProgramProfile: View {
     let program: WorkoutProgram
-    /// Version miniature (listes) : sans axes.
-    var compact = false
 
-    private struct Point: Identifiable {
-        let id: Int
-        let minute: Double
-        let speed: Double
-        let incline: Double
-    }
-
-    private struct Band: Identifiable {
-        let id: Int
-        let from: Double
-        let to: Double
-        let low: Double
-        let high: Double
-    }
-
-    private var points: [Point] {
-        var out: [Point] = []
-        for sp in program.schedule {
-            let a = Double(sp.start) / 60, b = Double(sp.end) / 60
-            out.append(Point(id: out.count, minute: a, speed: sp.phase.speedKmh, incline: sp.phase.inclinePercent))
-            out.append(Point(id: out.count, minute: b, speed: sp.phase.endSpeedKmh ?? sp.phase.speedKmh, incline: sp.phase.inclinePercent))
-        }
-        return out
-    }
-
-    /// Plage de vitesse des phases pilotées par la FC.
-    private var bands: [Band] {
-        program.schedule.compactMap { sp in
-            sp.phase.autoSpeed.map { Band(id: sp.index, from: Double(sp.start) / 60, to: Double(sp.end) / 60, low: $0.minKmh, high: $0.maxKmh) }
-        }
+    private var kinds: [PhaseKind] {
+        let present = Set(program.schedule.map(\.phase.kind))
+        return PhaseKind.allCases.filter(present.contains)
     }
 
     var body: some View {
-        Chart {
-            ForEach(bands) { b in
-                RectangleMark(xStart: .value("Début", b.from), xEnd: .value("Fin", b.to),
-                              yStart: .value("Min", b.low), yEnd: .value("Max", b.high))
-                    .foregroundStyle(Theme.accent.opacity(0.18))
+        VStack(alignment: .leading, spacing: 6) {
+            Text("jusqu'à \(Format.speed(program.maxSpeedKmh)) km/h")
+                .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+            IntensityProfile(program: program).frame(height: 64)
+            HStack {
+                Text("0")
+                Spacer()
+                Text("\(Int((Double(program.totalDurationSeconds) / 60).rounded())) min")
             }
-            ForEach(points) { p in
-                // yStart/yEnd : pas d'empilement aux changements de phase (deux points à la même minute).
-                AreaMark(x: .value("Minute", p.minute), yStart: .value("Base", 0.0), yEnd: .value("Vitesse", p.speed))
-                    .foregroundStyle(Theme.speed.opacity(0.3))
-                    .interpolationMethod(.linear)
-                LineMark(x: .value("Minute", p.minute), y: .value("Vitesse", p.speed), series: .value("Série", "Vitesse"))
-                    .foregroundStyle(Theme.speed)
-                LineMark(x: .value("Minute", p.minute), y: .value("Inclinaison", p.incline), series: .value("Série", "Inclinaison"))
-                    .foregroundStyle(Theme.incline)
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
+            .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), alignment: .leading)], alignment: .leading, spacing: 4) {
+                ForEach(kinds, id: \.self) { k in
+                    HStack(spacing: 4) {
+                        Circle().fill(Theme.phaseColor(k)).frame(width: 7, height: 7)
+                        Text(k.label).lineLimit(1)
+                    }
+                }
             }
+            .font(.caption2).foregroundStyle(.secondary)
         }
-        .chartXAxis(compact ? .hidden : .automatic)
-        .chartYAxis(compact ? .hidden : .automatic)
-        .chartXAxisLabel(compact ? "" : "min")
-        .chartLegend(.hidden)
-        .accessibilityLabel("Graphique du programme : vitesse en bleu, inclinaison en jaune")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Profil du programme : \(ProgramStyle.summary(program))")
     }
 }
 

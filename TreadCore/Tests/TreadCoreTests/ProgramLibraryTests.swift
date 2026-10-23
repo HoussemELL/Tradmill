@@ -27,6 +27,12 @@ final class ProgramLibraryTests: XCTestCase {
         }
         XCTAssertEqual(Set(t.map(\.protocolSignature)).count, t.count)
 
+        XCTAssertTrue(t.allSatisfy(\.isLocked), "programmes prédéfinis verrouillés : comparables au fil des séances")
+        var unlocked = WorkoutProgram.zone2Auto
+        unlocked.locked = false
+        XCTAssertEqual(unlocked.protocolSignature, WorkoutProgram.zone2Auto.protocolSignature,
+                       "le verrou ne change pas l'empreinte : séances déjà faites toujours comparables")
+
         let base = WorkoutProgram.cardioBaseline
         XCTAssertTrue(base.isLocked)
         XCTAssertFalse(base.hasAutoSpeed, "aucun ajustement automatique pendant le test")

@@ -1,10 +1,11 @@
 # Programmes prédéfinis, pilotage Zone 2 et Apple Watch
 
 Toutes les vitesses sont en km/h. Les programmes sont installés au premier lancement (et
-ajoutés à une installation existante). Ils restent modifiables et duplicables ; *Programmes ›
-+ › Restaurer / Réinitialiser les programmes prédéfinis* les remet en place.
+ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 4) : chaque
+séance est comparée aux précédentes du même programme (*Historique › Progression*). Pour une
+variante, dupliquez-le ; *Programmes › + › Réinitialiser les programmes prédéfinis* les remet en place.
 
-## 1. La bibliothèque (révision 2)
+## 1. La bibliothèque (révision 4)
 
 Inclinaison minimale **1 %** dans toutes les phases (Incline Walk monte à 2 %). Les programmes
 déjà installés sont **mis à jour en place** (mêmes identifiants, aucun doublon) ; un programme
@@ -13,7 +14,7 @@ prédéfini que vous aviez supprimé n'est pas réinstallé ; vos programmes per
 | Programme | Durée | Étapes (durée · km/h · %) |
 |---|---|---|
 | **Zone 2 Auto** ❤️ | 35 min | 5 min 4,0 → 5,5 progressif · 1 → 25 min pilotées par la FC (départ 5,8, limites 4–7) · 1 → 5 min 4,0 → 3,5 · 1 |
-| **Cardio Baseline** 🔒 | 30 min | 5 min · 4,0 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
+| **Cardio Baseline** | 30 min | 5 min · 4,0 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
 | **Zone 2 Endurance** | 35 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
 | **Interval Run 9/11** | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 (tout à 1 %) |
 | **Football Endurance · Niveau 1** | 35 min | échauffement 4 min · 4,5 + 4 min · 5,5 + 2 min · 6,5 → 3 × 3 min · 8,5 avec 3 min · 5,0 **entre** les efforts → 5 min · 6,0 → 5 min · 4,0 (1 %) |

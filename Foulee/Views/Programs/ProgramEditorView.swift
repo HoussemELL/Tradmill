@@ -44,7 +44,7 @@ struct ProgramEditorView: View {
                     TextField("Notes", text: $program.notes, axis: .vertical).lineLimit(1...4)
                 }
                 Section {
-                    ProgramChart(program: program).frame(height: 140)
+                    ProgramProfile(program: program).padding(.vertical, 4)
                     LabeledContent("Durée totale", value: Format.duration(TimeInterval(program.totalDurationSeconds)))
                     LabeledContent("Phases (blocs déroulés)", value: "\(program.schedule.count)")
                 } header: { Text("Aperçu") }
@@ -104,9 +104,9 @@ struct ProgramEditorView: View {
                 Label("Déverrouiller pour modifier", systemImage: "lock.open")
             }
         } header: {
-            Label("Protocole de référence verrouillé", systemImage: "lock.fill")
+            Label("Programme verrouillé", systemImage: "lock.fill")
         } footer: {
-            Text("Gardé strictement identique pour comparer votre FC à effort égal au fil des semaines. Pour une variante, dupliquez-le plutôt.")
+            Text("Gardé strictement identique pour comparer vos séances au fil des semaines (FC à effort égal, ou vitesse en zone pour Zone 2 Auto). Pour une variante, dupliquez-le plutôt.")
         }
     }
 

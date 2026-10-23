@@ -238,7 +238,7 @@ struct ProgramRow: View {
             HStack(spacing: 4) {
                 Text(program.name).font(.headline).lineLimit(2)
                 if program.isAuto { Image(systemName: "heart.circle.fill").foregroundStyle(WatchStyle.accent).font(.caption) }
-                if program.isLocked { Image(systemName: "lock.fill").foregroundStyle(.orange).font(.caption2) }
+                if program.isLocked && !program.isTemplate { Image(systemName: "lock.fill").foregroundStyle(.orange).font(.caption2) }
             }
             if program.level != nil || program.advanced {
                 Text([program.level.map { $0 == 1 ? "Niveau 1" : "Niveau \($0) · progression" }, program.advanced ? "Avancé" : nil]

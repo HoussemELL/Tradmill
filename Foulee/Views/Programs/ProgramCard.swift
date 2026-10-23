@@ -102,7 +102,8 @@ struct ProgramCardView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(program.name).font(.headline).foregroundStyle(.primary).lineLimit(2)
-                        if program.isLocked {
+                        // Les programmes prédéfinis sont tous verrouillés : cadenas réservé aux programmes personnels.
+                        if program.isLocked && program.templateID == nil {
                             Image(systemName: "lock.fill").font(.caption).foregroundStyle(.secondary)
                                 .accessibilityLabel("verrouillé")
                         }

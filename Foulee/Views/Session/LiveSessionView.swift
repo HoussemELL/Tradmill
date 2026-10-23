@@ -70,7 +70,7 @@ struct LiveSessionView: View {
             Banner(text: "Consigne manuelle jusqu'au prochain palier", color: Theme.speed, systemImage: "hand.raised.fill")
         }
         if snap.lockedProtocol && snap.protocolModified {
-            Banner(text: "Test de référence modifié pendant la séance : elle ne sera pas comparée aux autres.",
+            Banner(text: "Programme modifié pendant la séance : elle ne sera pas comparée aux autres.",
                    color: Theme.warning, systemImage: "lock.open.fill")
         }
         if let a = model.banner { Banner(text: a, color: Theme.heart, systemImage: "heart.text.square.fill") }

@@ -146,11 +146,11 @@ struct PrepareSessionView: View {
                 Spacer()
                 Text(Format.duration(TimeInterval(p.totalDurationSeconds))).font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
             }
-            ProgramChart(program: p).frame(height: 110)
+            ProgramProfile(program: p)
             if p.isLocked {
-                Label("Test de référence : gardez-le identique. Modifier la vitesse ou passer une phase rend la séance non comparable.",
+                Label("Programme verrouillé : chaque séance est comparée aux précédentes. Pour qu'elle compte, ne changez pas la vitesse et ne passez aucune étape.",
                       systemImage: "lock.fill")
-                    .font(.caption).foregroundStyle(Theme.warning)
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if p.hasAutoSpeed {
                 Label(autoText(p), systemImage: "heart.circle").font(.caption).foregroundStyle(Theme.accent)

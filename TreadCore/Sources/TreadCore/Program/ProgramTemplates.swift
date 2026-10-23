@@ -22,7 +22,8 @@ public extension WorkoutProgram {
     /// déjà installés (même identifiant) et ajoute les nouveaux.
     /// 2 : inclinaison minimale 1 % partout, Football Endurance (3 niveaux), HIIT avancé.
     /// 3 : retrait des anciens programmes de la première version, s'ils n'ont pas été modifiés.
-    static let templatesRevision = 3
+    /// 4 : tous les programmes prédéfinis verrouillés (comparables au fil des séances).
+    static let templatesRevision = 4
 
     /// Programmes installés par la toute première version (avant les identifiants de modèle),
     /// remplacés par la bibliothèque actuelle. Retirés seulement s'ils sont restés intacts.
@@ -92,7 +93,7 @@ public extension WorkoutProgram {
                 .phase(.init(name: "Montée en allure", kind: .steady, durationSeconds: min(5), speedKmh: 5.5, inclinePercent: i1, targetZone: 1)),
                 .phase(.init(name: "Zone 2", kind: .steady, durationSeconds: min(20), speedKmh: 6.0, inclinePercent: i1, targetZone: 2)),
                 .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1, targetZone: 1)),
-            ], templateID: ProgramTemplateID.zone2Endurance, protocolVersion: 2)
+            ], templateID: ProgramTemplateID.zone2Endurance, locked: true, protocolVersion: 2)
     }
 
     static var intervalRun911: WorkoutProgram {
@@ -107,7 +108,7 @@ public extension WorkoutProgram {
             .phase(.init(name: "Course 11", kind: .work, durationSeconds: min(2), speedKmh: 11.0, inclinePercent: i1, targetZone: 5)),
             .phase(.init(name: "Marche", kind: .recovery, durationSeconds: min(3), speedKmh: 4.0, inclinePercent: i1)),
             .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1)),
-        ], templateID: ProgramTemplateID.intervalRun911, protocolVersion: 2)
+        ], templateID: ProgramTemplateID.intervalRun911, locked: true, protocolVersion: 2)
     }
 
     static var hiitRun11: WorkoutProgram {
@@ -123,7 +124,7 @@ public extension WorkoutProgram {
                     .init(name: "Récupération", kind: .recovery, durationSeconds: min(3), speedKmh: 4.5, inclinePercent: i1),
                 ])),
                 .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1)),
-            ], templateID: ProgramTemplateID.hiitRun11, protocolVersion: 2, advanced: true)
+            ], templateID: ProgramTemplateID.hiitRun11, locked: true, protocolVersion: 2, advanced: true)
     }
 
     static var inclineWalk: WorkoutProgram {
@@ -132,7 +133,7 @@ public extension WorkoutProgram {
             .phase(.init(name: "Marche 1 %", kind: .steady, durationSeconds: min(5), speedKmh: 5.5, inclinePercent: i1)),
             .phase(.init(name: "Marche 2 %", kind: .work, durationSeconds: min(15), speedKmh: 5.5, inclinePercent: 2)),
             .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1)),
-        ], templateID: ProgramTemplateID.inclineWalk, protocolVersion: 2)
+        ], templateID: ProgramTemplateID.inclineWalk, locked: true, protocolVersion: 2)
     }
 
     static var postMealWalk: WorkoutProgram {
@@ -140,7 +141,7 @@ public extension WorkoutProgram {
             .phase(.init(name: "Mise en route", kind: .warmup, durationSeconds: min(2), speedKmh: 3.5, inclinePercent: i1)),
             .phase(.init(name: "Marche", kind: .steady, durationSeconds: min(10), speedKmh: 4.5, inclinePercent: i1)),
             .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(3), speedKmh: 3.5, inclinePercent: i1)),
-        ], templateID: ProgramTemplateID.postMealWalk, protocolVersion: 2)
+        ], templateID: ProgramTemplateID.postMealWalk, locked: true, protocolVersion: 2)
     }
 
     static var zone2Auto: WorkoutProgram {
@@ -157,7 +158,7 @@ public extension WorkoutProgram {
                              inclinePercent: i1, targetZone: 2, autoSpeed: AutoSpeedSettings())),
                 .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 4.0,
                              inclinePercent: i1, targetZone: 1, endSpeedKmh: 3.5)),
-            ], templateID: ProgramTemplateID.zone2Auto, protocolVersion: 2)
+            ], templateID: ProgramTemplateID.zone2Auto, locked: true, protocolVersion: 2)
     }
 
     // MARK: - Football Endurance (3 niveaux)
@@ -194,7 +195,7 @@ public extension WorkoutProgram {
             Alternative au fractionné ; à éviter la même semaine qu'un match intense. 3 × 3 min à 8,5 km/h, \
             récupération 3 min à 5 km/h entre les efforts.
             """, items: footballWarmup + footballEfforts(3, minutes: 3, speed: 8.5) + footballCooldown,
-            templateID: ProgramTemplateID.footballEndurance1, protocolVersion: 1, level: 1)
+            templateID: ProgramTemplateID.footballEndurance1, locked: true, protocolVersion: 1, level: 1)
     }
 
     static var footballEndurance2: WorkoutProgram {
@@ -202,7 +203,7 @@ public extension WorkoutProgram {
             Progression (41 min, 1 %), après plusieurs séances de niveau 1 bien tolérées (cheville comprise). \
             4 × 3 min à 8,5 km/h, récupération 3 min à 5 km/h entre les efforts.
             """, items: footballWarmup + footballEfforts(4, minutes: 3, speed: 8.5) + footballCooldown,
-            templateID: ProgramTemplateID.footballEndurance2, protocolVersion: 1, level: 2)
+            templateID: ProgramTemplateID.footballEndurance2, locked: true, protocolVersion: 1, level: 2)
     }
 
     static var footballEndurance3: WorkoutProgram {
@@ -210,7 +211,7 @@ public extension WorkoutProgram {
             Progression avancée (45 min, 1 %), jamais imposée : lancement après confirmation. \
             4 × 4 min à 9 km/h, récupération 3 min à 5 km/h entre les efforts.
             """, items: footballWarmup + footballEfforts(4, minutes: 4, speed: 9.0) + footballCooldown,
-            templateID: ProgramTemplateID.footballEndurance3, protocolVersion: 1, level: 3, advanced: true)
+            templateID: ProgramTemplateID.footballEndurance3, locked: true, protocolVersion: 1, level: 3, advanced: true)
     }
 }
 
