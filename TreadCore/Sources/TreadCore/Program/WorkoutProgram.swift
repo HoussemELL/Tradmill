@@ -154,9 +154,16 @@ public struct WorkoutProgram: Codable, Identifiable, Equatable, Hashable, Sendab
     /// Protocole verrouillé (ex. Cardio Baseline) : les phases ne se modifient qu'après
     /// déverrouillage explicite, pour garder des séances strictement comparables.
     public var locked: Bool?
+    /// Version du protocole d'un programme prédéfini (incrémentée quand ses étapes changent).
+    public var protocolVersion: Int?
+    /// Niveau dans une famille de programmes (ex. Football Endurance 1, 2, 3).
+    public var level: Int?
+    /// Programme avancé : jamais proposé automatiquement, lancement après confirmation explicite.
+    public var advanced: Bool?
 
     public init(id: UUID = UUID(), name: String, notes: String = "", items: [ProgramItem],
-                createdAt: Date = Date(), updatedAt: Date = Date(), templateID: String? = nil, locked: Bool? = nil) {
+                createdAt: Date = Date(), updatedAt: Date = Date(), templateID: String? = nil, locked: Bool? = nil,
+                protocolVersion: Int? = nil, level: Int? = nil, advanced: Bool? = nil) {
         self.id = id
         self.name = name
         self.notes = notes
@@ -165,7 +172,12 @@ public struct WorkoutProgram: Codable, Identifiable, Equatable, Hashable, Sendab
         self.updatedAt = updatedAt
         self.templateID = templateID
         self.locked = locked
+        self.protocolVersion = protocolVersion
+        self.level = level
+        self.advanced = advanced
     }
+
+    public var isAdvanced: Bool { advanced ?? false }
 
     public var isLocked: Bool { locked ?? false }
 
@@ -197,7 +209,7 @@ public struct WorkoutProgram: Codable, Identifiable, Equatable, Hashable, Sendab
     /// Copie avec de nouveaux identifiants (duplication, import).
     public func duplicated(name: String? = nil, now: Date = Date()) -> WorkoutProgram {
         WorkoutProgram(name: name ?? "\(self.name) (copie)", notes: notes,
-                       items: items.map { $0.withNewIDs() }, createdAt: now, updatedAt: now)
+                       items: items.map { $0.withNewIDs() }, createdAt: now, updatedAt: now, advanced: advanced)
     }
 
     /// Phases à plat, blocs déroulés, avec heure de début relative.

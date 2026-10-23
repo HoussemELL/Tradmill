@@ -142,9 +142,11 @@ distance, temps actif et restant, phase actuelle et suivante.
 - Écarts consigne/mesure affichés en bandeau ; une valeur demandée n'est jamais
   présentée comme une mesure.
 
-**Programmes prédéfinis** : Cardio Baseline (verrouillé, pour comparer la FC à
-effort identique), Zone 2 Endurance, Interval Run 9/11, HIIT Run 11, Incline Walk,
-Post-Meal Walk et **Zone 2 Auto** (vitesse réglée par la FC pour rester en zone 2).
+**Programmes prédéfinis** (inclinaison minimale 1 %) : **Zone 2 Auto** (vitesse réglée
+par la FC pour rester en zone 2), Cardio Baseline (verrouillé, pour comparer la FC à effort
+identique), Zone 2 Endurance, Interval Run 9/11, Football Endurance (niveaux 1 à 3), HIIT Run 11
+(avancé), Incline Walk, Post-Meal Walk. Export des séances pour Rythme :
+[docs/RYTHME.md](docs/RYTHME.md).
 Détails, règles du pilotage et sécurité : [docs/PROGRAMMES.md](docs/PROGRAMMES.md).
 
 **Programmes** : créer, modifier, dupliquer (balayage ou appui long),

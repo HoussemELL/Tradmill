@@ -1,9 +1,7 @@
 name: Simulateurs
 
+# Lancement manuel uniquement (onglet Actions) : ~45 min de simulateurs.
 on:
-  push:
-    branches-ignore: [ci-sim-results]
-    paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
 
 permissions:

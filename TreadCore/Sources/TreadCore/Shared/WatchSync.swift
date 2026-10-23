@@ -54,6 +54,9 @@ public struct WatchProgramSummary: Codable, Equatable, Hashable, Sendable, Ident
     public var groups: [WatchProgramGroup]
     /// Exercice Santé suggéré (course si une phase atteint 8 km/h).
     public var suggestsRunning: Bool
+    /// Niveau (Football Endurance) et programme avancé (confirmation, jamais proposé d'office).
+    public var level: Int?
+    public var isAdvanced: Bool?
 
     public init(_ p: WorkoutProgram) {
         id = p.id
@@ -72,7 +75,11 @@ public struct WatchProgramSummary: Codable, Equatable, Hashable, Sendable, Ident
             }
         }
         suggestsRunning = p.maxSpeedKmh >= 8
+        level = p.level
+        isAdvanced = p.isAdvanced ? true : nil
     }
+
+    public var advanced: Bool { isAdvanced ?? false }
 
     public var stepCount: Int { groups.reduce(0) { $0 + $1.steps.count * max($1.repeatCount, 1) } }
 }

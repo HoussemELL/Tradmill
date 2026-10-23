@@ -240,6 +240,11 @@ struct ProgramRow: View {
                 if program.isAuto { Image(systemName: "heart.circle.fill").foregroundStyle(WatchStyle.accent).font(.caption) }
                 if program.isLocked { Image(systemName: "lock.fill").foregroundStyle(.orange).font(.caption2) }
             }
+            if program.level != nil || program.advanced {
+                Text([program.level.map { $0 == 1 ? "Niveau 1" : "Niveau \($0) · progression" }, program.advanced ? "Avancé" : nil]
+                        .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption2).foregroundStyle(program.advanced ? Color.orange : Color.secondary)
+            }
             Text("\(WatchStyle.minutes(program.totalSeconds)) · max \(WatchStyle.speed(program.maxSpeedKmh)) km/h")
                 .font(.caption2).foregroundStyle(.secondary)
             StepStrip(program: program).frame(height: 5)
@@ -317,7 +322,8 @@ struct ProgramDetailView: View {
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Le tapis démarre lentement puis suit « \(program.name) ». Gardez la clé de sécurité attachée.")
+            Text((program.advanced ? "Programme avancé, à réserver après validation des niveaux précédents. " : "")
+                 + "Le tapis démarre lentement puis suit « \(program.name) ». Gardez la clé de sécurité attachée.")
         }
     }
 

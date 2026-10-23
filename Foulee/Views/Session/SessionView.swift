@@ -81,9 +81,18 @@ struct PrepareSessionView: View {
     @State private var showDevicePicker = false
     @State private var showSteps = false
     @State private var error: String?
+    @State private var confirmAdvanced = false
+
+    /// Sélection par défaut : le premier programme non avancé (un programme avancé n'est jamais
+    /// proposé d'office).
+    private var defaultProgramID: UUID? {
+        programs.first { $0.program?.isAdvanced != true }?.id
+    }
+
+    private var currentProgramID: UUID? { selectedProgramID ?? defaultProgramID }
 
     private var selectedProgram: WorkoutProgram? {
-        guard !freeRunSelected, let id = selectedProgramID ?? programs.first?.id else { return nil }
+        guard !freeRunSelected, let id = currentProgramID else { return nil }
         return programs.first { $0.id == id }?.program
     }
 
@@ -104,7 +113,7 @@ struct PrepareSessionView: View {
                 VStack(spacing: 8) {
                     ForEach(programs) { e in
                         if let p = e.program {
-                            ProgramChoiceRow(program: p, selected: !freeRunSelected && (selectedProgramID ?? programs.first?.id) == p.id) {
+                            ProgramChoiceRow(program: p, selected: !freeRunSelected && currentProgramID == p.id) {
                                 freeRunSelected = false
                                 selectedProgramID = p.id
                             }
@@ -198,12 +207,7 @@ struct PrepareSessionView: View {
                 Text(r).font(.footnote).foregroundStyle(.secondary)
             }
             Button {
-                error = nil
-                model.prepareSession(program: selectedProgram)
-                if let e = model.startSession() {
-                    error = e
-                    model.discardPreparedSession()
-                }
+                if selectedProgram?.isAdvanced == true { confirmAdvanced = true } else { start() }
             } label: {
                 Label(selectedProgram.map { "Démarrer · \($0.name)" } ?? "Démarrer · Séance libre", systemImage: "play.fill")
                     .font(.title3.bold())
@@ -216,10 +220,25 @@ struct PrepareSessionView: View {
             .tint(Theme.accent)
             .disabled(startDisabledReason != nil)
             .accessibilityHint("Démarre le tapis à basse vitesse puis applique la première phase")
+            .confirmationDialog("Programme avancé", isPresented: $confirmAdvanced, titleVisibility: .visible) {
+                Button("Démarrer quand même") { start() }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("« \(selectedProgram?.name ?? "") » est une progression avancée, à réserver après validation des niveaux précédents. Tenez compte de vos matchs, de la musculation et de votre cheville.")
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.bar)
+    }
+
+    private func start() {
+        error = nil
+        model.prepareSession(program: selectedProgram)
+        if let e = model.startSession() {
+            error = e
+            model.discardPreparedSession()
+        }
     }
 }
 
@@ -303,6 +322,7 @@ struct ProgramChoiceRow: View {
                         if program.isLocked { Image(systemName: "lock.fill").font(.caption).foregroundStyle(Theme.warning) }
                         if program.hasAutoSpeed { Image(systemName: "heart.circle.fill").font(.caption).foregroundStyle(Theme.accent) }
                     }
+                    ProgramBadges(program: program)
                     Text("\(Format.duration(TimeInterval(program.totalDurationSeconds))) · max \(Format.speed(program.maxSpeedKmh)) km/h")
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
@@ -384,5 +404,24 @@ struct HeartRateLine: View {
             }
         }
         .font(.caption)
+    }
+}
+
+/// Niveau et statut « avancé » d'un programme.
+struct ProgramBadges: View {
+    let program: WorkoutProgram
+
+    var body: some View {
+        if program.level != nil || program.isAdvanced {
+            HStack(spacing: 6) {
+                if let l = program.level {
+                    StatusPill(text: l == 1 ? "Niveau 1 · par défaut" : "Niveau \(l) · progression",
+                               systemImage: "chart.bar.fill", color: Theme.speed)
+                }
+                if program.isAdvanced {
+                    StatusPill(text: "Avancé", systemImage: "exclamationmark.triangle.fill", color: Theme.warning)
+                }
+            }
+        }
     }
 }

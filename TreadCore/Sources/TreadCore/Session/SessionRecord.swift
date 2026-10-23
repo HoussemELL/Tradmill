@@ -223,6 +223,14 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     /// Ajustements du pilote FC.
     public var autoAdjustments: [AutoAdjustment]?
 
+    // Champs ajoutés en V1.3 (bibliothèque révisée, export Rythme).
+    /// Version du protocole du programme prédéfini au moment de la séance.
+    public var protocolVersion: Int?
+    /// Niveau du programme (Football Endurance 1, 2, 3).
+    public var programLevel: Int?
+    /// Ressenti de l'effort saisi par l'utilisateur (échelle CR10 de Borg : 0 = repos, 10 = maximal).
+    public var perceivedExertion: Int?
+
     public init(id: UUID = UUID(), startDate: Date, program: WorkoutProgram?, treadmillName: String?,
                 profileID: String?, simulated: Bool) {
         self.id = id
@@ -231,6 +239,8 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
         self.programName = program?.name
         self.programSignature = program?.protocolSignature
         self.templateID = program?.templateID
+        self.protocolVersion = program?.protocolVersion
+        self.programLevel = program?.level
         self.treadmillName = treadmillName
         self.profileID = profileID
         self.simulated = simulated

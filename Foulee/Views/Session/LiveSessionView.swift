@@ -352,6 +352,7 @@ struct FinishedSessionView: View {
             VStack(spacing: 12) {
                 Image(systemName: "checkmark.seal.fill").font(.system(size: 56)).foregroundStyle(Theme.accent)
                 Text("Séance terminée").font(.title.bold())
+                PerceivedExertionCard(recordID: r.id, initial: r.perceivedExertion)
                 if model.treadmill.beltState != .stopped && model.treadmill.beltState != .idle && model.treadmill.beltState != .disconnected {
                     Banner(text: "Arrêt non confirmé par la télémétrie (\(model.treadmill.beltState.label)). Vérifiez le tapis.",
                            color: Theme.danger)

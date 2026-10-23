@@ -66,14 +66,20 @@ struct HistoryListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        let records = sessions.compactMap(\.record)
-                        if let data = try? SessionExport.json(records) {
-                            exportDoc = ExportDocument(data: data, contentType: .json, filename: "seances_foulee.json")
+                    Menu {
+                        Button("Tout exporter (JSON Foulée)") {
+                            if let data = try? SessionExport.json(sessions.compactMap(\.record)) {
+                                exportDoc = ExportDocument(data: data, contentType: .json, filename: "seances_foulee.json")
+                            }
+                        }
+                        Button("Tout exporter pour Rythme (JSON)") {
+                            if let data = try? RythmeSessionExport.json(sessions.compactMap(\.record)) {
+                                exportDoc = ExportDocument(data: data, contentType: .json, filename: "seances_foulee_rythme.json")
+                            }
                         }
                     } label: { Image(systemName: "square.and.arrow.up") }
                     .disabled(sessions.isEmpty)
-                    .accessibilityLabel("Exporter tout l'historique en JSON")
+                    .accessibilityLabel("Exporter l'historique")
                 }
             }
             .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }),
@@ -145,6 +151,7 @@ struct HistoryDetailView: View {
                     MetricTile(title: "Source FC", value: r.hrSources.first?.shortLabel ?? "—", detail: hrDetail(r))
                     MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
                 }
+                PerceivedExertionCard(recordID: r.id, initial: r.perceivedExertion)
                 SessionInsightsView(record: r)
                 caloriesCard(r)
                 chartCard("Fréquence cardiaque", r, .heartRate)
@@ -178,6 +185,11 @@ struct HistoryDetailView: View {
                     Button("Exporter en JSON") {
                         if let d = try? SessionExport.json([r]) {
                             exportDoc = ExportDocument(data: d, contentType: .json, filename: SessionExport.fileName(for: r, ext: "json"))
+                        }
+                    }
+                    Button("Exporter pour Rythme (JSON)") {
+                        if let d = try? RythmeSessionExport.json([r]) {
+                            exportDoc = ExportDocument(data: d, contentType: .json, filename: SessionExport.fileName(for: r, ext: "rythme.json"))
                         }
                     }
                     Button("Exporter en CSV") {

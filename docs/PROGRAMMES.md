@@ -4,25 +4,60 @@ Toutes les vitesses sont en km/h. Les programmes sont installés au premier lanc
 ajoutés à une installation existante). Ils restent modifiables et duplicables ; *Programmes ›
 + › Restaurer / Réinitialiser les programmes prédéfinis* les remet en place.
 
-## 1. Les 7 programmes
+## 1. La bibliothèque (révision 2)
 
-| Programme | Durée | Étapes (durée · vitesse · inclinaison) |
+Inclinaison minimale **1 %** dans toutes les phases (Incline Walk monte à 2 %). Les programmes
+déjà installés sont **mis à jour en place** (mêmes identifiants, aucun doublon) ; un programme
+prédéfini que vous aviez supprimé n'est pas réinstallé ; vos programmes personnels ne changent pas.
+
+| Programme | Durée | Étapes (durée · km/h · %) |
 |---|---|---|
-| **Cardio Baseline** 🔒 | 30 min | 5 min · 4,0 · 0 % → 20 min · 6,0 · 0 % → 5 min · 3,8 · 0 % |
-| **Zone 2 Endurance** | 35 min | 5 min · 4,0 · 0 % → 5 min · 5,5 · 0 % → 20 min · 6,0 · 1 % → 5 min · 3,8 · 0 % |
-| **Interval Run 9/11** | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 (0 %) |
-| **HIIT Run 11** | 35 min | 4 min · 4,0 → 4 min · 5,5 → 2 min · 7,0 → 4 × (2 min · 11,0 + 3 min · 4,5) → 5 min · 3,8 (0 %) — progression ultérieure |
-| **Incline Walk** | 30 min | 5 min · 4,0 · 0 % → 5 min · 5,5 · 1 % → 15 min · 5,5 · 2 % → 5 min · 3,8 · 0 % |
-| **Post-Meal Walk** | 15 min | 2 min · 3,5 → 10 min · 4,5 → 3 min · 3,5 (0 %) |
-| **Zone 2 Auto** ❤️ | 35 min | 5 min · 4,0 → 5,5 progressif → 25 min pilotées par la FC (départ 5,8, limites 4–7) → 5 min · 4,0 → 3,5 progressif (0 %) |
+| **Zone 2 Auto** ❤️ | 35 min | 5 min 4,0 → 5,5 progressif · 1 → 25 min pilotées par la FC (départ 5,8, limites 4–7) · 1 → 5 min 4,0 → 3,5 · 1 |
+| **Cardio Baseline** 🔒 | 30 min | 5 min · 4,0 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
+| **Zone 2 Endurance** | 35 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
+| **Interval Run 9/11** | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 (tout à 1 %) |
+| **Football Endurance · Niveau 1** | 35 min | échauffement 4 min · 4,5 + 4 min · 5,5 + 2 min · 6,5 → 3 × 3 min · 8,5 avec 3 min · 5,0 **entre** les efforts → 5 min · 6,0 → 5 min · 4,0 (1 %) |
+| **Football Endurance · Niveau 2** | 41 min | même échauffement → 4 × 3 min · 8,5, 3 min · 5,0 entre → 5 min · 6,0 → 5 min · 4,0 (1 %) |
+| **Football Endurance · Niveau 3** ⚠️ | 45 min | même échauffement → 4 × 4 min · 9,0, 3 min · 5,0 entre → 5 min · 6,0 → 5 min · 4,0 (1 %) |
+| **HIIT Run 11** ⚠️ | 35 min | 4 min · 4,0 → 4 min · 5,5 → 2 min · 7,0 → 4 × (2 min · 11,0 + 3 min · 4,5) → 5 min · 3,8 (1 %) |
+| **Incline Walk** | 30 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 15 min · 5,5 · 2 → 5 min · 3,8 · 1 |
+| **Post-Meal Walk** | 15 min | 2 min · 3,5 → 10 min · 4,5 → 3 min · 3,5 (1 %) |
 
-- **Seul Zone 2 Auto règle la vitesse selon la FC.** Dans les six autres, la zone cible d'une
-  phase sert à l'affichage et aux alertes (désactivées par défaut), jamais à accélérer.
-- **Zone 2 Endurance** : les 6 km/h sont un réglage de départ, à ajuster avec +/−
-  selon votre FC (à 5,5 km/h vous êtes souvent en haut de la zone 1).
-- **Cardio Baseline est verrouillé** : ses étapes ne se modifient qu'après « Déverrouiller »
-  (avec avertissement). Pour une variante, dupliquez-le. Pendant la séance, une consigne
-  manuelle ou une phase passée marque la séance « non comparable » (bandeau).
+⚠️ **Avancé** : jamais sélectionné par défaut ni proposé comme progression automatique ; le
+départ (iPhone ou Watch) demande une confirmation explicite. Football Endurance : niveau 1 par
+défaut, niveaux 2 et 3 affichés comme progressions.
+
+- **Seul Zone 2 Auto règle la vitesse selon la FC**, jamais l'inclinaison (1 % fixe).
+- **Cardio Baseline** : verrouillé, aucun ajustement automatique. Le protocole à 1 % est la nouvelle
+  référence : son empreinte diffère de l'ancien protocole à 0 %, les anciens tests forment donc une
+  série distincte dans *Progression* et ne lui sont jamais comparés.
+- Interval Run 9/11, HIIT Run 11 : les blocs répétés gardent une récupération après le dernier
+  effort (comme demandé). Football Endurance : récupération uniquement **entre** les efforts
+  (étapes explicites, donc modifiables une à une).
+
+### Organisation (bibliothèque d'alternatives, pas un plan hebdomadaire)
+
+| Rôle | Programme |
+|---|---|
+| Endurance principale | Zone 2 Auto |
+| Test de référence (toutes les 2 semaines, à la place de Zone 2) | Cardio Baseline |
+| Fractionné principal | Interval Run 9/11 |
+| Alternative au fractionné, préparation football | Football Endurance (niveau 1, puis 2, puis 3) |
+| Progression avancée | HIIT Run 11 |
+| Alternative de marche | Incline Walk |
+| Activité légère complémentaire | Post-Meal Walk |
+
+Foulée ne recommande aucune séance automatiquement. Une semaine avec un match intense, trois
+séances de musculation et une cheville à ménager, privilégiez Zone 2 Auto ou une marche plutôt
+qu'un second fractionné intense.
+
+### Unités d'inclinaison
+
+Foulée envoie et lit l'inclinaison en **%** (champ FTMS *Inclination*, résolution 0,1 %) et
+vérifie chaque valeur contre la plage et le pas annoncés par le tapis (UREVO URTM047 : 0–9 %,
+pas 1 d'après le diagnostic). Si le tapis affiche des **niveaux** plutôt que des pourcentages,
+la correspondance n'est pas garantie : voir le contrôle dans
+[VALIDATION_MATERIELLE.md](VALIDATION_MATERIELLE.md).
 
 ## 2. Transitions et limites du tapis
 

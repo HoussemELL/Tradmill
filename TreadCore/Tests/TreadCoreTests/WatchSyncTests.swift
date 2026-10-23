@@ -49,7 +49,7 @@ final class WatchSyncTests: XCTestCase {
                                       programs: programs, treadmillReady: ready, sessionActive: active,
                                       diagnosticRunning: false, capabilities: caps)
         }
-        XCTAssertEqual(eval(programs[6].id), .start(programs[6]))
+        XCTAssertEqual(eval(programs[0].id), .start(programs[0]))
         XCTAssertEqual(eval(nil), .start(nil))
         if case .refuse = eval(programs[0].id, ready: false) {} else { XCTFail("tapis non connecté") }
         if case .refuse = eval(programs[0].id, active: true) {} else { XCTFail("séance déjà en cours") }

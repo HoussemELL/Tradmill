@@ -36,6 +36,8 @@ struct AppSettings: Codable, Equatable {
     var didSeedTemplates = false
     /// Programmes prédéfinis déjà proposés (par `templateID`) : un programme supprimé n'est pas réinstallé.
     var seededTemplateIDs: [String]?
+    /// Révision de la bibliothèque de programmes prédéfinis installée (nil = 1).
+    var templatesRevision: Int?
 }
 
 final class SettingsStore {

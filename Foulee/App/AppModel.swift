@@ -425,6 +425,8 @@ final class AppModel {
     /// Séance définitive (arrêt réel de la bande + 2 min de FC de récupération) : écriture Santé.
     private func sessionFinalized(_ record: SessionRecord) {
         var r = record
+        // Le ressenti a pu être saisi pendant les 2 min de FC de récupération.
+        r.perceivedExertion = dataStore.record(id: r.id)?.perceivedExertion ?? r.perceivedExertion
         let usedWatch = watchOwnedSessions.removeValue(forKey: r.id) ?? false
         if usedWatch {
             r.healthStatus = .ownedByWatch
@@ -435,7 +437,8 @@ final class AppModel {
         guard !usedWatch else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let updated = await self.writeToHealth(r)
+            var updated = await self.writeToHealth(r)
+            updated.perceivedExertion = self.dataStore.record(id: r.id)?.perceivedExertion ?? updated.perceivedExertion
             self.dataStore.upsert(updated)
         }
     }
@@ -487,6 +490,13 @@ final class AppModel {
         }
         dataStore.upsert(r)
         return r
+    }
+
+    /// Ressenti de l'effort (CR10 de Borg, 0–10), saisi après la séance.
+    func setPerceivedExertion(_ value: Int?, for id: UUID) {
+        guard var r = dataStore.record(id: id) else { return }
+        r.perceivedExertion = value.map { min(max($0, 0), 10) }
+        dataStore.upsert(r)
     }
 
     /// Supprime la séance de Foulée et, si elle y est, de Santé (séance et échantillons).
@@ -587,22 +597,18 @@ final class AppModel {
 
     func dismissRecoveredNotice() { recoveredNotice = nil }
 
-    /// Installe les programmes prédéfinis jamais proposés (y compris pour une installation existante).
-    /// Un programme prédéfini supprimé par l'utilisateur n'est pas réinstallé automatiquement.
+    /// Installe et met à jour la bibliothèque de programmes prédéfinis (voir `TemplateLibrary`) :
+    /// mise à jour en place (mêmes identifiants), ajout des nouveaux, jamais de doublon, programmes
+    /// supprimés par l'utilisateur non réinstallés, programmes personnels intacts.
     private func seedTemplatesIfNeeded() {
-        var seeded = Set(settings.seededTemplateIDs ?? [])
-        let existing = Set(dataStore.allPrograms().compactMap(\.templateID))
-        var added = 0
-        for t in WorkoutProgram.templates {
-            guard let id = t.templateID, !seeded.contains(id) else { continue }
-            if !existing.contains(id) {
-                dataStore.upsert(t)
-                added += 1
-            }
-            seeded.insert(id)
-        }
-        if added > 0 { log.log(.info, "\(added) programme(s) prédéfini(s) ajouté(s)") }
-        settings.seededTemplateIDs = Array(seeded).sorted()
+        let installedRevision = settings.templatesRevision ?? (settings.seededTemplateIDs == nil ? 0 : 1)
+        let plan = TemplateLibrary.plan(installed: dataStore.allPrograms(), seededIDs: settings.seededTemplateIDs ?? [],
+                                        installedRevision: installedRevision)
+        plan.upserts.forEach { dataStore.upsert($0) }
+        if !plan.updatedNames.isEmpty { log.log(.info, "Programmes mis à jour : \(plan.updatedNames.joined(separator: ", "))") }
+        if !plan.addedNames.isEmpty { log.log(.info, "Programmes ajoutés : \(plan.addedNames.joined(separator: ", "))") }
+        settings.seededTemplateIDs = plan.seededIDs
+        settings.templatesRevision = plan.revision
         settings.didSeedTemplates = true
     }
 

@@ -165,6 +165,7 @@ struct ProgramRow: View {
                     StatusPill(text: "FC auto", systemImage: "heart.circle", color: Theme.accent)
                 }
             }
+            if let p = entity.program { ProgramBadges(program: p) }
             if let p = entity.program {
                 Text("\(p.schedule.count) phases · \(Format.duration(TimeInterval(p.totalDurationSeconds))) · max \(Format.speed(p.maxSpeedKmh)) km/h")
                     .font(.caption).foregroundStyle(.secondary)

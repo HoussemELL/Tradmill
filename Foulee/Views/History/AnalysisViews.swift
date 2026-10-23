@@ -396,3 +396,48 @@ struct ProgressChart: View {
         .chartYScale(domain: .automatic(includesZero: false))
     }
 }
+
+// MARK: - Ressenti de l'effort
+
+/// Ressenti de l'effort (échelle CR10 de Borg), saisi après la séance et exporté pour Rythme.
+struct PerceivedExertionCard: View {
+    @Environment(AppModel.self) private var model
+    let recordID: UUID
+    @State private var value: Int?
+
+    init(recordID: UUID, initial: Int?) {
+        self.recordID = recordID
+        _value = State(initialValue: initial)
+    }
+
+    static func label(_ v: Int) -> String {
+        switch v {
+        case 0: return "Repos"
+        case 1: return "Très facile"
+        case 2: return "Facile"
+        case 3: return "Modéré"
+        case 4: return "Un peu difficile"
+        case 5, 6: return "Difficile"
+        case 7, 8: return "Très difficile"
+        case 9: return "Extrêmement difficile"
+        default: return "Maximal"
+        }
+    }
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Ressenti de l'effort").font(.headline)
+                Text("Échelle 0–10 (Borg CR10)").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Picker("Ressenti", selection: $value) {
+                Text("Non renseigné").tag(Int?.none)
+                ForEach(0...10, id: \.self) { v in Text("\(v) · \(Self.label(v))").tag(Optional(v)) }
+            }
+            .pickerStyle(.menu)
+        }
+        .card()
+        .onChange(of: value) { _, v in model.setPerceivedExertion(v, for: recordID) }
+    }
+}

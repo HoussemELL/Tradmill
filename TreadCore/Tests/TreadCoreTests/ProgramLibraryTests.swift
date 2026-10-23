@@ -8,50 +8,63 @@ final class ProgramLibraryTests: XCTestCase {
     private func speeds(_ p: WorkoutProgram) -> [Double] { p.schedule.map(\.phase.speedKmh) }
     private func durations(_ p: WorkoutProgram) -> [Int] { p.schedule.map { $0.phase.durationSeconds / 60 } }
 
-    func testSevenTemplatesWithExactSegments() {
+    private func inclines(_ p: WorkoutProgram) -> [Double] { p.schedule.map(\.phase.inclinePercent) }
+    private func ones(_ n: Int) -> [Double] { Array(repeating: 1.0, count: n) }
+
+    func testLibraryWithExactSegmentsAndMinimumIncline() {
         let t = WorkoutProgram.templates
-        XCTAssertEqual(t.map(\.name), ["Cardio Baseline", "Zone 2 Endurance", "Interval Run 9/11", "HIIT Run 11",
-                                       "Incline Walk", "Post-Meal Walk", "Zone 2 Auto"])
-        XCTAssertEqual(t.map { $0.totalDurationSeconds / 60 }, [30, 35, 30, 35, 30, 15, 35])
+        XCTAssertEqual(t.map(\.name), ["Zone 2 Auto", "Cardio Baseline", "Zone 2 Endurance", "Interval Run 9/11",
+                                       "Football Endurance · Niveau 1", "Football Endurance · Niveau 2",
+                                       "Football Endurance · Niveau 3", "HIIT Run 11", "Incline Walk", "Post-Meal Walk"])
+        XCTAssertEqual(t.map { $0.totalDurationSeconds / 60 }, [35, 30, 35, 30, 35, 41, 45, 35, 30, 15])
+        XCTAssertEqual(Set(t.compactMap(\.templateID)).count, t.count, "aucun doublon")
         for p in t {
             XCTAssertTrue(ProgramValidator.validate(p, against: caps).isEmpty, "\(p.name) : \(ProgramValidator.validate(p, against: caps))")
             XCTAssertNotNil(p.templateID)
+            XCTAssertNotNil(p.protocolVersion)
+            XCTAssertGreaterThanOrEqual(p.schedule.map(\.phase.inclinePercent).min() ?? 0, WorkoutProgram.minimumTemplateIncline,
+                                        "\(p.name) : inclinaison minimale 1 %")
         }
-        XCTAssertEqual(Set(t.map(\.protocolSignature)).count, 7)
+        XCTAssertEqual(Set(t.map(\.protocolSignature)).count, t.count)
 
         let base = WorkoutProgram.cardioBaseline
         XCTAssertTrue(base.isLocked)
+        XCTAssertFalse(base.hasAutoSpeed, "aucun ajustement automatique pendant le test")
         XCTAssertEqual(durations(base), [5, 20, 5])
         XCTAssertEqual(speeds(base), [4.0, 6.0, 3.8])
-        XCTAssertEqual(base.schedule.map(\.phase.inclinePercent), [0, 0, 0])
+        XCTAssertEqual(inclines(base), ones(3))
 
         let z2 = WorkoutProgram.zone2Endurance
         XCTAssertEqual(durations(z2), [5, 5, 20, 5])
         XCTAssertEqual(speeds(z2), [4.0, 5.5, 6.0, 3.8])
-        XCTAssertEqual(z2.schedule.map(\.phase.inclinePercent), [0, 0, 1, 0])
+        XCTAssertEqual(inclines(z2), ones(4))
         XCTAssertFalse(z2.hasAutoSpeed, "aucune accélération automatique selon la FC")
 
         let run = WorkoutProgram.intervalRun911
         XCTAssertEqual(durations(run), [3, 3, 2] + Array(repeating: 1, count: 12) + [2, 3, 5])
         XCTAssertEqual(speeds(run), [4, 5, 6] + Array([9.0, 5.0].repeated(6)) + [11, 4, 3.8])
-        XCTAssertTrue(run.schedule.allSatisfy { $0.phase.inclinePercent == 0 })
+        XCTAssertEqual(inclines(run), ones(18))
 
         let hiit = WorkoutProgram.hiitRun11
+        XCTAssertTrue(hiit.isAdvanced, "avancé : confirmation explicite, jamais proposé automatiquement")
         XCTAssertEqual(durations(hiit), [4, 4, 2] + Array([2, 3].repeated(4)) + [5])
         XCTAssertEqual(speeds(hiit), [4, 5.5, 7] + Array([11.0, 4.5].repeated(4)) + [3.8])
+        XCTAssertEqual(inclines(hiit), ones(12))
 
         let incline = WorkoutProgram.inclineWalk
         XCTAssertEqual(durations(incline), [5, 5, 15, 5])
         XCTAssertEqual(speeds(incline), [4, 5.5, 5.5, 3.8])
-        XCTAssertEqual(incline.schedule.map(\.phase.inclinePercent), [0, 1, 2, 0])
+        XCTAssertEqual(inclines(incline), [1, 1, 2, 1])
 
         let meal = WorkoutProgram.postMealWalk
         XCTAssertEqual(durations(meal), [2, 10, 3])
         XCTAssertEqual(speeds(meal), [3.5, 4.5, 3.5])
+        XCTAssertEqual(inclines(meal), ones(3))
 
         let auto = WorkoutProgram.zone2Auto
         XCTAssertEqual(durations(auto), [5, 25, 5])
         XCTAssertTrue(auto.hasAutoSpeed)
+        XCTAssertEqual(inclines(auto), ones(3), "1 % fixe, même pendant la phase pilotée")
         XCTAssertEqual(auto.schedule[0].phase.endSpeedKmh, 5.5)
         XCTAssertEqual(auto.schedule[2].phase.speedKmh, 4.0)
         XCTAssertEqual(auto.schedule[2].phase.endSpeedKmh, 3.5)
@@ -63,6 +76,88 @@ final class ProgramLibraryTests: XCTestCase {
         XCTAssertEqual(a.increaseInterval, 60)
         XCTAssertEqual(auto.schedule[1].phase.speedKmh, 5.8)
         XCTAssertEqual(auto.maxSpeedKmh, 7)
+
+        // Football Endurance : récupération uniquement ENTRE les efforts.
+        let f1 = WorkoutProgram.footballEndurance1, f2 = WorkoutProgram.footballEndurance2, f3 = WorkoutProgram.footballEndurance3
+        XCTAssertEqual(durations(f1), [4, 4, 2, 3, 3, 3, 3, 3, 5, 5])
+        XCTAssertEqual(speeds(f1), [4.5, 5.5, 6.5, 8.5, 5, 8.5, 5, 8.5, 6, 4])
+        XCTAssertEqual(durations(f2), [4, 4, 2, 3, 3, 3, 3, 3, 3, 3, 5, 5])
+        XCTAssertEqual(speeds(f2), [4.5, 5.5, 6.5, 8.5, 5, 8.5, 5, 8.5, 5, 8.5, 6, 4])
+        XCTAssertEqual(durations(f3), [4, 4, 2, 4, 3, 4, 3, 4, 3, 4, 5, 5])
+        XCTAssertEqual(speeds(f3), [4.5, 5.5, 6.5, 9, 5, 9, 5, 9, 5, 9, 6, 4])
+        XCTAssertEqual(f1.schedule.filter { $0.phase.kind == .work }.count, 3)
+        XCTAssertEqual(f2.schedule.filter { $0.phase.kind == .work }.count, 4)
+        XCTAssertEqual(f3.schedule.filter { $0.phase.kind == .work }.count, 4)
+        XCTAssertEqual(f1.schedule.last { $0.phase.kind == .work }.map { f1.schedule[$0.index + 1].phase.kind }, .steady,
+                       "pas de récupération après le dernier effort")
+        XCTAssertEqual([f1.level, f2.level, f3.level], [1, 2, 3])
+        XCTAssertEqual([f1.isAdvanced, f2.isAdvanced, f3.isAdvanced], [false, false, true])
+        for f in [f1, f2, f3] { XCTAssertEqual(inclines(f), ones(f.schedule.count)) }
+    }
+
+    func testLibraryUpdateKeepsIdentifiersAndNeverDuplicates() {
+        // Bibliothèque installée en révision 1 (anciens protocoles à 0 %), un programme personnel,
+        // et Post-Meal Walk supprimé par l'utilisateur.
+        var oldBaseline = WorkoutProgram.cardioBaseline
+        oldBaseline.items = oldBaseline.items.map {
+            guard case var .phase(p) = $0 else { return $0 }
+            p.inclinePercent = 0
+            return .phase(p)
+        }
+        let oldZ2 = WorkoutProgram.zone2Auto
+        let personal = WorkoutProgram(name: "Ma séance", items: [.phase(.init(name: "A", durationSeconds: 60, speedKmh: 4))])
+        let seeded = [ProgramTemplateID.cardioBaseline, ProgramTemplateID.zone2Auto, ProgramTemplateID.postMealWalk]
+        let plan = TemplateLibrary.plan(installed: [oldBaseline, oldZ2, personal], seededIDs: seeded, installedRevision: 1)
+        let updatedBaseline = plan.upserts.first { $0.templateID == ProgramTemplateID.cardioBaseline }
+        XCTAssertEqual(updatedBaseline?.id, oldBaseline.id, "identifiant conservé")
+        XCTAssertEqual(updatedBaseline?.createdAt, oldBaseline.createdAt)
+        XCTAssertEqual(updatedBaseline.map(inclines), ones(3))
+        XCTAssertNotEqual(updatedBaseline?.protocolSignature, oldBaseline.protocolSignature,
+                          "nouveau protocole à 1 % : série de comparaison distincte des anciens tests à 0 %")
+        XCTAssertEqual(plan.upserts.first { $0.templateID == ProgramTemplateID.zone2Auto }?.id, oldZ2.id)
+        XCTAssertFalse(plan.upserts.contains { $0.templateID == ProgramTemplateID.postMealWalk }, "supprimé : pas réinstallé")
+        XCTAssertFalse(plan.upserts.contains { $0.id == personal.id }, "programme personnel intact")
+        XCTAssertTrue(plan.addedNames.contains("Football Endurance · Niveau 1"))
+        XCTAssertEqual(plan.revision, WorkoutProgram.templatesRevision)
+        // Relancer ne fait plus rien : pas de doublon.
+        let installed = [oldBaseline, oldZ2, personal] + plan.upserts.filter { p in ![oldBaseline.id, oldZ2.id].contains(p.id) }
+        let again = TemplateLibrary.plan(installed: installed, seededIDs: plan.seededIDs, installedRevision: plan.revision)
+        XCTAssertTrue(again.upserts.isEmpty)
+        // Première installation : tout est ajouté une fois.
+        let fresh = TemplateLibrary.plan(installed: [], seededIDs: [], installedRevision: 0)
+        XCTAssertEqual(fresh.upserts.count, WorkoutProgram.templates.count)
+    }
+
+    func testRythmeExportSeparatesTargetsFromMeasurements() throws {
+        let s = SessionHarness(program: .cardioBaseline)
+        XCTAssertNoThrow(try s.session.start().get())
+        s.run(5 * 60 + 15, hrBPM: 110)
+        _ = s.session.adjustSpeed(by: 0.1)
+        s.run(60, hrBPM: 125)
+        s.session.stop()
+        s.run(150, hrBPM: 100)
+        var r = try XCTUnwrap(s.finalized)
+        r.perceivedExertion = 4
+        let x = RythmeSessionExport(record: r)
+        XCTAssertEqual(x.program?.templateID, ProgramTemplateID.cardioBaseline)
+        XCTAssertEqual(x.program?.protocolVersion, 2)
+        XCTAssertEqual(x.program?.protocolSignature, WorkoutProgram.cardioBaseline.protocolSignature)
+        XCTAssertEqual(x.plannedSegments.map(\.durationSeconds), [300, 1200, 300])
+        XCTAssertEqual(x.plannedSegments.map(\.targetInclinePercent), [1, 1, 1])
+        XCTAssertEqual(x.executedSegments.count, 2)
+        XCTAssertEqual(x.interruptions.manualChanges, 1)
+        XCTAssertEqual(x.perceivedExertion, 4)
+        XCTAssertFalse(x.heartRate.isEmpty)
+        XCTAssertEqual(x.zones?.bounds.count, 6)
+        // Une mesure absente reste nulle : jamais la consigne à sa place.
+        let early = try XCTUnwrap(x.samples.first { $0.targetSpeedKmh != nil && $0.measuredSpeedKmh != nil &&
+                                                     abs($0.targetSpeedKmh! - $0.measuredSpeedKmh!) > 0.5 })
+        XCTAssertNotEqual(early.measuredSpeedKmh, early.targetSpeedKmh, "pendant l'accélération, mesure ≠ consigne")
+        let data = try RythmeSessionExport.json([r])
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["format"] as? String, "foulee.rythme.session")
+        XCTAssertEqual(json["formatVersion"] as? Int, 1)
+        XCTAssertEqual(try JSONDecoder.iso.decode(RythmeSessionExport.self, from: data).session.id, r.id)
     }
 
     func testSignatureIgnoresNamesButNotSettings() {
@@ -83,7 +178,7 @@ final class ProgramLibraryTests: XCTestCase {
         let data = try ProgramExchange.export(WorkoutProgram.templates)
         let back = try ProgramExchange.importPrograms(from: data)
         XCTAssertEqual(back.map(\.protocolSignature), WorkoutProgram.templates.map(\.protocolSignature))
-        XCTAssertEqual(back.last?.schedule[1].phase.autoSpeed, AutoSpeedSettings())
+        XCTAssertEqual(back.first { $0.name == "Zone 2 Auto" }?.schedule[1].phase.autoSpeed, AutoSpeedSettings())
         let old = #"{"id":"6F1C2B1E-0000-0000-0000-000000000001","name":"A","durationSeconds":60,"speedKmh":4,"inclinePercent":0,"kind":"steady"}"#
         let p = try CoreJSON.decode(ProgramPhase.self, from: Data(old.utf8))
         XCTAssertNil(p.autoSpeed)
@@ -464,6 +559,14 @@ final class ProgramLibraryTests: XCTestCase {
         let msg = WatchMessage.liveStatus(st)
         XCTAssertEqual(try WatchMessage.decode(msg.encoded()), msg)
         XCTAssertEqual(try WatchMessage.decode(WatchMessage.remoteCommand(.stop).encoded()), .remoteCommand(.stop))
+    }
+}
+
+private extension JSONDecoder {
+    static var iso: JSONDecoder {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
     }
 }
 

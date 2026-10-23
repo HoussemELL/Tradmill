@@ -169,3 +169,16 @@ commandes il envoie lèverait le doute sur la cause du problème de vitesse.
 5. Filtrer sur les écritures ATT vers la poignée du Control Point (0x2AD9) et
    comparer avec les lignes `[TX]` de Foulée : ordre, délais, valeurs, présence
    de Request Control ou de répétitions.
+
+## 8. Unité d'inclinaison (programmes à 1 % et 2 %)
+
+Tous les programmes prédéfinis utilisent au moins 1 % d'inclinaison (Incline Walk : 2 %).
+Foulée suppose l'unité FTMS standard (% de pente) ; à vérifier une fois sur le tapis :
+
+1. *Réglages › Tapis › Capacités lues* : notez la plage et le pas d'inclinaison et leur source
+   (« tapis » ou « profil »).
+2. Séance libre à 3 km/h, puis consigne d'inclinaison 1 % (bouton +) : comparez l'affichage de la
+   console (1 ? niveau 1 ?) et la valeur « Inclinaison réelle » de l'app.
+3. Recommencez à 2 %.
+4. Si la console affiche autre chose que 1 et 2 (ou si la pente visible ne correspond pas),
+   exportez le journal de diagnostic : le profil URTM047 devra convertir les niveaux.
