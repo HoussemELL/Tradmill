@@ -495,197 +495,7 @@
   ]
  },
  {
-  "name": "04-watch-ecrans",
-  "description": "Apple Watch : accueil Mes programmes (catalogue reçu de l'iPhone), détail d'un programme, pages de séance (démo).",
-  "steps": [
-   {
-    "do": "launch",
-    "on": "phone",
-    "args": [
-     "-FouleeScenario",
-     "screens",
-     "-FouleeTestPrograms",
-     "-FouleeAppearance",
-     "system"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 8
-   },
-   {
-    "do": "launch",
-    "on": "watch",
-    "args": [
-     "-FouleeScenario",
-     "screens",
-     "-FouleeSimulated",
-     "-FouleeDemo"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 50
-   },
-   {
-    "do": "shot",
-    "on": "watch",
-    "label": "accueil-mes-programmes"
-   },
-   {
-    "do": "collect",
-    "on": "watch",
-    "expect": [
-     {
-      "file": "watch.json",
-      "path": "programNames",
-      "op": "contains",
-      "value": "Test Zone 2 Auto",
-      "label": "catalogue de l'iPhone reçu (programmes de test inclus)"
-     },
-     {
-      "file": "watch.json",
-      "path": "programsReceived",
-      "op": "ge",
-      "value": 9,
-      "label": "tous les programmes (7 prédéfinis + 2 personnels)"
-     }
-    ]
-   },
-   {
-    "do": "launch",
-    "on": "watch",
-    "args": [
-     "-FouleeScenario",
-     "screens",
-     "-FouleeSimulated",
-     "-FouleeDemo",
-     "-FouleeOpen",
-     "Zone 2 Auto"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 10
-   },
-   {
-    "do": "shot",
-    "on": "watch",
-    "label": "detail-zone2auto"
-   },
-   {
-    "do": "launch",
-    "on": "watch",
-    "args": [
-     "-FouleeScenario",
-     "screens",
-     "-FouleeSimulated",
-     "-FouleeDemo",
-     "-FouleeOpen",
-     "Interval Run 9/11"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 10
-   },
-   {
-    "do": "shot",
-    "on": "watch",
-    "label": "detail-interval"
-   },
-   {
-    "do": "launch",
-    "on": "watch",
-    "args": [
-     "-FouleeScenario",
-     "demo",
-     "-FouleeSimulated",
-     "-FouleeDemoLive",
-     "-FouleePage",
-     "1"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 10
-   },
-   {
-    "do": "shot",
-    "on": "watch",
-    "label": "seance-mesures"
-   },
-   {
-    "do": "launch",
-    "on": "watch",
-    "args": [
-     "-FouleeScenario",
-     "demo",
-     "-FouleeSimulated",
-     "-FouleeDemoLive",
-     "-FouleePage",
-     "2"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 8
-   },
-   {
-    "do": "shot",
-    "on": "watch",
-    "label": "seance-programme"
-   },
-   {
-    "do": "launch",
-    "on": "watch",
-    "args": [
-     "-FouleeScenario",
-     "demo",
-     "-FouleeSimulated",
-     "-FouleeDemoLive",
-     "-FouleePage",
-     "3"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 8
-   },
-   {
-    "do": "shot",
-    "on": "watch",
-    "label": "seance-zones"
-   },
-   {
-    "do": "launch",
-    "on": "watch",
-    "args": [
-     "-FouleeScenario",
-     "demo",
-     "-FouleeSimulated",
-     "-FouleeDemoLive",
-     "-FouleePage",
-     "0"
-    ]
-   },
-   {
-    "do": "wait",
-    "seconds": 8
-   },
-   {
-    "do": "shot",
-    "on": "watch",
-    "label": "seance-commandes"
-   },
-   {
-    "do": "terminate",
-    "on": "watch"
-   }
-  ]
- },
- {
-  "name": "05-watch-lance-zone2auto",
+  "name": "04-watch-lance-zone2auto",
   "description": "Scénario complet : la montre lance « Test Zone 2 Auto », l'iPhone démarre le tapis simulé, la montre envoie sa FC (simulée) par WatchConnectivity et le pilote l'utilise ; pause, reprise et arrêt depuis la montre.",
   "steps": [
    {
@@ -908,6 +718,196 @@
       "label": "pilote FC : ajustement avec la FC de la montre"
      }
     ]
+   }
+  ]
+ },
+ {
+  "name": "05-watch-ecrans",
+  "description": "Apple Watch : accueil Mes programmes (catalogue reçu de l'iPhone), détail d'un programme, pages de séance (démo).",
+  "steps": [
+   {
+    "do": "launch",
+    "on": "phone",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeTestPrograms",
+     "-FouleeAppearance",
+     "system"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeSimulated",
+     "-FouleeDemo"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 20
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "accueil-mes-programmes"
+   },
+   {
+    "do": "collect",
+    "on": "watch",
+    "expect": [
+     {
+      "file": "watch.json",
+      "path": "programNames",
+      "op": "contains",
+      "value": "Test Zone 2 Auto",
+      "label": "catalogue de l'iPhone reçu (programmes de test inclus)"
+     },
+     {
+      "file": "watch.json",
+      "path": "programsReceived",
+      "op": "ge",
+      "value": 9,
+      "label": "tous les programmes (7 prédéfinis + 2 personnels)"
+     }
+    ]
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeSimulated",
+     "-FouleeDemo",
+     "-FouleeOpen",
+     "Zone 2 Auto"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 10
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "detail-zone2auto"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "screens",
+     "-FouleeSimulated",
+     "-FouleeDemo",
+     "-FouleeOpen",
+     "Interval Run 9/11"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 10
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "detail-interval"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "1"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 10
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-mesures"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "2"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-programme"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "3"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-zones"
+   },
+   {
+    "do": "launch",
+    "on": "watch",
+    "args": [
+     "-FouleeScenario",
+     "demo",
+     "-FouleeSimulated",
+     "-FouleeDemoLive",
+     "-FouleePage",
+     "0"
+    ]
+   },
+   {
+    "do": "wait",
+    "seconds": 8
+   },
+   {
+    "do": "shot",
+    "on": "watch",
+    "label": "seance-commandes"
+   },
+   {
+    "do": "terminate",
+    "on": "watch"
    }
   ]
  }

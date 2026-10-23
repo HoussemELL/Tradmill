@@ -91,7 +91,7 @@ final class WorkoutManager {
 
     /// Un contexte de l'iPhone a été reçu depuis le lancement (le contexte mémorisé ou de
     /// démonstration ne compte pas).
-    @ObservationIgnored private var hasFreshContext = false
+    private(set) var hasFreshContext = false
 
     private func poll() {
         let now = Date()
@@ -195,7 +195,7 @@ final class WorkoutManager {
                 self.launch = .refused("iPhone injoignable : \(error.localizedDescription)")
             }
         })
-        DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + WatchStartPolicy.watchGiveUpAfter) { [weak self] in
             guard let self, self.pendingRequest?.request.requestID == r.requestID else { return }
             self.pendingRequest = nil
             self.launch = .refused("Pas de réponse de l'iPhone. Rien n'a été démarré.")

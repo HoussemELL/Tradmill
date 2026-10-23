@@ -54,6 +54,9 @@ final class WatchSyncTests: XCTestCase {
         if case .refuse = eval(programs[0].id, ready: false) {} else { XCTFail("tapis non connecté") }
         if case .refuse = eval(programs[0].id, active: true) {} else { XCTFail("séance déjà en cours") }
         if case .refuse = eval(programs[0].id, age: 45) {} else { XCTFail("demande périmée : jamais de démarrage tardif") }
+        if case .refuse = eval(programs[0].id, age: 25) {} else { XCTFail("plus de 20 s : refusée") }
+        XCTAssertLessThan(WatchStartPolicy.maxRequestAge, WatchStartPolicy.watchGiveUpAfter,
+                          "la montre n'annonce l'échec qu'une fois toute acceptation impossible")
         if case .refuse = eval(UUID()) {} else { XCTFail("programme inconnu") }
         var tooFast = programs[0]
         if case var .phase(p) = tooFast.items[1] { p.speedKmh = 15; tooFast.items[1] = .phase(p) }

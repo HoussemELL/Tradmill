@@ -108,7 +108,9 @@ enum WatchScenario {
     /// Lance le programme dès que l'iPhone a publié son catalogue et que le tapis est prêt
     /// (équivaut à : choisir le programme, « Démarrer », confirmer).
     private static func autoStart(_ name: String, _ m: WorkoutManager, deadline: Date) {
-        if let p = m.programs.first(where: { $0.name == name }), m.phoneReachable, m.context?.treadmill.ready == true {
+        // Comme l'utilisateur : on ne lance qu'une fois le catalogue de l'iPhone reçu (canal établi).
+        if let p = m.programs.first(where: { $0.name == name }), m.phoneReachable, m.hasFreshContext,
+           m.context?.treadmill.ready == true {
             m.startProgram(p)
             return
         }

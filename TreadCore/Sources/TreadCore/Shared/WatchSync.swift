@@ -176,8 +176,11 @@ public struct WatchStartResult: Codable, Equatable, Sendable {
 /// Règles de l'iPhone pour une demande de démarrage venue de la montre.
 public enum WatchStartPolicy {
     /// Au-delà, une demande est jugée périmée (message retardé) et refusée : on ne démarre jamais
-    /// un tapis sur une action ancienne.
-    public static let maxRequestAge: TimeInterval = 30
+    /// un tapis sur une action ancienne. Doit rester inférieur à `watchGiveUpAfter`, pour que la
+    /// montre n'annonce jamais « rien n'a démarré » alors que l'iPhone pourrait encore accepter.
+    public static let maxRequestAge: TimeInterval = 20
+    /// Délai après lequel la montre abandonne une demande sans réponse.
+    public static let watchGiveUpAfter: TimeInterval = 30
 
     public enum Decision: Equatable {
         case start(WorkoutProgram?)

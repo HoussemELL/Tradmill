@@ -106,7 +106,7 @@ bouton **Démarrer** (désactivé avec la raison si le tapis n'est pas prêt).
 
 **Lancement depuis la montre** : *Démarrer* → confirmation → la montre demande à l'iPhone de
 démarrer ce programme. L'iPhone vérifie (tapis connecté — il tente le tapis mémorisé pendant 12 s —,
-pas d'autre séance, programme compatible, demande de moins de 30 s), démarre le tapis puis répond ;
+pas d'autre séance, programme compatible, demande de moins de 20 s ; la montre attend 30 s avant d'annoncer l'échec), démarre le tapis puis répond ;
 la montre ne lance son exercice qu'après l'acceptation. En cas de refus, la raison s'affiche et
 rien ne démarre.
 
