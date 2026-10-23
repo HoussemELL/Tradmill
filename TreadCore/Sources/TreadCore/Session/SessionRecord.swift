@@ -50,9 +50,15 @@ public struct PhaseSpan: Codable, Equatable, Sendable {
     /// Secondes depuis le début de la séance (même base que les échantillons).
     public var start: Double
     public var end: Double?
+    /// Phase dont la vitesse était pilotée par la FC.
+    public var auto: Bool?
+    /// Zone cible indicative de la phase.
+    public var targetZone: Int?
+    /// Vitesse de fin d'une phase progressive.
+    public var endSpeedKmh: Double?
 
     public init(index: Int, name: String, kind: PhaseKind, targetSpeedKmh: Double, targetInclinePercent: Double,
-                start: Double, end: Double? = nil) {
+                start: Double, end: Double? = nil, auto: Bool? = nil, targetZone: Int? = nil, endSpeedKmh: Double? = nil) {
         self.index = index
         self.name = name
         self.kind = kind
@@ -60,6 +66,9 @@ public struct PhaseSpan: Codable, Equatable, Sendable {
         self.targetInclinePercent = targetInclinePercent
         self.start = start
         self.end = end
+        self.auto = auto
+        self.targetZone = targetZone
+        self.endSpeedKmh = endSpeedKmh
     }
 }
 
@@ -98,6 +107,7 @@ public struct SessionEvent: Codable, Equatable, Sendable {
         case machineStopped, externalMovement
         case hrSourceChanged, zoneAlert
         case recovered, info
+        case autoAdjust, autoSafety
     }
 
     public var t: Double
@@ -202,12 +212,25 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     public var healthReport: HealthWriteReport?
     public var elevationGainMeters: Double?
 
+    // Champs ajoutés en V1.2 (programmes de référence, pilotage FC).
+    /// Empreinte du protocole suivi (`WorkoutProgram.protocolSignature`).
+    public var programSignature: String?
+    /// Programme prédéfini d'origine.
+    public var templateID: String?
+    /// Nombre de consignes manuelles (vitesse/inclinaison) et de phases passées pendant la séance.
+    public var manualChanges: Int?
+    public var skippedPhases: Int?
+    /// Ajustements du pilote FC.
+    public var autoAdjustments: [AutoAdjustment]?
+
     public init(id: UUID = UUID(), startDate: Date, program: WorkoutProgram?, treadmillName: String?,
                 profileID: String?, simulated: Bool) {
         self.id = id
         self.startDate = startDate
         self.program = program
         self.programName = program?.name
+        self.programSignature = program?.protocolSignature
+        self.templateID = program?.templateID
         self.treadmillName = treadmillName
         self.profileID = profileID
         self.simulated = simulated

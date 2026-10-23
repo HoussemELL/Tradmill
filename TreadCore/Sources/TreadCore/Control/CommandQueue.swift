@@ -4,6 +4,7 @@ import Foundation
 public enum CommandOrigin: String, Sendable, Codable {
     case user = "utilisateur"
     case program = "programme"
+    case autopilot = "pilote FC"
     case startSequence = "séquence démarrage"
     case resumeSequence = "séquence reprise"
     case safety = "sécurité"

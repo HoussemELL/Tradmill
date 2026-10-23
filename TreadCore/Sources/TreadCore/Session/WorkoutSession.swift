@@ -14,8 +14,33 @@ public struct SessionSettings: Codable, Equatable, Sendable {
     public var freeRunStartSpeed = 3.0
     /// Arrêter le tapis à la fin du programme (sinon la dernière consigne est maintenue).
     public var stopTreadmillAtProgramEnd = true
+    /// Transitions progressives : entre deux phases, la consigne de vitesse change par paliers
+    /// d'au plus `maxSpeedStepKmh`, le palier suivant étant envoyé quand le tapis a rejoint le précédent.
+    public var smoothTransitions = true
+    public var maxSpeedStepKmh = 1.0
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case zones, stepEstimationEnabled, strideLengthMeters, weightKg, zoneAlertsEnabled, zoneAlertDwell
+        case zoneAlertCooldown, freeRunStartSpeed, stopTreadmillAtProgramEnd, smoothTransitions, maxSpeedStepKmh
+    }
+
+    /// Décodage tolérant : les réglages d'une version antérieure restent lisibles.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        zones = try c.decodeIfPresent(HeartZoneSettings.self, forKey: .zones) ?? zones
+        stepEstimationEnabled = try c.decodeIfPresent(Bool.self, forKey: .stepEstimationEnabled) ?? stepEstimationEnabled
+        strideLengthMeters = try c.decodeIfPresent(Double.self, forKey: .strideLengthMeters) ?? strideLengthMeters
+        weightKg = try c.decodeIfPresent(Double.self, forKey: .weightKg)
+        zoneAlertsEnabled = try c.decodeIfPresent(Bool.self, forKey: .zoneAlertsEnabled) ?? zoneAlertsEnabled
+        zoneAlertDwell = try c.decodeIfPresent(TimeInterval.self, forKey: .zoneAlertDwell) ?? zoneAlertDwell
+        zoneAlertCooldown = try c.decodeIfPresent(TimeInterval.self, forKey: .zoneAlertCooldown) ?? zoneAlertCooldown
+        freeRunStartSpeed = try c.decodeIfPresent(Double.self, forKey: .freeRunStartSpeed) ?? freeRunStartSpeed
+        stopTreadmillAtProgramEnd = try c.decodeIfPresent(Bool.self, forKey: .stopTreadmillAtProgramEnd) ?? stopTreadmillAtProgramEnd
+        smoothTransitions = try c.decodeIfPresent(Bool.self, forKey: .smoothTransitions) ?? smoothTransitions
+        maxSpeedStepKmh = try c.decodeIfPresent(Double.self, forKey: .maxSpeedStepKmh) ?? maxSpeedStepKmh
+    }
 }
 
 /// Séance en cours : relie moteur de programme, contrôleur du tapis, FC, pas, zones et enregistrement.
@@ -69,6 +94,11 @@ public final class WorkoutSession {
     public private(set) var currentZone: Int?
     public private(set) var lastAlert: String?
     public private(set) var message: String?
+    /// Pilote FC de la phase en cours (phases « auto » uniquement).
+    public private(set) var autopilot: ZoneAutopilot?
+    private var heartFilter = HeartRateFilter(window: 18)
+    private var lastProgramSpeedCommandAt: TimeInterval = -.infinity
+    private var lastSpeedCommandFailure: String?
 
     public var onAlert: ((String) -> Void)?
     public var onFinished: ((SessionRecord) -> Void)?
@@ -132,12 +162,27 @@ public final class WorkoutSession {
     public var treadmillKcal: Double? { energyCounter.sessionTotal > 0 ? energyCounter.sessionTotal : nil }
     public var estimatedKcalValue: Double? { settings.weightKg == nil ? nil : estimatedKcal }
 
-    /// Consignes effectives : modification manuelle > phase courante > séance libre.
+    /// Consignes effectives : modification manuelle > phase courante (rampe, pilote FC) > séance libre.
+    /// C'est la consigne visée ; avec les transitions progressives, le tapis peut l'atteindre par paliers.
     public var effectiveTargets: (speed: Double, incline: Double) {
         let base: (Double, Double)
-        if let p = currentPhase?.phase { base = (p.speedKmh, p.inclinePercent) } else { base = freeRunTargets }
+        if let p = currentPhase?.phase { base = (programSpeed(for: p), p.inclinePercent) } else { base = freeRunTargets }
         return (manualOverride?.speed ?? base.0, manualOverride?.incline ?? base.1)
     }
+
+    /// Consigne du programme pour la phase : vitesse fixe, rampe arrondie à l'incrément du tapis,
+    /// ou consigne du pilote FC.
+    public func programSpeed(for p: ProgramPhase) -> Double {
+        if p.isAuto, let a = autopilot { return a.targetKmh }
+        if p.isRamp {
+            let elapsed = engine.currentPhase?.phase.id == p.id ? position.phaseElapsed : 0
+            return controller.capabilities.snapSpeed(p.plannedSpeed(at: elapsed))
+        }
+        return p.speedKmh
+    }
+
+    /// La phase en cours est pilotée par la FC.
+    public var isAutoPhase: Bool { engine.currentPhase?.phase.isAuto == true }
 
     public var isFreeRun: Bool { engine.isFreeRun }
 
@@ -203,19 +248,27 @@ public final class WorkoutSession {
     public func skipToNextPhase() {
         guard !engine.isFreeRun, status == .running || isPaused else { return }
         let from = engine.currentPhase?.displayName ?? "?"
+        record.skippedPhases = (record.skippedPhases ?? 0) + 1
         let events = engine.skipToNextPhase(at: clock())
         event(.phaseSkipped, "Phase « \(from) » passée manuellement")
         handle(engineEvents: events)
         changed()
     }
 
-    /// Modification manuelle : remplace la consigne jusqu'au prochain palier.
+    /// Modification manuelle : remplace la consigne jusqu'au prochain palier. Toujours prioritaire :
+    /// pendant une phase pilotée par la FC, le pilote se retire jusqu'à sa réactivation.
     public func setManualSpeed(_ kmh: Double) -> Result<Void, ControllerError> {
         let v = controller.capabilities.snapSpeed(kmh)
         if let e = controller.checkSpeed(v) { return .failure(e) }
         if engine.isFreeRun { freeRunTargets.speed = v } else {
             manualOverride = ManualOverride(speed: v, incline: manualOverride?.incline)
-            event(.manualOverride, String(format: "Vitesse manuelle %.1f km/h (jusqu'au prochain palier)", v))
+            record.manualChanges = (record.manualChanges ?? 0) + 1
+            if let a = autopilot, a.mode != .manual {
+                a.takeManualControl()
+                event(.manualOverride, String(format: "Vitesse manuelle %.1f km/h : pilotage FC désactivé jusqu'à réactivation", v))
+            } else {
+                event(.manualOverride, String(format: "Vitesse manuelle %.1f km/h (jusqu'au prochain palier)", v))
+            }
         }
         let r = isPaused ? .success(()) : controller.setTargetSpeed(v, origin: .user)
         changed()
@@ -227,11 +280,22 @@ public final class WorkoutSession {
         let v = controller.capabilities.snapInclination(pct)
         if engine.isFreeRun { freeRunTargets.incline = v } else {
             manualOverride = ManualOverride(speed: manualOverride?.speed, incline: v)
+            record.manualChanges = (record.manualChanges ?? 0) + 1
             event(.manualOverride, String(format: "Inclinaison manuelle %.0f %% (jusqu'au prochain palier)", v))
         }
         let r = isPaused ? .success(()) : controller.setTargetIncline(v, origin: .user)
         changed()
         return r
+    }
+
+    /// Rend la main au pilote FC, en repartant de la vitesse actuelle (aucun saut).
+    public func resumeAutopilot() {
+        guard let a = autopilot, a.mode == .manual else { return }
+        let current = manualOverride?.speed ?? controller.speed.requested ?? a.targetKmh
+        manualOverride = manualOverride.map { ManualOverride(speed: nil, incline: $0.incline) }
+        a.resumeAutomatic(fromKmh: current, at: clock())
+        event(.autoAdjust, String(format: "Pilotage FC réactivé à %.1f km/h", a.targetKmh))
+        changed()
     }
 
     public func adjustSpeed(by delta: Double) -> Result<Void, ControllerError> {
@@ -341,6 +405,7 @@ public final class WorkoutSession {
             status = .running
             if let p = pauseStartedAt { record.pausedSeconds += now - p; pauseStartedAt = nil }
             event(.resume, "Reprise (mouvement du tapis observé)")
+            autopilot?.didResume(at: now)
             handle(engineEvents: engine.resume(at: now))
         }
         recordHeartReading(now: now)
@@ -353,6 +418,10 @@ public final class WorkoutSession {
             handle(engineEvents: engine.update(at: now))
         }
         updateHeartAndZones(now: now)
+        if status == .running {
+            runAutopilot(now: now)
+            driveProgramSpeed(now: now)
+        }
         if status == .running, let w = settings.weightKg, let last = lastTickAt, let v = controller.telemetry.speedKmh,
            controller.telemetry.isFresh(now: now) {
             estimatedKcal += EnergyEstimator.kcalPerMinute(speedKmh: v, gradePercent: controller.telemetry.inclinePercent ?? 0, weightKg: w)
@@ -398,6 +467,7 @@ public final class WorkoutSession {
         if pauseStartedAt == nil { pauseStartedAt = now }
         zoneTime.interrupt()
         alerts.reset()
+        autopilot?.suspend()
         status = .paused(reason)
         event(.pause, reason.label)
         changed()
@@ -503,7 +573,17 @@ public final class WorkoutSession {
                 if record.phaseSpans == nil { record.phaseSpans = [] }
                 record.phaseSpans?.append(PhaseSpan(index: index, name: sp.displayName, kind: sp.phase.kind,
                                                     targetSpeedKmh: sp.phase.speedKmh, targetInclinePercent: sp.phase.inclinePercent,
-                                                    start: now - startMonotonic))
+                                                    start: now - startMonotonic, auto: sp.phase.isAuto ? true : nil,
+                                                    targetZone: sp.phase.targetZone,
+                                                    endSpeedKmh: sp.phase.isRamp ? sp.phase.endSpeedKmh : nil))
+                if let a = sp.phase.autoSpeed {
+                    autopilot = ZoneAutopilot(settings: a, startKmh: sp.phase.speedKmh, capabilities: controller.capabilities, now: now)
+                    heartFilter = HeartRateFilter(window: a.filterSeconds)
+                    event(.autoAdjust, String(format: "Pilotage FC : départ %.1f km/h, zone %d visée, limites %.1f–%.1f km/h",
+                                              autopilot?.targetKmh ?? sp.phase.speedKmh, a.targetZone, a.minKmh, a.maxKmh))
+                } else {
+                    autopilot = nil
+                }
                 applyPhaseTargets(sp.phase)
             case .finished:
                 event(.info, "Programme terminé")
@@ -516,17 +596,72 @@ public final class WorkoutSession {
 
     private func applyPhaseTargets(_ p: ProgramPhase) {
         guard status == .running else { return }
+        driveProgramSpeed(now: clock())
         // N'envoie que ce qui change par rapport à la consigne déjà demandée (pas de doublon).
-        if controller.speed.requested.map({ abs($0 - p.speedKmh) > 0.001 }) ?? true || controller.speed.status == .none {
-            if case let .failure(e) = controller.setTargetSpeed(p.speedKmh, origin: .program) {
-                event(.commandFailed, "Consigne vitesse de la phase refusée : \(e)")
-            }
-        }
         if controller.capabilities.supportsInclinationControl,
            controller.incline.requested.map({ abs($0 - p.inclinePercent) > 0.001 }) ?? true {
             if case let .failure(e) = controller.setTargetIncline(p.inclinePercent, origin: .program) {
                 event(.commandFailed, "Consigne inclinaison de la phase refusée : \(e)")
             }
+        }
+    }
+
+    /// Envoie la consigne de vitesse du programme (phase, rampe, pilote FC), sans doublon.
+    /// Transitions progressives : un écart supérieur à `maxSpeedStepKmh` est franchi par paliers,
+    /// chaque palier partant quand la vitesse mesurée a rejoint le précédent (ou après 6 s).
+    private func driveProgramSpeed(now: TimeInterval) {
+        guard status == .running, let p = engine.currentPhase?.phase, manualOverride?.speed == nil,
+              !controller.isSettlingInitialSpeed else { return }
+        let desired = programSpeed(for: p)
+        let current = controller.speed.requested
+        if let c = current, abs(c - desired) < 0.001, controller.speed.status != .none { return }
+        let sinceLast = now - lastProgramSpeedCommandAt
+        // Évite de répéter une commande en échec à chaque passage de la boucle.
+        if lastSpeedCommandFailure != nil && sinceLast < 2 { return }
+        var next = desired
+        if settings.smoothTransitions, let c = current, abs(desired - c) > settings.maxSpeedStepKmh + 0.001 {
+            let measured = controller.telemetry.isFresh(now: now) ? controller.telemetry.speedKmh : nil
+            let reached = measured.map { abs($0 - c) <= 0.25 } ?? false
+            guard sinceLast >= 1.5, reached || sinceLast >= 6 else { return }
+            next = controller.capabilities.snapSpeed(c + (desired > c ? 1 : -1) * settings.maxSpeedStepKmh)
+        }
+        lastProgramSpeedCommandAt = now
+        let origin: CommandOrigin = p.isAuto && autopilot?.mode != .manual ? .autopilot : .program
+        if case let .failure(e) = controller.setTargetSpeed(next, origin: origin) {
+            let text = "Consigne vitesse \(String(format: "%.1f", next)) km/h refusée : \(e)"
+            if text != lastSpeedCommandFailure { event(.commandFailed, text) }
+            lastSpeedCommandFailure = text
+        } else {
+            lastSpeedCommandFailure = nil
+        }
+    }
+
+    /// Pilote FC : FC filtrée → consigne. Perte de FC : plus aucune accélération et retour
+    /// progressif à l'allure de sécurité (le tapis reste pilotable) ; sinon pilotage suspendu.
+    private func runAutopilot(now: TimeInterval) {
+        guard let a = autopilot, isAutoPhase else { return }
+        if let src = heartRate.activeSource, let r = heartRate.latest[src] { heartFilter.add(r) }
+        let live = heartRate.status(now: now).liveBPM != nil
+        let zone = settings.zones.zones.first { $0.zone == a.settings.targetZone }
+        let controllable = controller.state == .running && !controller.isSettlingInitialSpeed
+        let before = a.mode
+        let adj = a.update(now: now, sessionTime: now - startMonotonic, filteredBPM: heartFilter.value(at: now),
+                           heartRateLive: live, zone: zone, controllable: controllable)
+        if a.mode == .heartRateLost && before != .heartRateLost {
+            let text = String(format: "FC indisponible : accélérations automatiques désactivées, retour progressif à %.1f km/h",
+                              min(a.targetKmh, a.settings.fallbackKmh))
+            lastAlert = text
+            event(.autoSafety, text)
+            onAlert?(text)
+        } else if before == .heartRateLost && a.mode != .heartRateLost {
+            event(.autoSafety, "FC revenue : pilotage FC repris (prochaine accélération dans 60 s au plus tôt)")
+        }
+        if let adj {
+            if record.autoAdjustments == nil { record.autoAdjustments = [] }
+            record.autoAdjustments?.append(adj)
+            event(adj.kind == .safety ? .autoSafety : .autoAdjust,
+                  String(format: "Pilote FC %.1f → %.1f km/h", adj.fromKmh, adj.toKmh)
+                    + (adj.filteredBPM.map { " (FC filtrée \($0))" } ?? "") + " : " + adj.reason)
         }
     }
 

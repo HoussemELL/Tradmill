@@ -23,11 +23,18 @@ public struct ProgramPhase: Codable, Identifiable, Equatable, Hashable, Sendable
     public var durationSeconds: Int
     public var speedKmh: Double
     public var inclinePercent: Double
-    /// Zone 1…5 indicative (aucun pilotage automatique du tapis par la FC en V1).
+    /// Zone 1…5 indicative : affichage et alertes, jamais de pilotage (sauf `autoSpeed`).
     public var targetZone: Int?
+    /// Vitesse de fin d'une phase progressive : la consigne passe linéairement de
+    /// `speedKmh` à `endSpeedKmh` par incréments du tapis (nil = vitesse constante).
+    public var endSpeedKmh: Double?
+    /// Phase dont la vitesse est réglée automatiquement par la FC (programme « Zone 2 auto »).
+    /// `speedKmh` vaut alors la vitesse de départ. Seules ces phases pilotent le tapis par la FC.
+    public var autoSpeed: AutoSpeedSettings?
 
     public init(id: UUID = UUID(), name: String, kind: PhaseKind = .steady, durationSeconds: Int,
-                speedKmh: Double, inclinePercent: Double = 0, targetZone: Int? = nil) {
+                speedKmh: Double, inclinePercent: Double = 0, targetZone: Int? = nil,
+                endSpeedKmh: Double? = nil, autoSpeed: AutoSpeedSettings? = nil) {
         self.id = id
         self.name = name
         self.kind = kind
@@ -35,6 +42,26 @@ public struct ProgramPhase: Codable, Identifiable, Equatable, Hashable, Sendable
         self.speedKmh = speedKmh
         self.inclinePercent = inclinePercent
         self.targetZone = targetZone
+        self.endSpeedKmh = endSpeedKmh
+        self.autoSpeed = autoSpeed
+    }
+
+    public var isRamp: Bool { endSpeedKmh.map { abs($0 - speedKmh) > 0.001 } ?? false }
+    public var isAuto: Bool { autoSpeed != nil }
+
+    /// Vitesse prévue après `elapsed` secondes dans la phase (rampe incluse), avant arrondi
+    /// à l'incrément du tapis. Pour une phase automatique : la vitesse de départ.
+    public func plannedSpeed(at elapsed: TimeInterval) -> Double {
+        guard let end = endSpeedKmh, isRamp, durationSeconds > 0 else { return speedKmh }
+        let f = min(max(elapsed / TimeInterval(durationSeconds), 0), 1)
+        return speedKmh + (end - speedKmh) * f
+    }
+
+    /// Vitesses extrêmes que la phase peut demander.
+    public var speedBounds: (min: Double, max: Double) {
+        if let a = autoSpeed { return (min(a.minKmh, speedKmh), max(a.maxKmh, speedKmh)) }
+        let e = endSpeedKmh ?? speedKmh
+        return (min(speedKmh, e), max(speedKmh, e))
     }
 
     public func withNewID() -> ProgramPhase {
@@ -122,15 +149,47 @@ public struct WorkoutProgram: Codable, Identifiable, Equatable, Hashable, Sendab
     public var items: [ProgramItem]
     public var createdAt: Date
     public var updatedAt: Date
+    /// Programme prédéfini d'origine (nil pour un programme créé ou dupliqué).
+    public var templateID: String?
+    /// Protocole verrouillé (ex. Cardio Baseline) : les phases ne se modifient qu'après
+    /// déverrouillage explicite, pour garder des séances strictement comparables.
+    public var locked: Bool?
 
     public init(id: UUID = UUID(), name: String, notes: String = "", items: [ProgramItem],
-                createdAt: Date = Date(), updatedAt: Date = Date()) {
+                createdAt: Date = Date(), updatedAt: Date = Date(), templateID: String? = nil, locked: Bool? = nil) {
         self.id = id
         self.name = name
         self.notes = notes
         self.items = items
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.templateID = templateID
+        self.locked = locked
+    }
+
+    public var isLocked: Bool { locked ?? false }
+
+    /// Programme contenant une phase pilotée par la FC.
+    public var hasAutoSpeed: Bool { schedule.contains { $0.phase.isAuto } }
+
+    /// Empreinte du déroulé (durées, vitesses, rampes, inclinaisons, pilotage), indépendante
+    /// des noms et identifiants : deux séances de même empreinte ont suivi le même protocole.
+    public var protocolSignature: String {
+        var text = ""
+        for sp in schedule {
+            let p = sp.phase
+            text += String(format: "%d/%.2f/%.1f", p.durationSeconds, p.speedKmh, p.inclinePercent)
+            if let e = p.endSpeedKmh, p.isRamp { text += String(format: ">%.2f", e) }
+            if let a = p.autoSpeed { text += "/auto:" + a.signature }
+            text += ";"
+        }
+        // FNV-1a 64 bits : stable d'une plateforme et d'une version à l'autre.
+        var h: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            h ^= UInt64(byte)
+            h = h &* 0x100000001b3
+        }
+        return String(h, radix: 16)
     }
 
     public var totalDurationSeconds: Int { items.reduce(0) { $0 + $1.durationSeconds } }
@@ -164,7 +223,7 @@ public struct WorkoutProgram: Codable, Identifiable, Equatable, Hashable, Sendab
         return out
     }
 
-    public var maxSpeedKmh: Double { schedule.map(\.phase.speedKmh).max() ?? 0 }
+    public var maxSpeedKmh: Double { schedule.map(\.phase.speedBounds.max).max() ?? 0 }
 }
 
 public struct ScheduledPhase: Equatable, Sendable, Identifiable {
@@ -186,35 +245,5 @@ public struct ScheduledPhase: Equatable, Sendable, Identifiable {
     public var displayName: String {
         if let r = repetition { return "\(phase.name) · \(r.iteration)/\(r.count)" }
         return phase.name
-    }
-}
-
-public extension WorkoutProgram {
-    /// Programmes fournis au premier lancement (modifiables).
-    static var templates: [WorkoutProgram] {
-        [
-            WorkoutProgram(name: "Marche active 30 min", notes: "Marche régulière avec une légère côte.", items: [
-                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 300, speedKmh: 3.5, inclinePercent: 0, targetZone: 1)),
-                .phase(.init(name: "Marche", kind: .steady, durationSeconds: 600, speedKmh: 5.0, inclinePercent: 1, targetZone: 2)),
-                .phase(.init(name: "Côte", kind: .work, durationSeconds: 600, speedKmh: 5.0, inclinePercent: 4, targetZone: 3)),
-                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 300, speedKmh: 3.5, inclinePercent: 0, targetZone: 1)),
-            ]),
-            WorkoutProgram(name: "Intervalles marche/course", notes: "6 répétitions course/marche.", items: [
-                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 300, speedKmh: 4.5, targetZone: 2)),
-                .block(.init(name: "Intervalles", repeatCount: 6, phases: [
-                    .init(name: "Course", kind: .work, durationSeconds: 60, speedKmh: 8.5, targetZone: 4),
-                    .init(name: "Marche", kind: .recovery, durationSeconds: 120, speedKmh: 5.0, targetZone: 2),
-                ])),
-                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 300, speedKmh: 4.0, targetZone: 1)),
-            ]),
-            WorkoutProgram(name: "Collines", notes: "Paliers d'inclinaison à vitesse constante.", items: [
-                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 300, speedKmh: 4.0)),
-                .block(.init(name: "Montées", repeatCount: 3, phases: [
-                    .init(name: "Montée", kind: .work, durationSeconds: 180, speedKmh: 5.0, inclinePercent: 6, targetZone: 3),
-                    .init(name: "Plat", kind: .recovery, durationSeconds: 120, speedKmh: 5.0, inclinePercent: 1, targetZone: 2),
-                ])),
-                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 300, speedKmh: 3.5)),
-            ]),
-        ]
     }
 }
