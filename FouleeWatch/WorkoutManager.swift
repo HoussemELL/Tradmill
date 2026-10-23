@@ -93,7 +93,7 @@ final class WorkoutManager {
             send(.workoutState(.running, startDate: date))
             if let id = linkedSessionID { addLinkMetadata(id) }
             if !pendingMetadata.isEmpty {
-                b.addMetadata(pendingMetadata) { _, _ in }
+                try? await b.addMetadata(pendingMetadata)
                 pendingMetadata = [:]
             }
         } catch {
