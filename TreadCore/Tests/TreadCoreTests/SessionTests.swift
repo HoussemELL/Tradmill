@@ -518,6 +518,26 @@ final class RythmeZoneTests: XCTestCase {
         XCTAssertEqual(z.zone(for: 164), 4)
         XCTAssertEqual(z.zone(for: 177), 5)
         XCTAssertEqual(z.zone(for: 230), 5)
+        // Cas réel : FC max 193, repos moyen 59 → Z2 commence à 139,4 : 139 en Z1, 140 en Z2
+        // (premier bpm de la zone, comme Rythme et l'Apple Watch ; pas l'arrondi au plus proche).
+        var real = HeartZoneSettings(maxHR: 193, restingHR: 59)
+        XCTAssertEqual(real.bounds[1], 140)
+        XCTAssertEqual(real.zone(for: 139), 1)
+        XCTAssertEqual(real.zone(for: 140), 2)
+        XCTAssertEqual(real.zones[1].inclusiveText, "140–152")
+        XCTAssertEqual(real.zones[0].inclusiveText, "≤ 139")
+        XCTAssertEqual(real.bounds[2], 153, "59 + 0,7 × 134 = 152,8 → 153")
+        // FC de repos décimale de Santé : bornes calculées sans arrondir le repos.
+        var decimal = HeartZoneSettings(maxHR: 193, restingHR: 58)
+        XCTAssertEqual(decimal.bounds[1], 139, "repos 58 : 58 + 0,6 × 135 = 139,0")
+        decimal.restingHRExact = 58.4
+        XCTAssertEqual(decimal.bounds[1], 140, "repos 58,4 : 58,4 + 0,6 × 134,6 = 139,16 → 140")
+        decimal.restingHRIsUserValue = true
+        XCTAssertEqual(decimal.bounds[1], 139, "repos saisi dans Foulée : valeur entière")
+        let res = ZoneProfileResolver.resolve(userMax: 193, userResting: nil, birthDate: nil, now: Date(),
+                                              highHR: [], restingHR: [59, 60, 59, 60, 60])
+        XCTAssertEqual(res.restingHR, 60)
+        XCTAssertEqual(res.restingHRExact ?? 0, 59.6, accuracy: 0.0001)
         let noRest = HeartZoneSettings(maxHR: 190, restingHR: nil)
         XCTAssertEqual(noRest.bounds, [0, 114, 133, 152, 171, 190])
         XCTAssertTrue(noRest.methodDescription.contains("FC de repos indisponible"))

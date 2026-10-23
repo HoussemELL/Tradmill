@@ -244,7 +244,7 @@ struct ZoneSettingsView: View {
                         Circle().fill(Theme.zoneColor(z.zone)).frame(width: 12, height: 12)
                         Text("Zone \(z.zone)")
                         Spacer()
-                        Text(z.lower == 0 ? "< \(z.upper) bpm" : "\(z.lower)–\(z.upper) bpm").monospacedDigit()
+                        Text("\(z.inclusiveText) bpm").monospacedDigit()
                     }
                 }
             }

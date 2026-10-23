@@ -1,6 +1,23 @@
 # Temps par zone : règle commune Foulée / Rythme
 
-À transmettre à la personne ou à l'IA qui développe Rythme.
+## Décision (accord avec Rythme)
+
+Rythme a retenu l'**option 1** : pour les séances Foulée, il affiche directement
+`zones.secondsPerZone` du fichier partagé et utilise `zones.bounds` du fichier pour ses mesures
+de zone 2 (temps en zone, vitesse tenue en zone). Ces deux champs sont donc **figés** : même
+nom, même sens, même règle (`foulee.zones.v1`). Tout changement passe par `formatVersion` 2.
+
+**Bornes** (identiques à Rythme et à l'Apple Watch) :
+- une FC entière est dans une zone si FC ≥ borne exacte ;
+- `zones.bounds` contient le **premier bpm entier** de chaque zone, c'est-à-dire l'arrondi
+  supérieur de la borne exacte. Exemple : 139,4 → 140, donc 139 en Z1 et 140 en Z2 ;
+- la FC de repos est la **moyenne décimale** Santé sur 30 jours, non arrondie
+  (`zones.restingHRExact`). Une FC de repos saisie dans Foulée est entière ;
+- à l'écran, Foulée affiche les bpm compris dans chaque zone : « Z1 ≤ 139 · Z2 140–152 · … ».
+
+---
+
+Message d'origine transmis à Rythme :
 
 ---
 

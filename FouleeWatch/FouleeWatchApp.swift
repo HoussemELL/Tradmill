@@ -504,7 +504,7 @@ struct ZoneBadge: View {
             Text(zone.map { "Z\($0)" } ?? "—").font(.system(.title3, design: .rounded).bold())
                 .foregroundStyle(WatchStyle.zoneColor(zone))
             if let z = zone, let r = WatchLiveStatus.range(of: z, bounds: bounds) {
-                Text(r.lower == 0 ? "<\(r.upper)" : "\(r.lower)–\(r.upper)").font(.system(size: 10)).monospacedDigit()
+                Text(ZoneRange(zone: z, lower: r.lower, upper: r.upper).inclusiveText).font(.system(size: 10)).monospacedDigit()
                     .foregroundStyle(.secondary)
             }
         }

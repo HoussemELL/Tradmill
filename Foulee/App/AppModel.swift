@@ -587,6 +587,7 @@ final class AppModel {
         nz.maxHR = res.maxHR
         nz.maxHRSource = res.maxSource
         nz.restingHR = res.restingHR
+        nz.restingHRExact = res.restingHRExact
         nz.restingHRSource = res.restingSource
         settings.session.zones = nz
         log.log(.heart, "Zones : FC max \(res.maxHR) (\(res.maxSource)), repos \(res.restingHR.map(String.init) ?? "—") (\(res.restingSource))")

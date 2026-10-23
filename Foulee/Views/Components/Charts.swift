@@ -60,19 +60,11 @@ struct ZoneMethodNote: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// « Z1 < 128 · Z2 128–140 · … · Z5 ≥ 164 bpm » (borne haute exclue).
+    /// « Z1 ≤ 139 · Z2 140–153 · … · Z5 ≥ 181 bpm » : bpm entiers compris dans chaque zone.
     private var boundsText: String {
         let z = zones.zones
         guard z.count == 5 else { return "" }
-        var parts: [String] = []
-        for r in z {
-            switch r.zone {
-            case 1: parts.append(r.lower > 0 ? "Z1 \(r.lower)–\(r.upper)" : "Z1 < \(r.upper)")
-            case 5: parts.append("Z5 ≥ \(r.lower)")
-            default: parts.append("Z\(r.zone) \(r.lower)–\(r.upper)")
-            }
-        }
-        return parts.joined(separator: " · ") + " bpm"
+        return z.map { "Z\($0.zone) \($0.inclusiveText)" }.joined(separator: " · ") + " bpm"
     }
 }
 

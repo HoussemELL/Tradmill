@@ -106,6 +106,8 @@ public struct RythmeSessionExport: Codable, Equatable, Sendable {
         public var rule: String?
         public var maxHRSource: String?
         public var restingHRSource: String?
+        /// FC de repos décimale utilisée pour les bornes (moyenne Santé non arrondie).
+        public var restingHRExact: Double?
     }
 
     public struct Interruptions: Codable, Equatable, Sendable {
@@ -195,7 +197,8 @@ public struct RythmeSessionExport: Codable, Equatable, Sendable {
             Zones(method: $0.effectiveMethod.rawValue, maxHR: $0.maxHR, restingHR: $0.restingHR, bounds: $0.bounds,
                   secondsPerZone: r.zoneSeconds, rule: SessionAnalysis.zoneRuleID,
                   maxHRSource: $0.maxHRIsUserValue ? "saisie dans Foulée" : $0.maxHRSource,
-                  restingHRSource: $0.restingHRIsUserValue ? "saisie dans Foulée" : $0.restingHRSource)
+                  restingHRSource: $0.restingHRIsUserValue ? "saisie dans Foulée" : $0.restingHRSource,
+                  restingHRExact: $0.restingForBounds)
         }
         autoAdjustments = r.autoAdjustments ?? []
         interruptions = Interruptions(pauses: r.events.filter { $0.kind == .pause }.count,

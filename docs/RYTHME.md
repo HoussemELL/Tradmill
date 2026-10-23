@@ -41,7 +41,7 @@ consigne ni 0. Les heures relatives `t` sont en secondes depuis `session.startDa
 | `executedSegments[]` | étapes exécutées : `start`, `end`, consignes, `autoSpeed`, `measuredAvgSpeedKmh`, `measuredMaxSpeedKmh`, `avgHR`, `maxHR`, `hrAtEnd` (FC en fin d'intervalle), `hrDrop60` (baisse 60 s après, si l'étape suivante est plus lente ou à l'arrêt), `secondsInTargetZone` |
 | `samples[]` (≈ 1 Hz) | `measuredSpeedKmh`, `measuredInclinePercent`, `targetSpeedKmh`, `targetInclinePercent`, `hr`, `zone`, `distanceMeters`, `paused` |
 | `heartRate[]` | FC horodatée (`t`, `date`, `bpm`, `source` : `bleSensor`, `appleWatch`, `treadmill`), y compris 2 min après l'arrêt |
-| `zones` | méthode, FC max, FC repos, 6 bornes (début Z1 … FC max), secondes par zone, `rule` (règle de calcul, [ZONES.md](ZONES.md)), `maxHRSource`, `restingHRSource` |
+| `zones` | méthode, FC max, FC repos, 6 bornes (début Z1 … FC max), secondes par zone, `rule` (règle de calcul, [ZONES.md](ZONES.md)), `maxHRSource`, `restingHRSource`, `restingHRExact` (repos décimal). `bounds` = premier bpm entier de chaque zone ; `bounds` et `secondsPerZone` sont lus tels quels par Rythme : champs figés |
 | `autoAdjustments[]` | pilote FC : `t`, `fromKmh`, `toKmh`, `filteredBPM`, `kind` (`increase`, `decrease`, `safety`), `reason` |
 | `interruptions` | nombre de pauses, pertes de connexion, arrêts par le tapis, consignes manuelles, phases passées, reprise après fermeture |
 | `recovery` | FC à l'arrêt de la bande, après 60 s et 120 s |

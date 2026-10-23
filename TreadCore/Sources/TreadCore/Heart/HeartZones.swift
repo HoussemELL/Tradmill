@@ -29,14 +29,30 @@ public struct ZoneRange: Equatable, Sendable {
     public var lower: Int
     /// Borne haute exclue (bpm), sauf la zone 5 qui inclut la FC max.
     public var upper: Int
+
+    public init(zone: Int, lower: Int, upper: Int) {
+        self.zone = zone
+        self.lower = lower
+        self.upper = upper
+    }
+
+    /// bpm entiers de la zone : « ≤ 139 » (Z1 sans plancher), « 140–153 », « ≥ 181 » (Z5).
+    public var inclusiveText: String {
+        if zone == 5 { return "≥ \(lower)" }
+        if lower == 0 { return "≤ \(upper - 1)" }
+        return "\(lower)–\(upper - 1)"
+    }
 }
 
 /// Réglages des cinq zones cardiaques.
 public struct HeartZoneSettings: Codable, Equatable, Sendable {
     /// FC max effectivement utilisée (saisie par l'utilisateur ou calculée depuis Santé).
     public var maxHR: Int
-    /// FC de repos effectivement utilisée.
+    /// FC de repos effectivement utilisée (affichage, arrondie).
     public var restingHR: Int?
+    /// FC de repos décimale (moyenne Santé sur 30 j, non arrondie), utilisée pour les bornes comme
+    /// le fait Rythme. nil si saisie dans Foulée ou indisponible.
+    public var restingHRExact: Double?
     public var method: ZoneMethod
     /// Six bornes croissantes en fraction (début Z1 … début Z5, fin Z5) — méthodes % et réserve personnalisée.
     public var percentBounds: [Double]
@@ -71,7 +87,7 @@ public struct HeartZoneSettings: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case maxHR, restingHR, method, percentBounds, customBounds
+        case maxHR, restingHR, restingHRExact, method, percentBounds, customBounds
         case maxHRIsUserValue, restingHRIsUserValue, maxHRSource, restingHRSource
     }
 
@@ -81,6 +97,7 @@ public struct HeartZoneSettings: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         maxHR = try c.decodeIfPresent(Int.self, forKey: .maxHR) ?? d.maxHR
         restingHR = try c.decodeIfPresent(Int.self, forKey: .restingHR)
+        restingHRExact = try c.decodeIfPresent(Double.self, forKey: .restingHRExact)
         method = (try? c.decodeIfPresent(ZoneMethod.self, forKey: .method)) ?? d.method
         percentBounds = try c.decodeIfPresent([Double].self, forKey: .percentBounds) ?? d.percentBounds
         customBounds = try c.decodeIfPresent([Int].self, forKey: .customBounds) ?? d.customBounds
@@ -113,21 +130,33 @@ public struct HeartZoneSettings: Codable, Equatable, Sendable {
         return nil
     }
 
-    /// Six bornes : début Z1 (0 = sans plancher), début Z2…Z5, FC max.
+    /// FC de repos utilisée pour les bornes : la valeur saisie, sinon la moyenne décimale de Santé.
+    public var restingForBounds: Double? {
+        guard let r = restingHR else { return nil }
+        if restingHRIsUserValue { return Double(r) }
+        return restingHRExact ?? Double(r)
+    }
+
+    /// Premier bpm entier d'une zone dont la borne exacte est `x` (identique à Rythme et à
+    /// l'Apple Watch : une FC entière est dans la zone si FC ≥ x). Ex. 139,4 → 140.
+    static func firstBPM(_ x: Double) -> Int { Int((x - 1e-6).rounded(.up)) }
+
+    /// Six bornes : début Z1 (0 = sans plancher), début Z2…Z5, FC max. Chaque borne est le
+    /// premier bpm entier de la zone (arrondi supérieur de la borne exacte).
     public var bounds: [Int] {
         switch effectiveMethod {
         case .rythme:
             let max = Double(maxHR)
-            let rest = Double(restingHR ?? 0)
-            let lows = Self.rythmePercents.map { Int((rest + $0 * (max - rest)).rounded()) }
+            let rest = restingForBounds ?? 0
+            let lows = Self.rythmePercents.map { Self.firstBPM(rest + $0 * (max - rest)) }
             return [0] + lows + [maxHR]
         case .customBPM:
             return customBounds
         case .percentOfMax:
-            return percentBounds.map { Int((Double(maxHR) * $0).rounded()) }
+            return percentBounds.map { Self.firstBPM(Double(maxHR) * $0) }
         case .heartRateReserve:
-            let rest = Double(restingHR ?? 0)
-            return percentBounds.map { Int((rest + $0 * (Double(maxHR) - rest)).rounded()) }
+            let rest = restingForBounds ?? 0
+            return percentBounds.map { Self.firstBPM(rest + $0 * (Double(maxHR) - rest)) }
         }
     }
 
@@ -149,7 +178,10 @@ public struct HeartZoneSettings: Codable, Equatable, Sendable {
 
     public var methodDescription: String {
         let maxText = "FC max \(maxHR) bpm (\(maxHRIsUserValue ? "saisie dans Foulée" : maxHRSource))"
-        let restText = restingHR.map { "FC repos \($0) bpm (\(restingHRIsUserValue ? "saisie dans Foulée" : restingHRSource))" }
+        let restValue: String? = restingForBounds.map { r in
+            r == r.rounded() ? "\(Int(r))" : String(format: "%.1f", r).replacingOccurrences(of: ".", with: ",")
+        }
+        let restText = restValue.map { "FC repos \($0) bpm (\(restingHRIsUserValue ? "saisie dans Foulée" : restingHRSource))" }
         switch effectiveMethod {
         case .rythme:
             if let restText {
@@ -181,6 +213,16 @@ public enum ZoneProfileResolver {
         public var maxSource: String
         public var restingHR: Int?
         public var restingSource: String
+        /// Moyenne décimale (non arrondie) de la FC de repos Santé.
+        public var restingHRExact: Double?
+
+        public init(maxHR: Int, maxSource: String, restingHR: Int?, restingSource: String, restingHRExact: Double? = nil) {
+            self.maxHR = maxHR
+            self.maxSource = maxSource
+            self.restingHR = restingHR
+            self.restingSource = restingSource
+            self.restingHRExact = restingHRExact
+        }
     }
 
     /// Seuil de lecture des mesures dans Santé : 170 bpm, moins la tolérance de 5 bpm
@@ -263,7 +305,7 @@ public enum ZoneProfileResolver {
                           restingSource: "moyenne 30 j (\(rounded) bpm) ignorée : hors plage 30…FC max − 40")
         }
         return Result(maxHR: maxHR, maxSource: maxSource, restingHR: rounded,
-                      restingSource: "moyenne Santé sur 30 j (\(restingHR.count) valeurs)")
+                      restingSource: "moyenne Santé sur 30 j (\(restingHR.count) valeurs)", restingHRExact: avg)
     }
 }
 
