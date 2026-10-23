@@ -162,9 +162,13 @@ phases, ajustements du pilote…), export JSON et CSV, « Enregistrer comme mod�
 **Progression** (bouton en haut à gauche) : évolution des séances de protocole
 identique (FC de référence, vitesse en zone 2).
 
-**Apple Watch** : FC, zone colorée et bornes, temps par zone, durée, vitesse,
-inclinaison, étape et temps restant, Pause/Reprise et Arrêt (le tapis est
-commandé par l'iPhone).
+**Apple Watch** : l'accueil présente **Mes programmes** (tous ceux de l'iPhone,
+prédéfinis et personnels) ; chaque programme a son détail (durée, étapes, vitesses,
+inclinaisons) et se **lance depuis la montre** (l'iPhone démarre le tapis, la montre
+fournit la FC). Pendant la séance : FC, zone colorée et bornes, temps par zone,
+vitesse, inclinaison, étape en cours et suivante, temps restant, Pause/Reprise et
+Arrêt. Marche/course sans tapis reste disponible en option secondaire.
+Détails : [docs/PROGRAMMES.md](docs/PROGRAMMES.md) §5.
 
 ## 7. Bluetooth FTMS et profil URTM047
 
@@ -277,7 +281,9 @@ voir l'onglet *Actions* du dépôt ; aucun avertissement du compilateur Swift :
 La signature réelle (votre équipe, profils, capacité HealthKit) n'est pas
 vérifiable en CI : elle se fait dans Xcode sur votre Mac.
 
-**Testé automatiquement** (126 tests, sous Linux et macOS) :
+**Testé automatiquement** (133 tests unitaires, sous Linux et macOS, plus des
+scénarios dans les simulateurs iPhone + Apple Watch appairés, voir
+[docs/TESTS_SIMULATEUR.md](docs/TESTS_SIMULATEUR.md)) :
 - décodage FTMS : flags optionnels, bit More Data inversé, valeurs « non
   disponible », paquets tronqués et octets en trop, plages, Feature, statuts,
   Control Point, FC (uint8/uint16, contact, RR) ;
@@ -307,7 +313,10 @@ vérifiable en CI : elle se fait dans Xcode sur votre Mac.
   après crash, export CSV/JSON, modèle depuis séance, plan Santé idempotent ;
 - 7 programmes prédéfinis (segments exacts), transitions par paliers, rampes,
   pilote Zone 2 (règles, perte de FC, contrôle manuel, séance complète simulée),
-  statistiques par intervalle, comparabilité, état envoyé à la Watch.
+  statistiques par intervalle, comparabilité, état envoyé à la Watch ;
+- synchronisation iPhone ↔ Watch : catalogue, démarrage depuis la montre (règles de
+  refus), commandes liées à la séance (une reprise retardée n'est jamais rejouée),
+  pilote Zone 2 alimenté par une FC au rythme de l'Apple Watch.
 
 **Nécessite une validation physique** (non vérifiable sans votre matériel) :
 - la séquence de démarrage et le comportement réel de l'URTM047 (délais,

@@ -144,6 +144,7 @@ struct ProgramEditorView: View {
             Button { editingPhase = PhaseEditTarget(itemIndex: index, phaseIndex: nil, phase: p) } label: {
                 PhaseRow(phase: p)
             }
+            .buttonStyle(.plain)
         case let .block(b):
             Button { editingBlockIndex = index } label: {
                 VStack(alignment: .leading, spacing: 4) {
@@ -160,6 +161,7 @@ struct ProgramEditorView: View {
                 }
                 .foregroundStyle(.primary)
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -403,7 +405,7 @@ struct BlockEditorView: View {
                 }
                 Section("Phases d'une répétition") {
                     ForEach(block.phases) { p in
-                        Button { editing = p } label: { PhaseRow(phase: p) }
+                        Button { editing = p } label: { PhaseRow(phase: p) }.buttonStyle(.plain)
                     }
                     .onMove { block.phases.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { block.phases.remove(atOffsets: $0) }

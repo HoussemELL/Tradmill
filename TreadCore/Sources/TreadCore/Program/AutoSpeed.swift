@@ -122,8 +122,9 @@ public struct AutoAdjustment: Codable, Equatable, Sendable {
 ///   quart bas de la zone, pour viser le milieu).
 /// - FC au-dessus de (limite haute − marge) pendant `decreaseInterval` : −palier, toutes les
 ///   `decreaseInterval` (20 s) ; −2 paliers si la FC dépasse la limite haute de plus de 5 bpm.
-/// - FC indisponible : plus aucune accélération ; descente progressive (−palier toutes les 5 s)
-///   vers l'allure de sécurité, si le tapis est pilotable ; sinon pilotage suspendu.
+/// - FC indisponible : plus aucune accélération, immédiatement ; après 15 s sans FC, descente
+///   progressive (−palier toutes les 5 s) vers l'allure de sécurité, si le tapis est pilotable ;
+///   sinon pilotage suspendu.
 /// - Consigne manuelle : le pilote se retire jusqu'à réactivation explicite.
 public final class ZoneAutopilot {
     public enum Mode: Equatable, Sendable {
@@ -132,6 +133,8 @@ public final class ZoneAutopilot {
         case regulating
         /// FC perdue : accélérations désactivées, retour progressif à l'allure de sécurité.
         case heartRateLost
+        /// FC momentanément absente (moins de `heartRateGrace`) : vitesse figée, aucune accélération.
+        case heartRateGap
         /// L'utilisateur a pris la main.
         case manual
         /// Tapis non pilotable (connexion perdue, pause…).
@@ -142,6 +145,7 @@ public final class ZoneAutopilot {
             case .warmingUp: return "Lecture de la FC…"
             case .regulating: return "Pilotage FC actif"
             case .heartRateLost: return "FC indisponible : accélérations désactivées"
+            case .heartRateGap: return "FC momentanément absente : vitesse maintenue, aucune accélération"
             case .manual: return "Contrôle manuel"
             case .suspended: return "Pilotage suspendu"
             }
@@ -167,6 +171,10 @@ public final class ZoneAutopilot {
     private var aboveSince: TimeInterval?
     private var lastSafetyStepAt: TimeInterval = -.infinity
     public static let safetyStepInterval: TimeInterval = 5
+    /// Délai sans FC avant le ralentissement de sécurité (les accélérations, elles, cessent
+    /// immédiatement) : une mesure retardée de la montre ne fait pas freiner le tapis.
+    public static let heartRateGrace: TimeInterval = 15
+    private var heartRateMissingSince: TimeInterval?
 
     /// - Parameters:
     ///   - startKmh: vitesse de départ de la phase.
@@ -234,11 +242,16 @@ public final class ZoneAutopilot {
 
         // Perte de FC : jamais d'accélération, descente progressive vers l'allure de sécurité.
         guard heartRateLive, let zone else {
-            if mode != .heartRateLost {
-                mode = .heartRateLost
-                trend = .unknown
-                aboveSince = nil
+            let since = heartRateMissingSince ?? now
+            heartRateMissingSince = since
+            trend = .unknown
+            aboveSince = nil
+            if now - since < Self.heartRateGrace {
+                if mode != .heartRateLost { mode = .heartRateGap }
+                status = mode.label
+                return nil
             }
+            mode = .heartRateLost
             let floor = snap(settings.fallbackKmh)
             guard targetKmh > floor + 0.001, now - lastSafetyStepAt >= Self.safetyStepInterval else {
                 status = targetKmh > floor + 0.001 ? mode.label : "FC indisponible : allure de sécurité \(fmt(targetKmh)) km/h"
@@ -248,10 +261,13 @@ public final class ZoneAutopilot {
             return change(to: snap(max(floor, targetKmh - settings.stepKmh)), now: now, sessionTime: sessionTime,
                           kind: .safety, reason: "FC indisponible : ralentissement progressif vers l'allure de sécurité")
         }
+        heartRateMissingSince = nil
         if mode == .heartRateLost {
             // FC revenue : on repart sans accélérer avant le délai complet.
             mode = .warmingUp
             lastChangeAt = now
+        } else if mode == .heartRateGap {
+            mode = .warmingUp
         }
         guard let hr = filteredBPM else {
             status = mode.label

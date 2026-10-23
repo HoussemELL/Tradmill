@@ -125,6 +125,7 @@ struct LiveSessionView: View {
         switch snap.autoMode {
         case .regulating?: return Theme.accent
         case .heartRateLost?, .suspended?: return Theme.danger
+        case .heartRateGap?: return Theme.warning
         case .manual?: return Theme.speed
         default: return .secondary
         }

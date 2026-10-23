@@ -525,7 +525,7 @@
    },
    {
     "do": "wait",
-    "seconds": 20
+    "seconds": 50
    },
    {
     "do": "shot",

@@ -50,12 +50,14 @@ Réglages par défaut (modifiables dans l'éditeur de phase, *Vitesse › Pilot�
 | Entre deux accélérations | 60 s (et 60 s après tout changement) |
 | Ralentissement | FC ≥ limite haute − 3 bpm pendant 20 s → −0,2 ; puis toutes les 20 s ; −0,4 si FC > limite haute + 5 |
 | Dans la zone | vitesse maintenue ; dans le quart bas de la zone, +0,2 toutes les 120 s au plus (viser le milieu, désactivable) |
-| Sans FC | aucune accélération, −0,2 toutes les 5 s jusqu'à 4,5 km/h |
+| Sans FC | aucune accélération, immédiatement ; vitesse figée 15 s (mesure retardée de la montre), puis −0,2 toutes les 5 s jusqu'à 4,5 km/h |
 
 **Sécurité**
 - FC indisponible (ceinture/Watch muette, Watch déconnectée → mesure périmée après 5 à 10 s) :
-  les accélérations sont désactivées immédiatement, alerte (bandeau + vibration), retour
-  progressif à l'allure de sécurité tant que le tapis est pilotable. Quand la FC revient, le
+  les accélérations sont désactivées immédiatement et la vitesse est figée ; si la FC ne revient
+  pas dans les 15 s, alerte (bandeau + vibration) et retour progressif à l'allure de sécurité tant
+  que le tapis est pilotable. (Les tests simulateur ont montré que la FC de la montre arrive par
+  à-coups : sans ce délai, un seul message retardé faisait ralentir le tapis.) Quand la FC revient, le
   pilotage reprend, sans accélération avant 60 s.
 - Tapis non pilotable (connexion BLE perdue) : la séance se met en pause, le pilotage est
   suspendu, rien ne redémarre sans votre action.

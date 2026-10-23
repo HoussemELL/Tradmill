@@ -123,6 +123,13 @@ final class DataStore {
         return (try? context.fetch(d))?.first?.record
     }
 
+    /// Empreinte légère de la liste des programmes (sans décoder leur contenu).
+    func programsFingerprint() -> String {
+        let d = FetchDescriptor<ProgramEntity>(sortBy: [SortDescriptor(\.sortIndex)])
+        return ((try? context.fetch(d)) ?? []).map { "\($0.id)|\($0.updatedAt.timeIntervalSince1970)|\($0.sortIndex)|\($0.payload.count)" }
+            .joined(separator: ";")
+    }
+
     func allPrograms() -> [WorkoutProgram] {
         let d = FetchDescriptor<ProgramEntity>(sortBy: [SortDescriptor(\.sortIndex)])
         return ((try? context.fetch(d)) ?? []).compactMap(\.program)

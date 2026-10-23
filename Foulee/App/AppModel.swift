@@ -43,6 +43,7 @@ final class AppModel {
     /// Dernière demande de démarrage traitée (une demande répétée n'est jamais rejouée).
     @ObservationIgnored private var handledStartRequests: Set<UUID> = []
     @ObservationIgnored private var lastStartResult: WatchStartResult?
+    @ObservationIgnored private var watchCatalog: (fingerprint: String, programs: [WatchProgramSummary])?
     /// Bandeau d'information (ex. séance lancée depuis la montre).
     var notice: String?
     /// Scénario de test (simulateur), actif seulement avec `-FouleeScenario`.
@@ -115,7 +116,11 @@ final class AppModel {
         let brief = WatchTreadmillBrief(name: tm.deviceName, ready: tm.connection.isReady && tm.beltState != .linkLost,
                                         simulated: tm.isSimulated, label: tm.connection.label)
         let active = hasActiveSession ? sessionService?.session.record : nil
-        return WatchPhoneContext(programs: dataStore.allPrograms().map(WatchProgramSummary.init), treadmill: brief,
+        let fp = dataStore.programsFingerprint()
+        if watchCatalog?.fingerprint != fp {
+            watchCatalog = (fp, dataStore.allPrograms().map(WatchProgramSummary.init))
+        }
+        return WatchPhoneContext(programs: watchCatalog?.programs ?? [], treadmill: brief,
                                  activeSessionID: active?.id, activeProgramName: active?.title,
                                  zoneBounds: settings.session.zones.bounds, sentAt: Date(), lastStartResult: lastStartResult)
     }

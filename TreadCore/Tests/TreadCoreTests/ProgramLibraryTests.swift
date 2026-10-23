@@ -285,19 +285,28 @@ final class ProgramLibraryTests: XCTestCase {
     func testAutopilotHeartRateLossDisablesIncreasesAndFallsBackProgressively() {
         let a = pilot(start: 6.4)
         var changes: [AutoAdjustment] = []
-        for t in stride(from: 1.0, through: 60, by: 1) {
+        for t in stride(from: 1.0, through: 75, by: 1) {
             if let c = a.update(now: t, sessionTime: t, filteredBPM: nil, heartRateLive: false, zone: zone2, controllable: true) { changes.append(c) }
         }
         XCTAssertEqual(a.mode, .heartRateLost)
         XCTAssertTrue(changes.allSatisfy { $0.kind == .safety && $0.toKmh < $0.fromKmh })
+        XCTAssertGreaterThanOrEqual(changes.first?.t ?? 0, 1 + ZoneAutopilot.heartRateGrace, "délai de grâce avant de ralentir")
         XCTAssertEqual(changes.map(\.toKmh), [6.2, 6.0, 5.8, 5.6, 5.4, 5.2, 5.0, 4.8, 4.6, 4.5])
         XCTAssertEqual(zip(changes.dropFirst(), changes).map { $0.t - $1.t }.min(), 5, "progressif : un palier toutes les 5 s")
         // FC revenue, sous la zone : pas d'accélération avant 60 s.
         var up: [AutoAdjustment] = []
-        for t in stride(from: 61.0, through: 150, by: 1) {
+        for t in stride(from: 76.0, through: 170, by: 1) {
             if let c = a.update(now: t, sessionTime: t, filteredBPM: 110, heartRateLive: true, zone: zone2, controllable: true) { up.append(c) }
         }
-        XCTAssertEqual(up.map(\.t), [121])
+        XCTAssertEqual(up.map(\.t), [136])
+        // Trou de FC bref (< 15 s) : vitesse figée, aucune accélération ni ralentissement.
+        let b = pilot(start: 6.0)
+        for t in stride(from: 1.0, through: 70, by: 1) {
+            let gap = (61.0...70.0).contains(t)
+            XCTAssertNil(b.update(now: t, sessionTime: t, filteredBPM: gap ? nil : 130, heartRateLive: !gap, zone: zone2, controllable: true))
+        }
+        XCTAssertEqual(b.mode, .heartRateGap)
+        XCTAssertEqual(b.targetKmh, 6.0)
     }
 
     func testAutopilotYieldsToManualAndSuspendsWhenNotControllable() {
