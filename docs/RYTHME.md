@@ -21,6 +21,10 @@ signature, `Config/Foulee.entitlements`, app iPhone). Foulée y tient à jour, d
 | Méthode de zones ou FC max modifiée | tous les fichiers réécrits (zones = réglages actuels, comme à l'écran) |
 | Séance simulée | jamais écrite |
 
+La base SwiftData de Foulée reste dans le conteneur **privé** de l'app, à URL explicite
+(`Foulee/Persistence/StoreLocation.swift`) : sans cela, SwiftData la placerait dans l'App Group.
+Seuls les fichiers JSON ci-dessus vont dans le dossier commun.
+
 Contrat : ajouter des champs optionnels est permis ; renommer ou supprimer un champ demande
 `formatVersion` 2 (à coordonner avec Rythme). `templateID` et `protocolSignature` sont stables.
 

@@ -50,6 +50,8 @@ final class AppModel {
     @ObservationIgnored private var watchCatalog: (fingerprint: String, programs: [WatchProgramSummary])?
     /// Bandeau d'information (ex. séance lancée depuis la montre).
     var notice: String?
+    /// Base de données inaccessible : l'app tourne sans rien enregistrer.
+    var storageWarning: String?
     /// Scénario de test (simulateur), actif seulement avec `-FouleeScenario`.
     @ObservationIgnored private var scenario: ScenarioRunner?
 
@@ -77,6 +79,12 @@ final class AppModel {
             let s = ScenarioRunner(model: self)
             scenario = s
             s.configure()
+        }
+        if let e = StoreLocation.openError {
+            storageWarning = "La base de Foulée n'a pas pu être ouverte (\(e)). Les séances de cette ouverture ne seront pas enregistrées : contactez le développeur avant de supprimer l'app."
+            log.log(.error, "Base SwiftData inaccessible : \(e)")
+        } else {
+            StoreLocation.recoverMisplacedData(into: dataStore, log: log)
         }
         recoverInterruptedSession()
         migrateLegacyZonesIfNeeded()

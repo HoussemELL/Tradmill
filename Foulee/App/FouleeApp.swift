@@ -9,14 +9,8 @@ struct FouleeApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        let container: ModelContainer
-        do {
-            container = try ModelContainer(for: ProgramEntity.self, SessionEntity.self)
-        } catch {
-            // Dernier recours : stockage en mémoire pour que l'app reste utilisable.
-            container = try! ModelContainer(for: ProgramEntity.self, SessionEntity.self,
-                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        }
+        // Base dans le conteneur privé de l'app (jamais dans le dossier partagé avec Rythme).
+        let container = StoreLocation.makeContainer()
         self.container = container
         _model = State(initialValue: AppModel(modelContext: container.mainContext))
     }
@@ -56,6 +50,12 @@ struct RootView: View {
         }
         .onAppear { model.connectRememberedDevices() }
         .task { await model.prepareHealth() }
+        .alert("Historique non enregistré", isPresented: Binding(get: { model.storageWarning != nil },
+                                                                 set: { if !$0 { model.storageWarning = nil } })) {
+            Button("OK") { model.storageWarning = nil }
+        } message: {
+            Text(model.storageWarning ?? "")
+        }
         .alert("Séance récupérée", isPresented: Binding(get: { model.recoveredNotice != nil },
                                                          set: { if !$0 { model.dismissRecoveredNotice() } })) {
             Button("OK") { model.dismissRecoveredNotice() }
