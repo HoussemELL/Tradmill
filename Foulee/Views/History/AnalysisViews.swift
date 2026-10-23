@@ -269,10 +269,11 @@ struct ComparabilityCard: View {
 // MARK: - Progression dans le temps
 
 struct ProgressListView: View {
+    @Environment(AppModel.self) private var model
     @Query(sort: \SessionEntity.startDate) private var sessions: [SessionEntity]
 
     var body: some View {
-        let groups = ProgressAnalysis.groups(sessions.compactMap(\.record))
+        let groups = ProgressAnalysis.groups(sessions.compactMap(\.record).map { model.displayRecord($0) })
         List {
             if groups.isEmpty {
                 Text("Les séances faites avec un programme apparaîtront ici, regroupées par protocole identique.")
@@ -297,10 +298,11 @@ struct ProgressListView: View {
 
 struct ProgressDetailView: View {
     let signature: String
+    @Environment(AppModel.self) private var model
     @Query(sort: \SessionEntity.startDate) private var sessions: [SessionEntity]
 
     private var group: ProgressGroup? {
-        ProgressAnalysis.groups(sessions.compactMap(\.record)).first { $0.signature == signature }
+        ProgressAnalysis.groups(sessions.compactMap(\.record).map { model.displayRecord($0) }).first { $0.signature == signature }
     }
 
     var body: some View {

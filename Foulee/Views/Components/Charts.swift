@@ -38,6 +38,27 @@ struct ProgramProfile: View {
     }
 }
 
+/// Méthode de zones appliquée à une séance affichée : toujours les réglages actuels, avec la
+/// méthode d'origine si la séance a été enregistrée avec d'autres bornes.
+struct ZoneMethodNote: View {
+    /// Séance telle qu'enregistrée (avant recalcul).
+    let record: SessionRecord
+    let zones: HeartZoneSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(zones.methodDescription)
+            if record.zonesDiffer(from: zones) {
+                Label("Zones recalculées depuis la FC enregistrée avec vos réglages actuels"
+                      + (record.zoneSettings.map { " (séance faite avec : \($0.effectiveMethod.label), FC max \($0.maxHR))" } ?? "") + ".",
+                      systemImage: "arrow.triangle.2.circlepath")
+            }
+        }
+        .font(.caption).foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 /// Barres de temps passé par zone.
 struct ZoneBars: View {
     let seconds: [Double]

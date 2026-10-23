@@ -492,6 +492,12 @@ final class AppModel {
         return r
     }
 
+    /// Séance telle qu'affichée et exportée pour Rythme : zones recalculées depuis la FC
+    /// enregistrée avec les réglages de zones actuels (l'enregistrement d'origine reste intact).
+    func displayRecord(_ r: SessionRecord) -> SessionRecord {
+        r.rezoned(with: settings.session.zones)
+    }
+
     /// Ressenti de l'effort (CR10 de Borg, 0–10), saisi après la séance.
     func setPerceivedExertion(_ value: Int?, for id: UUID) {
         guard var r = dataStore.record(id: id) else { return }

@@ -316,3 +316,30 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
         return WorkoutProgram(name: name, notes: "Créé depuis la séance du \(f.string(from: startDate))", items: phases.map { .phase($0) })
     }
 }
+
+public extension SessionRecord {
+    /// Vrai si les zones enregistrées ont été calculées avec des bornes différentes de `zones`.
+    func zonesDiffer(from zones: HeartZoneSettings) -> Bool {
+        guard let z = zoneSettings else { return true }
+        return z.bounds != zones.bounds || z.effectiveMethod != zones.effectiveMethod
+    }
+
+    /// Même séance, zones recalculées depuis la FC enregistrée avec `zones` (changement de
+    /// méthode ou de FC max après coup) : zone de chaque échantillon, temps par zone, réglages.
+    /// Rien d'autre ne change. Mêmes bornes qu'à l'enregistrement : séance renvoyée telle quelle.
+    func rezoned(with zones: HeartZoneSettings) -> SessionRecord {
+        guard zonesDiffer(from: zones) else { return self }
+        var r = self
+        var time = ZoneTimeAccumulator()
+        for i in r.samples.indices {
+            let s = r.samples[i]
+            let zone = s.hr.map { zones.zone(for: $0) }
+            r.samples[i].zone = zone
+            // Comme pendant la séance : pas de temps compté en pause ni sans FC.
+            if s.paused { time.interrupt() } else { time.add(zone: zone, at: s.t) }
+        }
+        r.zoneSeconds = time.seconds
+        r.zoneSettings = zones
+        return r
+    }
+}

@@ -347,7 +347,8 @@ struct FinishedSessionView: View {
     let service: SessionService
 
     var body: some View {
-        let r = service.session.record
+        let stored = service.session.record
+        let r = model.displayRecord(stored)
         ScrollView {
             VStack(spacing: 12) {
                 Image(systemName: "checkmark.seal.fill").font(.system(size: 56)).foregroundStyle(Theme.accent)
@@ -371,6 +372,7 @@ struct FinishedSessionView: View {
                 }
                 SessionInsightsView(record: r)
                 ZoneBars(seconds: r.zoneSeconds)
+                ZoneMethodNote(record: stored, zones: model.settings.session.zones)
                 Button {
                     model.closeFinishedSession()
                 } label: {

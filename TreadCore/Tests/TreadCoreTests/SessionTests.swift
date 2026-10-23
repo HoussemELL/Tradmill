@@ -43,7 +43,7 @@ final class WorkoutSessionTests: XCTestCase {
         ])
     }
 
-    func testFullProgramRunsAndStopsTreadmill() {
+    func testFullProgramRunsAndStopsTreadmill() throws {
         let s = SessionHarness(program: program())
         XCTAssertNoThrow(try s.session.start().get())
         XCTAssertEqual(s.session.status, .starting)
@@ -65,6 +65,20 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertEqual(r.stepsSource, .none)
         XCTAssertEqual(r.maxHR, 150)
         XCTAssertGreaterThan(r.zoneSeconds[2] + r.zoneSeconds[3], 100)
+        // Zones recalculées après coup (autre méthode) : même FC, nouvelles zones, même temps total.
+        let same = try XCTUnwrap(r.zoneSettings)
+        XCTAssertEqual(r.rezoned(with: same), r, "mêmes bornes : séance inchangée")
+        let custom = HeartZoneSettings(maxHR: 200, method: .customBPM, customBounds: [90, 110, 125, 140, 160, 200])
+        let z = r.rezoned(with: custom)
+        XCTAssertEqual(z.zoneSettings, custom)
+        XCTAssertEqual(z.zoneSeconds.reduce(0, +), r.zoneSeconds.reduce(0, +), accuracy: 3)
+        XCTAssertGreaterThan(z.zoneSeconds[3], 60, "130 bpm : zone 3 avec ces seuils")
+        XCTAssertGreaterThan(z.zoneSeconds[4], 20, "150 bpm : zone 4")
+        XCTAssertEqual(z.samples.compactMap(\.zone).count, r.samples.compactMap(\.hr).count)
+        XCTAssertEqual(z.samples.map(\.hr), r.samples.map(\.hr))
+        XCTAssertEqual(z.id, r.id)
+        XCTAssertEqual(r.rezoned(with: custom).rezoned(with: same).zoneSeconds.reduce(0, +),
+                       r.zoneSeconds.reduce(0, +), accuracy: 3)
         XCTAssertEqual(r.hrSources, [.bleSensor])
         XCTAssertTrue(s.h.sentCommands.contains(.stop))
         XCTAssertEqual(s.h.sentCommands.filter { $0 == .startOrResume }.count, 1)

@@ -224,7 +224,10 @@ ne lit jamais d'anciens échantillons Santé pour simuler du direct.
 **Zones** : 5 zones ; FC max 200 bpm par défaut ; % de FC max, réserve
 cardiaque (Karvonen, si FC de repos renseignée) ou seuils en bpm ; méthode
 affichée ; temps par zone ; alertes facultatives avec temporisation (séjour
-continu hors zone, délai entre alertes). Pas de pilotage du tapis par la FC.
+continu hors zone, délai entre alertes). Changer de méthode ou de FC max
+recalcule aussi les séances passées à l'affichage (temps par zone, graphiques,
+stats par intervalle, progression, export Rythme), depuis la FC enregistrée ;
+l'enregistrement d'origine reste intact.
 
 **Pas** : priorité au tapis (champ d'extension, s'il existe), puis Apple Watch,
 puis estimation facultative marquée « estimée », sinon « — ». Pas de la séance

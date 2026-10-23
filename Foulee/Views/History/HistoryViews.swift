@@ -73,7 +73,7 @@ struct HistoryListView: View {
                             }
                         }
                         Button("Tout exporter pour Rythme (JSON)") {
-                            if let data = try? RythmeSessionExport.json(sessions.compactMap(\.record)) {
+                            if let data = try? RythmeSessionExport.json(sessions.compactMap(\.record).map { model.displayRecord($0) }) {
                                 exportDoc = ExportDocument(data: data, contentType: .json, filename: "seances_foulee_rythme.json")
                             }
                         }
@@ -137,7 +137,9 @@ struct HistoryDetailView: View {
     }
 
     private func content(_ r: SessionRecord) -> some View {
-        ScrollView {
+        // Affichage : zones recalculées avec la méthode actuelle ; `r` (d'origine) sert aux corrections.
+        let shown = model.displayRecord(r)
+        return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(Format.shortDate(r.startDate) + (r.treadmillName.map { " · \($0)" } ?? "") + (r.simulated ? " · SIMULATEUR" : ""))
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -152,15 +154,13 @@ struct HistoryDetailView: View {
                     MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
                 }
                 PerceivedExertionCard(recordID: r.id, initial: r.perceivedExertion)
-                SessionInsightsView(record: r)
+                SessionInsightsView(record: shown)
                 caloriesCard(r)
-                chartCard("Fréquence cardiaque", r, .heartRate)
-                chartCard("Vitesse (mesure / cible)", r, .speed)
-                chartCard("Inclinaison (mesure / cible)", r, .incline)
-                ZoneBars(seconds: r.zoneSeconds)
-                if let z = r.zoneSettings {
-                    Text(z.methodDescription).font(.caption).foregroundStyle(.secondary)
-                }
+                chartCard("Fréquence cardiaque", shown, .heartRate)
+                chartCard("Vitesse (mesure / cible)", shown, .speed)
+                chartCard("Inclinaison (mesure / cible)", shown, .incline)
+                ZoneBars(seconds: shown.zoneSeconds)
+                ZoneMethodNote(record: r, zones: model.settings.session.zones)
                 DisclosureGroup("Événements (\(r.events.count))", isExpanded: $showEvents) {
                     ForEach(Array(r.events.enumerated()), id: \.offset) { _, e in
                         HStack(alignment: .top) {
@@ -188,12 +188,12 @@ struct HistoryDetailView: View {
                         }
                     }
                     Button("Exporter pour Rythme (JSON)") {
-                        if let d = try? RythmeSessionExport.json([r]) {
+                        if let d = try? RythmeSessionExport.json([shown]) {
                             exportDoc = ExportDocument(data: d, contentType: .json, filename: SessionExport.fileName(for: r, ext: "rythme.json"))
                         }
                     }
                     Button("Exporter en CSV") {
-                        exportDoc = ExportDocument(data: Data(SessionExport.csv(r).utf8), contentType: .commaSeparatedText,
+                        exportDoc = ExportDocument(data: Data(SessionExport.csv(shown).utf8), contentType: .commaSeparatedText,
                                                    filename: SessionExport.fileName(for: r, ext: "csv"))
                     }
                     Button("Corriger la séance…") { editing = true }
