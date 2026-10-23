@@ -33,6 +33,9 @@ final class AppModel {
     @ObservationIgnored private let settingsStore = SettingsStore()
     @ObservationIgnored private let checkpointStore: CheckpointStore
     @ObservationIgnored private var timer: DispatchSourceTimer?
+    /// Séances terminées qui enregistrent encore la FC de récupération.
+    @ObservationIgnored private var finishingServices: [SessionService] = []
+    @ObservationIgnored private var watchOwnedSessions: [UUID: Bool] = [:]
 
     init(modelContext: ModelContext) {
         let log = DiagnosticLog()
@@ -123,6 +126,7 @@ final class AppModel {
         let driven = sessionService.map { $0.session.status != .finished } ?? false
         treadmill.tick(drivenBySession: driven)
         sessionService?.tick()
+        finishingServices.forEach { $0.tick() }
         heartRate.refresh()
         if let d = diagnostic, case .running = d.state {
             d.tick()
@@ -177,6 +181,7 @@ final class AppModel {
                                clock: MonotonicClock.now, wallClock: Date.init)
         let service = SessionService(session: s, checkpointStore: checkpointStore)
         service.onFinished = { [weak self] r in self?.sessionFinished(r) }
+        service.onFinalized = { [weak self] r in self?.sessionFinalized(r) }
         service.onAlert = { [weak self] text in self?.zoneAlert(text) }
         treadmill.eventSink = { [weak s] e in s?.handle(controllerEvent: e) }
         treadmill.telemetrySink = { [weak s] d, t in s?.handleTelemetry(d, at: t) }
@@ -195,7 +200,9 @@ final class AppModel {
         guard let s = sessionService else { return "Aucune séance préparée" }
         switch s.session.start() {
         case .success:
-            watch.beginSession(id: s.session.record.id, title: s.session.record.title)
+            let (std, meta) = HealthWritePlan.watchMetadata(record: s.session.record)
+            watch.beginSession(id: s.session.record.id, title: s.session.record.title,
+                               metadata: .workoutMetadata(standard: std, foulee: meta))
             if settings.startWatchWorkoutWithSession && watch.isAppInstalled && watch.linkState != .mirrored {
                 watch.launchWatchWorkout(running: (s.program?.maxSpeedKmh ?? s.session.effectiveTargets.speed) >= 8)
             }
@@ -224,31 +231,151 @@ final class AppModel {
         sessionService?.session.stop()
     }
 
+    /// Fin de séance : sauvegarde locale immédiate. Si un exercice Watch a tourné, la Watch est
+    /// propriétaire de l'enregistrement Santé : on lui transmet les métadonnées Foulée avant de
+    /// la terminer (ou de l'annuler si la séance fait moins d'1 minute).
     private func sessionFinished(_ record: SessionRecord) {
         var r = record
         let usedWatch = watch.usedDuringSession
-        if usedWatch { r.healthStatus = .ownedByWatch }
+        if usedWatch {
+            r.healthStatus = .ownedByWatch
+            let plan = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: settings.health.enabled,
+                                                                       watchWorkoutUsed: true, bodyMassKg: nil))
+            let (std, meta) = HealthWritePlan.watchMetadata(record: r)
+            watch.send(.workoutMetadata(standard: std, foulee: meta))
+            if settings.endWatchWorkoutWithSession || plan.discardWatchWorkout {
+                watch.send(.command(plan.discardWatchWorkout ? .discard : .end))
+            }
+            r.healthReport = HealthWriteReport(plan: plan, outcome: plan.discardWatchWorkout ? "exercice Watch annulé (< 1 min)" : "métadonnées envoyées à la Watch",
+                                               workoutUUID: nil)
+            log.log(.health, "Santé : \(plan.reason)")
+        }
+        watchOwnedSessions[r.id] = usedWatch
         dataStore.upsert(r)
         lastFinishedRecordID = r.id
-        if settings.endWatchWorkoutWithSession && usedWatch { watch.send(.command(.end)) }
         watch.endSessionTracking()
         updateIdleTimer()
-        let plan = HealthSyncPlan.make(record: r, settings: settings.health, watchWorkoutUsed: usedWatch)
+    }
+
+    /// Séance définitive (arrêt réel de la bande + 2 min de FC de récupération) : écriture Santé.
+    private func sessionFinalized(_ record: SessionRecord) {
+        var r = record
+        let usedWatch = watchOwnedSessions.removeValue(forKey: r.id) ?? false
+        if usedWatch {
+            r.healthStatus = .ownedByWatch
+            r.healthReport = dataStore.record(id: r.id)?.healthReport
+        }
+        dataStore.upsert(r)
+        finishingServices.removeAll { $0.session.isFinalized }
+        guard !usedWatch else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let updated = await self.writeToHealth(r)
+            self.dataStore.upsert(updated)
+        }
+    }
+
+    /// Calcule le plan et écrit dans Santé (iPhone propriétaire). Renvoie la séance mise à jour.
+    @MainActor
+    func writeToHealth(_ record: SessionRecord) async -> SessionRecord {
+        var r = record
+        let mass = settings.health.enabled ? await health.latestBodyMass() : nil
+        let plan = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: settings.health.enabled,
+                                                                   watchWorkoutUsed: r.healthStatus == .ownedByWatch,
+                                                                   bodyMassKg: mass))
         log.log(.health, "Santé : \(plan.reason)")
-        if plan.owner == .phone {
-            let toSave = r
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                var updated = toSave
-                updated.healthStatus = await self.health.save(toSave, plan: plan)
-                self.dataStore.upsert(updated)
+        let result = await health.write(r, plan: plan)
+        r.healthStatus = result.status
+        r.healthReport = result.report
+        if case .saved = result.status { r.healthSyncVersion = plan.standard.syncVersion }
+        return r
+    }
+
+    /// Correction d'une séance : nouvelle révision, réécrite dans Santé si Foulée l'y avait écrite.
+    @MainActor
+    func correct(_ record: SessionRecord, title: String, activityType: HealthActivityType?, endAfterMinutes: Double?) async -> SessionRecord {
+        var r = record
+        r.programName = title.trimmingCharacters(in: .whitespaces).isEmpty ? r.programName : title
+        r.activityTypeOverride = activityType
+        if let minutes = endAfterMinutes, let start = r.beltStartDate ?? r.samples.first.map({ r.date(at: $0.t) }) {
+            let newEnd = start.addingTimeInterval(minutes * 60)
+            if newEnd < (r.beltStopDate ?? r.endDate ?? newEnd.addingTimeInterval(1)) {
+                let cut = newEnd.timeIntervalSince(r.startDate)
+                r.samples.removeAll { $0.t > cut }
+                r.events.removeAll { $0.t > cut }
+                r.heartRateReadings = r.heartRateReadings?.filter { $0.t <= cut + HealthWritePlan.recoveryWindow }
+                r.phaseSpans = r.phaseSpans?.filter { $0.start < cut }.map { var p = $0; p.end = min(p.end ?? cut, cut); return p }
+                r.beltStopDate = newEnd
+                r.endDate = newEnd
+                if let last = r.samples.last {
+                    r.distanceMeters = last.distance
+                    r.steps = last.steps
+                    r.activeSeconds = last.active
+                }
+                r.recomputeAggregates()
             }
         }
+        r.revision = (r.revision ?? 1) + 1
+        r.events.append(SessionEvent(t: r.samples.last?.t ?? 0, kind: .info, detail: "Séance corrigée (révision \(r.revision ?? 2))"))
+        if case .saved = r.healthStatus {
+            r = await writeToHealth(r)
+        }
+        dataStore.upsert(r)
+        return r
+    }
+
+    /// Supprime la séance de Foulée et, si elle y est, de Santé (séance et échantillons).
+    @MainActor
+    func delete(_ record: SessionRecord) async -> String {
+        var message = "Séance supprimée de Foulée"
+        switch record.healthStatus {
+        case .saved, .ownedByWatch:
+            message += " ; " + (await health.deleteSession(id: record.id.uuidString))
+        default:
+            break
+        }
+        dataStore.delete(id: record.id)
+        return message
+    }
+
+    /// Au premier lancement : demande les autorisations Santé (une fois), puis calcule les zones.
+    @MainActor
+    func prepareHealth() async {
+        guard health.isAvailable else { return }
+        if settings.didRequestHealthAuthorization != true {
+            _ = await health.requestAuthorization()
+            settings.didRequestHealthAuthorization = true
+        }
+        await refreshZonesFromHealth()
+    }
+
+    // MARK: - Zones (comme Rythme)
+
+    /// Recalcule FC max et FC de repos depuis Santé (sauf valeurs saisies dans Foulée).
+    @MainActor
+    func refreshZonesFromHealth() async {
+        guard health.isAvailable else { return }
+        let z = settings.session.zones
+        let inputs = await health.zoneInputs()
+        let res = ZoneProfileResolver.resolve(userMax: z.maxHRIsUserValue ? z.maxHR : nil,
+                                              userResting: z.restingHRIsUserValue ? z.restingHR : nil,
+                                              birthDate: inputs.birthDate, now: Date(),
+                                              highHR: inputs.highHR, restingHR: inputs.restingHR,
+                                              fallbackMax: z.maxHR)
+        var nz = settings.session.zones
+        nz.maxHR = res.maxHR
+        nz.maxHRSource = res.maxSource
+        nz.restingHR = res.restingHR
+        nz.restingHRSource = res.restingSource
+        settings.session.zones = nz
+        log.log(.heart, "Zones : FC max \(res.maxHR) (\(res.maxSource)), repos \(res.restingHR.map(String.init) ?? "—") (\(res.restingSource))")
     }
 
     /// Ferme l'écran de séance terminée pour en préparer une nouvelle.
     func closeFinishedSession() {
         guard let s = sessionService, s.session.status == .finished else { return }
+        // La FC de récupération continue d'être enregistrée en arrière-plan.
+        if !s.session.isFinalized { finishingServices.append(s) }
         sessionService = nil
         treadmill.eventSink = nil
         treadmill.telemetrySink = nil

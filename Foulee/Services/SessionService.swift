@@ -42,6 +42,8 @@ final class SessionService {
     @ObservationIgnored private let checkpointStore: CheckpointStore
     @ObservationIgnored private var lastCheckpoint: TimeInterval = 0
     @ObservationIgnored var onFinished: ((SessionRecord) -> Void)?
+    /// Séance définitive (arrêt réel de la bande, FC de récupération) : prête pour Santé.
+    @ObservationIgnored var onFinalized: ((SessionRecord) -> Void)?
     @ObservationIgnored var onAlert: ((String) -> Void)?
 
     init(session: WorkoutSession, checkpointStore: CheckpointStore) {
@@ -53,6 +55,7 @@ final class SessionService {
             self?.onFinished?(r)
         }
         session.onAlert = { [weak self] a in self?.onAlert?(a) }
+        session.onRecordFinalized = { [weak self] r in self?.onFinalized?(r) }
         refresh()
     }
 

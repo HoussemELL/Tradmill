@@ -31,6 +31,8 @@ struct AppSettings: Codable, Equatable {
     var endWatchWorkoutWithSession = true
 
     var logRawTelemetry = true
+    /// Optionnel pour rester lisible par les réglages enregistrés avant son ajout.
+    var didRequestHealthAuthorization: Bool?
     var didSeedTemplates = false
 }
 

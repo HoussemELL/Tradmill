@@ -15,7 +15,7 @@ struct SettingsView: View {
                         LabeledContent("Source cardio", value: model.settings.heartRatePreference.label)
                     }
                     NavigationLink { ZoneSettingsView() } label: {
-                        LabeledContent("FC max et zones", value: "\(model.settings.session.zones.maxHR) bpm")
+                        LabeledContent("FC max et zones", value: "\(model.settings.session.zones.maxHR) bpm · \(model.settings.session.zones.method == .rythme ? "auto" : "perso")")
                     }
                     NavigationLink { HealthSettingsView() } label: {
                         LabeledContent("Apple Santé", value: model.settings.health.enabled ? "Activé" : "Désactivé")
@@ -151,25 +151,59 @@ struct HeartRateSettingsView: View {
 
 struct ZoneSettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var refreshing = false
 
     var body: some View {
         @Bindable var model = model
         let zones = model.settings.session.zones
         Form {
             Section {
-                Stepper("FC max : \(zones.maxHR) bpm", value: $model.settings.session.zones.maxHR, in: 100...240)
-                Toggle("FC de repos renseignée", isOn: Binding(
-                    get: { zones.restingHR != nil },
-                    set: { model.settings.session.zones.restingHR = $0 ? 60 : nil }))
-                if let rest = zones.restingHR {
-                    Stepper("FC de repos : \(rest) bpm", value: Binding(
-                        get: { rest }, set: { model.settings.session.zones.restingHR = $0 }), in: 30...120)
-                }
                 Picker("Méthode", selection: $model.settings.session.zones.method) {
                     ForEach(ZoneMethod.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
             } footer: {
                 Text(zones.methodDescription)
+            }
+            Section {
+                Toggle("Saisir ma FC max", isOn: Binding(
+                    get: { zones.maxHRIsUserValue },
+                    set: { on in
+                        model.settings.session.zones.maxHRIsUserValue = on
+                        if !on { Task { await model.refreshZonesFromHealth() } }
+                    }))
+                if zones.maxHRIsUserValue {
+                    Stepper("FC max : \(zones.maxHR) bpm", value: $model.settings.session.zones.maxHR, in: 100...240)
+                } else {
+                    LabeledContent("FC max", value: "\(zones.maxHR) bpm")
+                    Text(zones.maxHRSource).font(.caption).foregroundStyle(.secondary)
+                }
+                Toggle("Saisir ma FC de repos", isOn: Binding(
+                    get: { zones.restingHRIsUserValue },
+                    set: { on in
+                        model.settings.session.zones.restingHRIsUserValue = on
+                        if on { model.settings.session.zones.restingHR = zones.restingHR ?? 60 }
+                        else { Task { await model.refreshZonesFromHealth() } }
+                    }))
+                if zones.restingHRIsUserValue, let rest = zones.restingHR {
+                    Stepper("FC de repos : \(rest) bpm", value: Binding(
+                        get: { rest }, set: { model.settings.session.zones.restingHR = $0 }), in: 30...120)
+                } else {
+                    LabeledContent("FC de repos", value: zones.restingHR.map { "\($0) bpm" } ?? "—")
+                    Text(zones.restingHRSource).font(.caption).foregroundStyle(.secondary)
+                }
+                Button {
+                    refreshing = true
+                    Task {
+                        _ = await model.health.requestAuthorization()
+                        await model.refreshZonesFromHealth()
+                        refreshing = false
+                    }
+                } label: {
+                    Label(refreshing ? "Calcul…" : "Recalculer depuis Santé", systemImage: "arrow.clockwise")
+                }
+                .disabled(refreshing || !model.health.isAvailable)
+            } header: { Text("FC max et FC de repos") } footer: {
+                Text("Sans saisie : FC max = la plus haute de « 220 − âge » (date de naissance dans Santé) et de la FC tenue la plus haute des 12 derniers mois (mesure ≥ 170 bpm confirmée par une autre, à 5 bpm près, dans les 2 minutes ; > 230 ignoré). FC de repos = moyenne Santé sur 30 jours, ignorée si < 30 ou > FC max − 40.")
             }
             if zones.effectiveMethod == .customBPM {
                 Section("Seuils (bpm)") {
@@ -178,7 +212,7 @@ struct ZoneSettingsView: View {
                                 value: $model.settings.session.zones.customBounds[i], in: 40...240)
                     }
                 }
-            } else {
+            } else if zones.effectiveMethod != .rythme {
                 Section("Bornes (% \(zones.effectiveMethod == .heartRateReserve ? "de réserve" : "de FC max"))") {
                     ForEach(0..<5, id: \.self) { i in
                         Stepper("Début Z\(i + 1) : \(Int((zones.percentBounds[i] * 100).rounded())) %",
@@ -195,7 +229,7 @@ struct ZoneSettingsView: View {
                         Circle().fill(Theme.zoneColor(z.zone)).frame(width: 12, height: 12)
                         Text("Zone \(z.zone)")
                         Spacer()
-                        Text("\(z.lower)–\(z.upper) bpm").monospacedDigit()
+                        Text(z.lower == 0 ? "< \(z.upper) bpm" : "\(z.lower)–\(z.upper) bpm").monospacedDigit()
                     }
                 }
             }
@@ -233,18 +267,25 @@ struct HealthSettingsView: View {
                 .disabled(!model.health.isAvailable)
                 Text(status.isEmpty ? model.health.sharingStatusLabel : status).font(.caption).foregroundStyle(.secondary)
             } footer: {
-                Text("Autorisations demandées : écriture des exercices, FC, distance et énergie ; lecture des exercices (pour éviter les doublons). L'app reste utilisable si vous refusez.")
+                Text("Écriture : séances, distance, pas, énergie active, fréquence cardiaque. Lecture : séances (éviter les doublons), poids (énergie), date de naissance, FC et FC de repos (zones). L'app reste utilisable si une autorisation est refusée ; seul ce qui est refusé n'est pas enregistré.")
             }
-            Section {
-                Toggle("Écrire la distance du tapis", isOn: $model.settings.health.writeDistance)
-                Toggle("Écrire l'énergie annoncée par le tapis", isOn: $model.settings.health.writeTreadmillEnergy)
-            } header: { Text("Données écrites par l'iPhone") } footer: {
+            Section("Qui enregistre la séance") {
                 Text("""
-                Propriétaire unique de l'enregistrement :
-                • si un exercice Apple Watch a tourné pendant la séance, c'est la Watch qui l'enregistre (FC, énergie, pas) et l'iPhone n'écrit rien ;
-                • sinon l'iPhone enregistre un exercice « marche/course en intérieur » avec la FC de la ceinture et, si activé, la distance.
-                Les pas ne sont jamais écrits (l'iPhone et la Watch les comptent déjà). Chaque séance porte un identifiant unique : elle n'est jamais enregistrée deux fois.
-                """)
+                • Un exercice Apple Watch tourne pendant la séance : la Watch enregistre la séance (FC, énergie, pas, distance). Foulée y ajoute ses métadonnées (programme, vitesses, inclinaison) ; l'iPhone n'écrit rien d'autre.
+                • Sinon : l'iPhone enregistre une seule séance (marche, course ou fractionné, en intérieur), de l'arrêt au démarrage réels de la bande, pauses exclues, phases du programme en segments.
+                • Si une autre séance (Watch, Exercice, app du tapis…) couvre déjà plus de la moitié du créneau, rien n'est écrit et l'historique l'indique.
+                • Moins d'1 minute ou séance simulée : rien n'est écrit.
+                """).font(.footnote)
+            }
+            Section("Données écrites par l'iPhone") {
+                Text("""
+                Par tranches d'1 minute au plus, associées à la séance :
+                • distance mesurée par le tapis ;
+                • pas comptés par le tapis (jamais inventés) — dans Santé, placez Foulée en tête des sources de pas ;
+                • énergie active : estimation ACSM avec votre poids le plus récent dans Santé, sinon énergie du tapis (jamais les deux) ;
+                • FC de la ceinture/brassard toutes les ~5 s, y compris 2 minutes après l'arrêt de la bande (récupération).
+                Chaque séance porte SyncIdentifier = ExternalUUID = identifiant Foulée et une SyncVersion ; corriger une séance la remplace, la supprimer dans Foulée la supprime de Santé.
+                """).font(.footnote)
             }
         }
         .navigationTitle("Apple Santé")

@@ -43,6 +43,7 @@ final class WatchBridge {
     @ObservationIgnored private let sessionProxy = MirrorProxy()
     @ObservationIgnored private let wcProxy = ConnectivityProxy()
     @ObservationIgnored private var pendingLink: WatchMessage?
+    @ObservationIgnored private var pendingMetadata: WatchMessage?
 
     @ObservationIgnored var onHeartRate: ((Double, TimeInterval) -> Void)?
     @ObservationIgnored var onSteps: ((Double) -> Void)?
@@ -87,14 +88,21 @@ final class WatchBridge {
     static let installHelp = "Installez l'app Watch : sur l'iPhone, app Watch › Mes montres › Apps disponibles › Foulée › Installer. Ou depuis Xcode : scheme FouleeWatch, destination votre Apple Watch (Mode développeur activé sur la montre)."
 
 
-    func beginSession(id: UUID, title: String) {
+    /// Début de séance : identifiant et métadonnées initiales pour la séance Watch
+    /// (renvoyés dès que le miroir s'établit si la Watch n'est pas encore reliée).
+    func beginSession(id: UUID, title: String, metadata: WatchMessage) {
         usedDuringSession = false
         pendingLink = .linkSession(id: id, title: title)
-        if mirrored != nil, let m = pendingLink { send(m) }
+        pendingMetadata = metadata
+        if mirrored != nil {
+            send(.linkSession(id: id, title: title))
+            send(metadata)
+        }
     }
 
     func endSessionTracking() {
         pendingLink = nil
+        pendingMetadata = nil
     }
 
     /// Lance l'app Watch et son exercice (cardio en direct). L'utilisateur peut aussi
@@ -160,6 +168,7 @@ final class WatchBridge {
         linkState = .mirrored
         log.log(.watch, "Session d'exercice Watch reçue en miroir")
         if let m = pendingLink { send(m) }
+        if let m = pendingMetadata { send(m) }
     }
 
     fileprivate func mirroredStateChanged(_ state: HKWorkoutSessionState) {
@@ -199,7 +208,7 @@ final class WatchBridge {
             watchState = state
             if state == .running, pendingLink != nil { usedDuringSession = true }
             log.log(.watch, "Exercice Watch : \(state.rawValue)")
-        case .linkSession, .command:
+        case .linkSession, .command, .workoutMetadata:
             break
         }
     }

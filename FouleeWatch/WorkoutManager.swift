@@ -29,6 +29,8 @@ final class WorkoutManager {
     @ObservationIgnored private let wcProxy = WatchConnectivityProxy()
     @ObservationIgnored private var discardOnEnd = false
     @ObservationIgnored private var linkedSessionID: UUID?
+    /// Métadonnées Foulée reçues avant que le builder existe : appliquées au démarrage.
+    @ObservationIgnored private var pendingMetadata: [String: Any] = [:]
 
     private init() {
         proxy.owner = self
@@ -90,6 +92,10 @@ final class WorkoutManager {
             }
             send(.workoutState(.running, startDate: date))
             if let id = linkedSessionID { addLinkMetadata(id) }
+            if !pendingMetadata.isEmpty {
+                b.addMetadata(pendingMetadata) { _, _ in }
+                pendingMetadata = [:]
+            }
         } catch {
             phase = .failed(error.localizedDescription)
         }
@@ -138,6 +144,26 @@ final class WorkoutManager {
             linkedSessionID = id
             linkedTitle = title
             addLinkMetadata(id)
+        case let .workoutMetadata(standard, foulee):
+            var meta: [String: Any] = [
+                HKMetadataKeySyncIdentifier: standard.syncIdentifier,
+                HKMetadataKeySyncVersion: NSNumber(value: standard.syncVersion),
+                HKMetadataKeyExternalUUID: standard.syncIdentifier,
+                HKMetadataKeyIndoorWorkout: NSNumber(value: standard.indoor),
+            ]
+            for (k, v) in foulee {
+                switch v {
+                case let .string(x): meta[k] = x
+                case let .number(x): meta[k] = NSNumber(value: x)
+                case let .integer(x): meta[k] = NSNumber(value: x)
+                case let .bool(x): meta[k] = NSNumber(value: x)
+                }
+            }
+            if let b = builder, isActive {
+                b.addMetadata(meta) { _, _ in }
+            } else {
+                pendingMetadata.merge(meta) { _, new in new }
+            }
         case let .command(c):
             switch c {
             case .pause: pause()
@@ -151,8 +177,11 @@ final class WorkoutManager {
     }
 
     private func addLinkMetadata(_ id: UUID) {
-        // Identifiant de la séance iPhone : clé d'idempotence et lien avec l'historique.
-        builder?.addMetadata([HKMetadataKeyExternalUUID: id.uuidString, HKMetadataKeyIndoorWorkout: true]) { _, _ in }
+        // Identifiant de la séance iPhone : même clé que la séance Foulée (anti-doublon).
+        builder?.addMetadata([HKMetadataKeyExternalUUID: id.uuidString,
+                              HKMetadataKeySyncIdentifier: id.uuidString,
+                              HKMetadataKeySyncVersion: NSNumber(value: 1),
+                              HKMetadataKeyIndoorWorkout: true]) { _, _ in }
     }
 
     // MARK: - Délégués

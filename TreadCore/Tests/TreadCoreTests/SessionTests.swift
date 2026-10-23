@@ -244,29 +244,9 @@ final class WorkoutSessionTests: XCTestCase {
 final class HealthWritePlanTests: XCTestCase {
     let inputs = HealthWritePlan.Inputs(healthEnabled: true, watchWorkoutUsed: false, bodyMassKg: 70)
 
-    /// Séance réelle simulée : ceinture BLE, pas fournis par le tapis, arrêt puis 2 min de récupération.
     func phoneSessionWithBelt(program: WorkoutProgram? = nil, minutes: Double = 5, pauseSeconds: Double = 0,
                               speed: Double? = nil) -> SessionRecord {
-        var q = SimulatedTreadmill.Quirks.urtm047Like
-        q.reportsStepCount = true
-        let s = SessionHarness(program: program, quirks: q)
-        XCTAssertNoThrow(try s.session.start().get())
-        s.run(15, hrBPM: 120)
-        if let v = speed { _ = s.session.setManualSpeed(v) }
-        if pauseSeconds > 0 {
-            s.run(minutes * 30, hrBPM: 130)
-            s.session.pause()
-            s.run(pauseSeconds, hrBPM: 110)
-            _ = s.session.resume()
-            s.run(minutes * 30, hrBPM: 135)
-        } else {
-            s.run(minutes * 60, hrBPM: 132)
-        }
-        if s.session.status != .finished { s.session.stop() }
-        s.run(150, hrBPM: 100)
-        var r = try! XCTUnwrap(s.finalized, "séance non finalisée")
-        r.simulated = false
-        return r
+        makePhoneSessionWithBelt(program: program, minutes: minutes, pauseSeconds: pauseSeconds, speed: speed)
     }
 
     func testPhoneOwnerWithBeltWritesEverythingInShortChunks() {
@@ -512,4 +492,58 @@ final class RythmeZoneTests: XCTestCase {
         XCTAssertEqual(r.maxHR, 200)
         XCTAssertTrue(r.maxSource.contains("par défaut"))
     }
+}
+
+/// Imprime les rapports d'exemple (docs/SANTE.md) : FOULEE_PRINT_EXAMPLES=1 swift test --filter HealthExamples
+final class HealthExamples: XCTestCase {
+    func testPrintExamples() throws {
+        guard ProcessInfo.processInfo.environment["FOULEE_PRINT_EXAMPLES"] != nil else { return }
+        let inputs = HealthWritePlan.Inputs(healthEnabled: true, watchWorkoutUsed: false, bodyMassKg: 72)
+        let phone = makePhoneSessionWithBelt(minutes: 4, pauseSeconds: 30)
+        let hiitProgram = WorkoutProgram(name: "Intervalles marche/course", items: [
+            .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: 120, speedKmh: 4.5)),
+            .block(.init(name: "Sprints", repeatCount: 3, phases: [
+                .init(name: "Sprint", kind: .work, durationSeconds: 60, speedKmh: 8.5),
+                .init(name: "Récupération", kind: .recovery, durationSeconds: 60, speedKmh: 5),
+            ])),
+            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: 60, speedKmh: 4)),
+        ])
+        let hiit = makePhoneSessionWithBelt(program: hiitProgram, minutes: 9)
+        let cases: [(String, SessionRecord, HealthWritePlan.Inputs)] = [
+            ("iPhone seul + ceinture", phone, inputs),
+            ("Watch propriétaire", phone, .init(healthEnabled: true, watchWorkoutUsed: true, bodyMassKg: 72)),
+            ("HIIT avec phases", hiit, inputs),
+        ]
+        for (name, r, i) in cases {
+            let p = HealthWritePlan.make(record: r, inputs: i)
+            print("=== EXEMPLE: \(name) ===")
+            print(HealthWriteReport(plan: p, outcome: "simulé (plan calculé, non écrit)", workoutUUID: nil).text)
+            print("=== FIN ===")
+        }
+    }
+}
+
+/// Séance réelle simulée : ceinture BLE, pas fournis par le tapis, arrêt puis 2 min de récupération.
+func makePhoneSessionWithBelt(program: WorkoutProgram? = nil, minutes: Double = 5, pauseSeconds: Double = 0,
+                              speed: Double? = nil) -> SessionRecord {
+    var q = SimulatedTreadmill.Quirks.urtm047Like
+    q.reportsStepCount = true
+    let s = SessionHarness(program: program, quirks: q)
+    XCTAssertNoThrow(try s.session.start().get())
+    s.run(15, hrBPM: 120)
+    if let v = speed { _ = s.session.setManualSpeed(v) }
+    if pauseSeconds > 0 {
+        s.run(minutes * 30, hrBPM: 130)
+        s.session.pause()
+        s.run(pauseSeconds, hrBPM: 110)
+        _ = s.session.resume()
+        s.run(minutes * 30, hrBPM: 135)
+    } else {
+        s.run(minutes * 60, hrBPM: 132)
+    }
+    if s.session.status != .finished { s.session.stop() }
+    s.run(150, hrBPM: 100)
+    var r = try! XCTUnwrap(s.finalized, "séance non finalisée")
+    r.simulated = false
+    return r
 }

@@ -55,6 +55,7 @@ struct RootView: View {
                 .tag(3)
         }
         .onAppear { model.connectRememberedDevices() }
+        .task { await model.prepareHealth() }
         .alert("Séance récupérée", isPresented: Binding(get: { model.recoveredNotice != nil },
                                                          set: { if !$0 { model.dismissRecoveredNotice() } })) {
             Button("OK") { model.dismissRecoveredNotice() }
