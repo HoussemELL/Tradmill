@@ -341,6 +341,12 @@ vos observations écrites. Exportez le journal de diagnostic après la
   HealthKit (ou vider `Config/*.entitlements`). Le tapis, la ceinture, les
   programmes et l'historique fonctionnent ; Santé et le cardio Apple Watch sont
   alors indisponibles.
+- **Ne modifiez jamais le champ *Bundle Identifier* dans Xcode.** Les deux
+  identifiants sont calculés depuis `BUNDLE_ID_PREFIX` (`Config/Signing.xcconfig`) :
+  iPhone = préfixe, Watch = préfixe + `.watchkitapp`. Si l'app Watch reçoit le
+  même identifiant que l'app iPhone, la montre refuse l'installation (le bouton
+  « Installer » tourne puis revient). Une étape de compilation vérifie ces deux
+  identifiants et arrête la compilation avec un message explicite.
 - **« Unable to launch watch app » / « App Foulée non installée »** : l'app
   n'est pas sur la montre. Activer le Mode développeur de la Watch, puis
   l'installer via l'app Watch de l'iPhone (*Mes montres › Apps disponibles*) ou

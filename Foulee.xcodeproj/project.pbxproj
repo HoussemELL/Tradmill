@@ -117,6 +117,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = F0000000000000000000A081 /* Build configuration list for PBXNativeTarget "Foulee" */;
 			buildPhases = (
+				F0000000000000000000A035 /* Vérifier l'identifiant iPhone */,
 				F0000000000000000000A031 /* Sources */,
 				F0000000000000000000A032 /* Frameworks */,
 				F0000000000000000000A033 /* Resources */,
@@ -142,6 +143,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = F0000000000000000000A082 /* Build configuration list for PBXNativeTarget "FouleeWatch" */;
 			buildPhases = (
+				F0000000000000000000A044 /* Vérifier l'identifiant Watch */,
 				F0000000000000000000A041 /* Sources */,
 				F0000000000000000000A042 /* Frameworks */,
 				F0000000000000000000A043 /* Resources */,
@@ -218,6 +220,47 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		F0000000000000000000A035 /* Vérifier l'identifiant iPhone */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Vérifier l'identifiant iPhone";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$PRODUCT_BUNDLE_IDENTIFIER\" != \"$BUNDLE_ID_PREFIX\" ]; then\n  echo \"error: Identifiant de l'app iPhone ($PRODUCT_BUNDLE_IDENTIFIER) différent de BUNDLE_ID_PREFIX ($BUNDLE_ID_PREFIX). Ne modifiez pas le champ Bundle Identifier dans Xcode : changez BUNDLE_ID_PREFIX dans Config/Signing.xcconfig.\"\n  exit 1\nfi\n";
+		};
+		F0000000000000000000A044 /* Vérifier l'identifiant Watch */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Vérifier l'identifiant Watch";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$PRODUCT_BUNDLE_IDENTIFIER\" != \"$BUNDLE_ID_PREFIX.watchkitapp\" ]; then\n  echo \"error: L'identifiant de l'app Watch doit être $BUNDLE_ID_PREFIX.watchkitapp (actuel : $PRODUCT_BUNDLE_IDENTIFIER). S'il est identique à celui de l'iPhone, la montre refuse l'installation. Ne modifiez pas le champ Bundle Identifier dans Xcode : changez BUNDLE_ID_PREFIX dans Config/Signing.xcconfig.\"\n  exit 1\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		F0000000000000000000A031 /* Sources */ = {
