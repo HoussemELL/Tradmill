@@ -214,7 +214,7 @@ struct LiveSessionView: View {
         switch model.heartRate.status {
         case let .live(bpm, source, age):
             MetricTile(title: "Cardio", value: "\(bpm)", unit: "bpm",
-                       detail: "\(source.shortLabel) · \(Int(age)) s", color: Theme.zoneColor(snap.zone), large: true)
+                       detail: "\(source.shortLabel) · \(Int(age)) s · \(Theme.zoneName(snap.zone))", color: Theme.heart, large: true)
         case let .stale(bpm, source, age):
             MetricTile(title: "Cardio", value: "—", unit: "bpm",
                        detail: "\(source.shortLabel) : \(bpm) il y a \(Int(age)) s", color: .secondary, large: true,
@@ -358,7 +358,7 @@ struct FinishedSessionView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds))
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters))
-                    MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
+                    if let steps = r.steps { MetricTile(title: "Pas", value: "\(steps)", detail: r.stepsSource.label) }
                     MetricTile(title: "Inclinaison moy.", value: Format.incline(r.avgIncline), unit: "%")
                 }
                 SessionInsightsView(record: r)

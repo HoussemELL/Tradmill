@@ -98,6 +98,9 @@ public final class WorkoutSession {
     public private(set) var autopilot: ZoneAutopilot?
     private var heartFilter = HeartRateFilter(window: 18)
     private var lastProgramSpeedCommandAt: TimeInterval = -.infinity
+    /// Transition par paliers en cours : chaque palier, y compris le dernier, attend que le
+    /// tapis ait rejoint le précédent.
+    private var steppingTransition = false
     private var lastSpeedCommandFailure: String?
 
     public var onAlert: ((String) -> Void)?
@@ -619,11 +622,17 @@ public final class WorkoutSession {
         // Évite de répéter une commande en échec à chaque passage de la boucle.
         if lastSpeedCommandFailure != nil && sinceLast < 2 { return }
         var next = desired
-        if settings.smoothTransitions, let c = current, abs(desired - c) > settings.maxSpeedStepKmh + 0.001 {
-            let measured = controller.telemetry.isFresh(now: now) ? controller.telemetry.speedKmh : nil
-            let reached = measured.map { abs($0 - c) <= 0.25 } ?? false
-            guard sinceLast >= 1.5, reached || sinceLast >= 6 else { return }
-            next = controller.capabilities.snapSpeed(c + (desired > c ? 1 : -1) * settings.maxSpeedStepKmh)
+        if settings.smoothTransitions, let c = current {
+            let needsStep = abs(desired - c) > settings.maxSpeedStepKmh + 0.001
+            if needsStep || steppingTransition {
+                let measured = controller.telemetry.isFresh(now: now) ? controller.telemetry.speedKmh : nil
+                let reached = measured.map { abs($0 - c) <= 0.25 } ?? false
+                guard sinceLast >= 1.5, reached || sinceLast >= 6 else { return }
+            }
+            if needsStep {
+                next = controller.capabilities.snapSpeed(c + (desired > c ? 1 : -1) * settings.maxSpeedStepKmh)
+            }
+            steppingTransition = needsStep
         }
         lastProgramSpeedCommandAt = now
         let origin: CommandOrigin = p.isAuto && autopilot?.mode != .manual ? .autopilot : .program

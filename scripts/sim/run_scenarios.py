@@ -79,8 +79,20 @@ def main():
     bundles = {"phone": plist_value(APP, "CFBundleIdentifier"), "watch": plist_value(WATCH_APP, "CFBundleIdentifier")}
     log("Bundles :", bundles)
     sh("xcrun", "simctl", "install", phone, APP, timeout=600)
-    w = sh("xcrun", "simctl", "install", watch, WATCH_APP, check=False, timeout=600)
-    log("Installation Watch :", w.returncode, w.stderr.strip()[-500:])
+    # Comme sur un vrai appareil : l'app Watch embarquée s'installe via l'iPhone appairé
+    # (WatchConnectivity la voit alors installée). Repli : installation directe.
+    installed = False
+    for _ in range(36):
+        apps = sh("xcrun", "simctl", "listapps", watch, check=False).stdout
+        if bundles["watch"] in apps:
+            installed = True
+            break
+        time.sleep(5)
+    if installed:
+        log("Installation Watch : automatique via l'iPhone appairé")
+    else:
+        w = sh("xcrun", "simctl", "install", watch, WATCH_APP, check=False, timeout=600)
+        log("Installation Watch : directe (repli)", w.returncode, w.stderr.strip()[-500:])
 
     scenarios = json.load(open(os.path.join(HERE, "scenarios.json")))
     results = []

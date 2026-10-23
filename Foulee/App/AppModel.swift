@@ -42,6 +42,7 @@ final class AppModel {
     @ObservationIgnored private var pendingWatchStart: (request: WatchStartRequest, deadline: TimeInterval)?
     /// Dernière demande de démarrage traitée (une demande répétée n'est jamais rejouée).
     @ObservationIgnored private var handledStartRequests: Set<UUID> = []
+    @ObservationIgnored private var lastStartResult: WatchStartResult?
     /// Bandeau d'information (ex. séance lancée depuis la montre).
     var notice: String?
     /// Scénario de test (simulateur), actif seulement avec `-FouleeScenario`.
@@ -99,6 +100,11 @@ final class AppModel {
         watch.onControl = { [weak self] c in self?.handleWatchControl(c) }
         watch.onStartRequest = { [weak self] r in self?.handleWatchStart(r) }
         watch.onContextRequested = { [weak self] in self?.publishWatchContext(force: true) }
+        watch.contextProvider = { [unowned self] in self.watchContext() }
+        watch.liveProvider = { [weak self] in
+            guard let s = self?.sessionService, s.session.status != .ready else { return nil }
+            return WatchLiveStatus.make(session: s.session, now: MonotonicClock.now(), date: Date())
+        }
     }
 
     // MARK: - Montre : catalogue, démarrage, commandes
@@ -111,7 +117,7 @@ final class AppModel {
         let active = hasActiveSession ? sessionService?.session.record : nil
         return WatchPhoneContext(programs: dataStore.allPrograms().map(WatchProgramSummary.init), treadmill: brief,
                                  activeSessionID: active?.id, activeProgramName: active?.title,
-                                 zoneBounds: settings.session.zones.bounds, sentAt: Date())
+                                 zoneBounds: settings.session.zones.bounds, sentAt: Date(), lastStartResult: lastStartResult)
     }
 
     /// Publie le contexte s'il a changé (vérifié toutes les 2 s, et immédiatement sur demande).
@@ -167,6 +173,7 @@ final class AppModel {
             }
         }
         log.log(.watch, "Démarrage Watch : \(result.accepted ? "accepté" : "refusé") — \(result.message)")
+        lastStartResult = result
         watch.sendReliably(.startResult(result))
         publishWatchContext(force: true)
         sendWatchStatus(force: true)

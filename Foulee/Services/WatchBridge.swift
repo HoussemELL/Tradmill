@@ -54,6 +54,11 @@ final class WatchBridge {
     @ObservationIgnored var onStartRequest: ((WatchStartRequest) -> Void)?
     @ObservationIgnored var onContextRequested: (() -> Void)?
     @ObservationIgnored private var lastContext: WatchPhoneContext?
+    @ObservationIgnored private var lastPublishError: String?
+    /// Contexte et état de séance actuels, renvoyés dans la réponse à une demande de la montre
+    /// (fonctionne même quand l'iPhone ne peut pas envoyer de lui-même).
+    @ObservationIgnored var contextProvider: (() -> WatchPhoneContext)?
+    @ObservationIgnored var liveProvider: (() -> WatchLiveStatus?)?
     /// Dernier message reçu de la montre (pour l'affichage « Watch reliée »).
     private(set) var lastWatchMessageAt: Date?
 
@@ -153,11 +158,16 @@ final class WatchBridge {
         guard force || !ctx.sameContent(as: lastContext) else { return }
         guard WCSession.isSupported(), WCSession.default.activationState == .activated,
               let data = try? ctx.encoded() else { return }
+        lastContext = ctx
+        guard WCSession.default.isPaired, WCSession.default.isWatchAppInstalled else { return }
         do {
             try WCSession.default.updateApplicationContext([WatchPhoneContext.key: data])
-            lastContext = ctx
+            lastPublishError = nil
         } catch {
-            log.log(.warning, "Contexte Watch non publié : \(error.localizedDescription)")
+            if lastPublishError != error.localizedDescription {
+                lastPublishError = error.localizedDescription
+                log.log(.warning, "Contexte Watch non publié : \(error.localizedDescription)")
+            }
         }
         if WCSession.default.isReachable { send(.context(ctx), quiet: true) }
     }
@@ -208,6 +218,7 @@ final class WatchBridge {
 
     fileprivate func connectivityChanged() {
         connectivityRevision += 1
+        lastContext = nil  // republier (app Watch installée entre-temps, nouvelle montre…)
     }
 
     fileprivate func attach(_ session: HKWorkoutSession) {
@@ -235,6 +246,22 @@ final class WatchBridge {
         log.log(.warning, "Miroir Watch déconnecté" + (error.map { " : \($0.localizedDescription)" } ?? ""))
         mirrored = nil
         linkState = .failed("miroir interrompu")
+    }
+
+    /// Message de la montre attendant une réponse : la demande de contexte reçoit programmes,
+    /// tapis, dernier résultat de démarrage et état de séance.
+    fileprivate func receive(_ data: Data, reply: @escaping ([String: Any]) -> Void) {
+        guard let msg = try? WatchMessage.decode(data), case .requestContext = msg else {
+            reply([:])
+            receive(data, via: false)
+            return
+        }
+        lastWatchMessageAt = Date()
+        var answer: [String: Any] = [:]
+        if let ctx = contextProvider?(), let d = try? ctx.encoded() { answer[WatchPhoneContext.key] = d }
+        if let live = liveProvider?(), let d = try? WatchMessage.liveStatus(live).encoded() { answer[WatchPhoneContext.liveKey] = d }
+        reply(answer)
+        onContextRequested?()
     }
 
     fileprivate func receive(_ data: Data, via mirror: Bool) {
@@ -267,7 +294,7 @@ final class WatchBridge {
             log.log(.watch, "Démarrage demandé depuis la Watch (\(r.programID.map { "programme \($0.uuidString.prefix(8))" } ?? "séance libre"))")
             onStartRequest?(r)
         case .requestContext:
-            if let c = lastContext { send(.context(c), quiet: true) }
+            if let c = contextProvider?() ?? lastContext { send(.context(c), quiet: true) }
             onContextRequested?()
         case .linkSession, .command, .workoutMetadata, .liveStatus, .context, .startResult:
             break
@@ -318,9 +345,11 @@ private final class ConnectivityProxy: NSObject, WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        replyHandler([:])
-        guard let data = message[WatchMessage.wcKey] as? Data else { return }
-        DispatchQueue.main.async { self.owner?.receive(data, via: false) }
+        guard let data = message[WatchMessage.wcKey] as? Data else { replyHandler([:]); return }
+        DispatchQueue.main.async {
+            guard let owner = self.owner else { replyHandler([:]); return }
+            owner.receive(data, reply: replyHandler)
+        }
     }
 
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {

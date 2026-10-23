@@ -52,6 +52,9 @@ final class ScenarioRunner {
         var startCommandsAfterLinkLoss = 0
         var statusAfterReconnect: String?
         var finished: Final?
+        var watchPaired = false
+        var watchAppInstalled = false
+        var watchReachable = false
         var log: [String] = []
         var updatedAt = Date()
     }
@@ -62,7 +65,8 @@ final class ScenarioRunner {
     private var startedAt: Date?
     private var script: [(action: String, t: Double, arg: String?)] = []
     private var done = Set<Int>()
-    private var heart = SimulatedHeartModel()
+    /// 5,8 km/h → 131 bpm (sous Z2), 6,2 → 137 (dans Z2 = 135–148).
+    private var heart = SimulatedHeartModel(restBPM: 38)
     private var hrGap: ClosedRange<Double>?
     private var lastWatchHR: TimeInterval?
     private var linkLostAt: Date?
@@ -141,6 +145,9 @@ final class ScenarioRunner {
 
     private func tick() {
         let tm = model.treadmill
+        report.watchPaired = model.watch.isWatchPaired
+        report.watchAppInstalled = model.watch.isAppInstalled
+        report.watchReachable = model.watch.isReachable
         if let p = Self.value("-FouleeStartProgram"), !startRequested, tm.connection.isReady, !model.hasActiveSession {
             startRequested = true
             let program = model.dataStore.allPrograms().first { $0.name == p }

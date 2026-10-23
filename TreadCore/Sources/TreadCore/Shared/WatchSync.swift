@@ -103,15 +103,18 @@ public struct WatchPhoneContext: Codable, Equatable, Sendable {
     public var activeProgramName: String?
     public var zoneBounds: [Int]
     public var sentAt: Date
+    /// Dernier résultat de démarrage (la montre peut le récupérer si le message direct s'est perdu).
+    public var lastStartResult: WatchStartResult?
 
     public init(programs: [WatchProgramSummary], treadmill: WatchTreadmillBrief, activeSessionID: UUID?,
-                activeProgramName: String?, zoneBounds: [Int], sentAt: Date) {
+                activeProgramName: String?, zoneBounds: [Int], sentAt: Date, lastStartResult: WatchStartResult? = nil) {
         self.programs = programs
         self.treadmill = treadmill
         self.activeSessionID = activeSessionID
         self.activeProgramName = activeProgramName
         self.zoneBounds = zoneBounds
         self.sentAt = sentAt
+        self.lastStartResult = lastStartResult
     }
 
     /// Égalité hors date d'envoi (évite de republier un contexte inchangé).
@@ -119,9 +122,12 @@ public struct WatchPhoneContext: Codable, Equatable, Sendable {
         guard let o else { return false }
         return programs == o.programs && treadmill == o.treadmill && activeSessionID == o.activeSessionID
             && activeProgramName == o.activeProgramName && zoneBounds == o.zoneBounds
+            && lastStartResult == o.lastStartResult
     }
 
     public static let key = "foulee.context"
+    /// Clé de l'état de séance dans la réponse à `requestContext`.
+    public static let liveKey = "foulee.live"
 
     public func encoded() throws -> Data {
         let e = JSONEncoder()

@@ -538,10 +538,17 @@
     "expect": [
      {
       "file": "watch.json",
+      "path": "programNames",
+      "op": "contains",
+      "value": "Test Zone 2 Auto",
+      "label": "catalogue de l'iPhone reçu (programmes de test inclus)"
+     },
+     {
+      "file": "watch.json",
       "path": "programsReceived",
       "op": "ge",
-      "value": 7,
-      "label": "programmes reçus sur la montre"
+      "value": 9,
+      "label": "tous les programmes (7 prédéfinis + 2 personnels)"
      }
     ]
    },
@@ -899,6 +906,13 @@
       "op": "lenge",
       "value": 1,
       "label": "pilote FC : ajustement avec la FC de la montre"
+     },
+     {
+      "file": "phone.json",
+      "path": "finished.autoAdjustments",
+      "op": "ge",
+      "value": 1,
+      "label": "ajustements enregistrés"
      }
     ]
    }

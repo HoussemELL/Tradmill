@@ -207,8 +207,9 @@ struct PrepareSessionView: View {
             } label: {
                 Label(selectedProgram.map { "Démarrer · \($0.name)" } ?? "Démarrer · Séance libre", systemImage: "play.fill")
                     .font(.title3.bold())
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.7)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, minHeight: 54)
             }
             .buttonStyle(.borderedProminent)
@@ -225,29 +226,34 @@ struct PrepareSessionView: View {
 /// Tapis, cardio et montre : ce qui conditionne le départ.
 struct DevicesCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Binding var showDevicePicker: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                Image(systemName: "figure.walk.treadmill")
-                    .font(.title2)
-                    .foregroundStyle(model.treadmill.connection.isReady ? Theme.accent : .secondary)
-                    .frame(width: 34)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.treadmill.connection.label).font(.headline).lineLimit(1)
-                    Text(capabilitiesText).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            // Très grands textes : bouton sous le nom plutôt qu'à côté (pas de mot coupé).
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                : AnyLayout(HStackLayout(spacing: 12))
+            layout {
+                HStack(spacing: 12) {
+                    Image(systemName: "figure.walk.treadmill")
+                        .font(.title2)
+                        .foregroundStyle(model.treadmill.connection.isReady ? Theme.accent : .secondary)
+                        .frame(width: 34)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.treadmill.connection.label).font(.headline).lineLimit(2)
+                        Text(capabilitiesText).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                    }
                 }
-                Spacer()
+                if !typeSize.isAccessibilitySize { Spacer(minLength: 0) }
                 Button(model.treadmill.connection == .none ? "Connecter" : "Changer") { showDevicePicker = true }
                     .buttonStyle(.bordered)
+                    .fixedSize()
             }
             Divider()
-            HStack(spacing: 12) {
-                Image(systemName: "heart.fill").foregroundStyle(Theme.heart).frame(width: 34)
-                HeartRateLine()
-                Spacer(minLength: 0)
-            }
+            HeartRateLine()
             HStack(spacing: 12) {
                 Image(systemName: "applewatch").foregroundStyle(watchColor).frame(width: 34)
                 Text(watchText).font(.caption).foregroundStyle(.secondary)
@@ -366,15 +372,15 @@ struct HeartRateLine: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "heart.fill").foregroundStyle(Theme.heart)
+        HStack(spacing: 12) {
+            Image(systemName: "heart.fill").foregroundStyle(Theme.heart).frame(width: 34).accessibilityHidden(true)
             switch model.heartRate.status {
             case let .live(bpm, source, age):
                 Text("\(bpm) bpm · \(source.shortLabel) · il y a \(Int(age)) s")
             case let .stale(bpm, source, age):
                 Text("\(source.shortLabel) : dernière mesure \(bpm) bpm il y a \(Int(age)) s (périmée)").foregroundStyle(.secondary)
             case .unavailable:
-                Text("Aucune fréquence cardiaque (\(model.settings.heartRatePreference.label))").foregroundStyle(.secondary)
+                Text("Pas de FC : connectez une ceinture ou ouvrez Foulée sur l'Apple Watch").foregroundStyle(.secondary)
             }
         }
         .font(.caption)

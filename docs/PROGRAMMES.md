@@ -88,23 +88,52 @@ durées, vitesses, rampes, inclinaisons, réglages du pilote ; le nom ne compte 
 
 ## 5. Apple Watch
 
-App watchOS avec `HKWorkoutSession` + `HKLiveWorkoutBuilder`, en miroir vers l'iPhone
-(WatchConnectivity en secours). L'iPhone pilote le tapis en FTMS ; la montre fournit la FC.
+L'app Watch est une télécommande et un écran de suivi de vos programmes ; l'iPhone reste le
+seul à piloter le tapis (FTMS), la montre fournit la FC (HKWorkoutSession + HKLiveWorkoutBuilder).
 
-Pages (balayage vertical) :
-1. **FC** en direct, **zone** colorée, **bornes** en bpm, **position dans la zone**, indication
-   par rapport à la zone cible, durée ;
-2. **Tapis** : durée, vitesse mesurée, consigne, inclinaison, **étape en cours, temps restant**,
-   étape suivante, état du pilotage FC ;
-3. **Temps par zone** ;
-4. **Commandes** : *Arrêter* (arrête le tapis via l'iPhone, qui termine ensuite l'exercice ;
-   sans réponse en 8 s, l'exercice est terminé sur la montre), *Pause/Reprendre*, *Pilotage FC*.
+**Accueil** :
+- état de l'iPhone et du tapis (« URTM047 prêt », « Tapis non connecté », « iPhone injoignable ») ;
+- **Mes programmes** : tous les programmes de l'iPhone (prédéfinis et personnels, dans le même
+  ordre), avec durée, vitesse max, frise des étapes, badges *FC auto* et *verrouillé* ;
+- une séance en cours sur l'iPhone peut être **suivie** depuis la montre ;
+- *Autres* (secondaire) : séance libre sur le tapis, exercice sans tapis (marche/course, FC seule).
+
+**Détail d'un programme** : durée, vitesse et inclinaison max, toutes les étapes (blocs
+répétés compris) avec durée, vitesse (fixe, progressive ou automatique) et inclinaison, notes,
+bouton **Démarrer** (désactivé avec la raison si le tapis n'est pas prêt).
+
+**Lancement depuis la montre** : *Démarrer* → confirmation → la montre demande à l'iPhone de
+démarrer ce programme. L'iPhone vérifie (tapis connecté — il tente le tapis mémorisé pendant 12 s —,
+pas d'autre séance, programme compatible, demande de moins de 30 s), démarre le tapis puis répond ;
+la montre ne lance son exercice qu'après l'acceptation. En cas de refus, la raison s'affiche et
+rien ne démarre.
+
+**Séance en cours** (pages horizontales, comme l'app Exercice) :
+1. *Commandes* (à gauche) : Arrêter, Pause/Reprendre, Pilotage FC ;
+2. *Mesures* : phase et temps restant, FC, zone colorée et bornes, position dans la zone,
+   vitesse, inclinaison, durée ;
+3. *Programme* : étape en cours, reste, progression du programme, consignes, étape suivante,
+   état du pilotage FC, alertes ;
+4. *Temps par zone*.
+
+**Synchronisation** :
+- catalogue + état du tapis publiés par l'iPhone via `applicationContext` (dernier état gagnant,
+  livré même si la montre était hors de portée ; vérifié toutes les 2 s, republié s'il change) ;
+- état de séance envoyé chaque seconde (miroir HealthKit, sinon WatchConnectivity) ;
+- commandes de la montre **liées à la séance et horodatées** : l'iPhone ignore une commande
+  pour une autre séance, une pause de plus de 30 s, et **ne rejoue jamais une reprise retardée**
+  (> 8 s) ; un arrêt non remis est mis en file (appliqué s'il arrive dans les 2 min) ;
+- pause ou arrêt sur l'iPhone → la montre suit (état en direct + commande de l'exercice) ;
+- iPhone injoignable pendant un arrêt depuis la montre : l'exercice se termine et la montre
+  demande d'arrêter le tapis avec son bouton ou la clé de sécurité ;
+- aucune déconnexion ne provoque d'accélération ni de redémarrage : perte de FC → plus
+  d'accélération et retour progressif à 4,5 km/h ; perte du tapis → pause, rien ne redémarre.
 
 **Zones** : HealthKit ne donne pas accès aux zones personnalisées réglées dans l'app Exercice.
 Foulée calcule par défaut les mêmes zones que l'Apple Watch (réserve cardiaque, FC max et de
 repos lues dans Santé). Si vous avez modifié vos zones sur la montre, recopiez-les dans
 *Réglages › FC max et zones › Partir de ces zones pour saisir mes seuils*. Les bornes sont
-envoyées à la montre à chaque seconde de séance et mémorisées pour une séance sans iPhone.
+envoyées à la montre et mémorisées pour une séance sans iPhone.
 
 **Doublons Santé** : la séance est enregistrée une seule fois — par la Watch si son exercice
 tourne (l'iPhone n'écrit rien et ajoute ses métadonnées), sinon par l'iPhone (voir

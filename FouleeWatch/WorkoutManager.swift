@@ -63,7 +63,9 @@ final class WorkoutManager {
     @ObservationIgnored private var lastZoneSampleAt: Date?
     @ObservationIgnored private var pendingRequest: (request: WatchStartRequest, summary: WatchProgramSummary?)?
     @ObservationIgnored private var simTimer: Timer?
-    @ObservationIgnored private var simHeart = SimulatedHeartModel()
+    @ObservationIgnored private var pollTimer: Timer?
+    @ObservationIgnored private var lastPollAt = Date.distantPast
+    @ObservationIgnored private var simHeart = SimulatedHeartModel(restBPM: 38)
     /// Coupure volontaire de la FC simulée (test de perte de FC), en secondes depuis le départ.
     @ObservationIgnored var simulatedHeartGap: ClosedRange<Double>?
     @ObservationIgnored var onEvent: ((String) -> Void)?
@@ -82,6 +84,18 @@ final class WorkoutManager {
             WCSession.default.delegate = wcProxy
             WCSession.default.activate()
         }
+        // Filet de sécurité : la montre réclame catalogue, résultat de démarrage et état de
+        // séance (souvent pendant un lancement ou si l'état en direct n'arrive plus).
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.poll() }
+    }
+
+    private func poll() {
+        let now = Date()
+        var urgent = context == nil
+        if case .requesting = launch { urgent = true }
+        if isActive, !(liveReceivedAt.map { now.timeIntervalSince($0) < 2.5 } ?? false) { urgent = true }
+        let interval: TimeInterval = urgent ? (isActive ? 1 : 2) : 15
+        if now.timeIntervalSince(lastPollAt) >= interval { requestContext() }
     }
 
     var isActive: Bool {
@@ -109,8 +123,20 @@ final class WorkoutManager {
         if phoneReachable && !was { requestContext() }
     }
 
+    /// Demande programmes, tapis, résultat de démarrage et état de séance ; l'iPhone répond
+    /// directement (fonctionne même s'il ne peut pas envoyer de lui-même).
     func requestContext() {
-        send(.requestContext)
+        lastPollAt = Date()
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable,
+              let data = try? WatchMessage.requestContext.encoded() else { return }
+        WCSession.default.sendMessage([WatchMessage.wcKey: data], replyHandler: { [weak self] reply in
+            let ctx = reply[WatchPhoneContext.key] as? Data
+            let live = reply[WatchPhoneContext.liveKey] as? Data
+            DispatchQueue.main.async {
+                if let ctx { self?.apply(contextData: ctx) }
+                if let live { self?.receive(live) }
+            }
+        }, errorHandler: nil)
     }
 
     fileprivate func apply(contextData data: Data) {
@@ -127,6 +153,7 @@ final class WorkoutManager {
         }
         if let data = try? c.encoded() { UserDefaults.standard.set(data, forKey: Self.contextKey) }
         onEvent?("context:\(c.programs.count)")
+        if let r = c.lastStartResult { handle(startResult: r) }
     }
 
     /// L'iPhone a envoyé son état de séance il y a moins de 5 s.
@@ -379,7 +406,7 @@ final class WorkoutManager {
         let date = Date()
         startDate = date
         phase = .running
-        simHeart = SimulatedHeartModel()
+        simHeart = SimulatedHeartModel(restBPM: 38)
         send(.workoutState(.running, startDate: date))
         onEvent?("workoutStarted")
         simTimer?.invalidate()
@@ -461,6 +488,7 @@ final class WorkoutManager {
                 pendingMetadata.merge(meta) { _, new in new }
             }
         case let .liveStatus(s):
+            if let l = live, let at = liveReceivedAt, l.sentAt > s.sentAt, Date().timeIntervalSince(at) < 5 { return }
             live = s
             liveReceivedAt = Date()
             if s.zoneBounds.count == 6, s.zoneBounds != zoneBounds {
@@ -468,6 +496,7 @@ final class WorkoutManager {
                 UserDefaults.standard.set(s.zoneBounds, forKey: Self.boundsKey)
             }
             onEvent?("live:\(s.state.rawValue):\(s.phaseName ?? "-"):\(s.targetSpeedKmh)")
+            followPhoneState(s)
         case let .context(c):
             apply(context: c)
         case let .startResult(r):
@@ -479,6 +508,26 @@ final class WorkoutManager {
             case .resume: resume()
             case .end: stopRequestedAt = nil; end()
             case .discard: end(discard: true)
+            }
+        default:
+            break
+        }
+    }
+
+    /// L'exercice de la montre suit l'état de la séance de l'iPhone (pause, reprise, fin), même
+    /// si la commande directe de l'iPhone s'est perdue.
+    private func followPhoneState(_ s: WatchLiveStatus) {
+        guard isActive, phase != .ending, s.sessionID == nil || linkedSessionID == nil || s.sessionID == linkedSessionID else { return }
+        switch s.state {
+        case .paused where phase == .running: pause()
+        case .running where phase == .paused: resume()
+        case .finished:
+            // L'iPhone envoie normalement « terminer » avec les métadonnées ; sinon on termine ici.
+            let id = s.sessionID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                guard let self, self.isActive, self.phase != .ending, self.live?.state == .finished, self.live?.sessionID == id else { return }
+                self.onEvent?("ended-after-phone")
+                self.end()
             }
         default:
             break

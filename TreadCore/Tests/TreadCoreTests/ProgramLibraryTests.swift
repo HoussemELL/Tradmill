@@ -150,9 +150,24 @@ final class ProgramLibraryTests: XCTestCase {
         ])
         let s = SessionHarness(program: p)
         XCTAssertNoThrow(try s.session.start().get())
-        let trace = requestedTrace(s, seconds: 170) { _ in 120 }
-        let afterStart = Array(trace.drop { $0 < 5 - 0.001 })
-        XCTAssertEqual(afterStart.prefix(9), [5, 6, 7, 8, 9, 8, 7, 6, 5], "paliers de 1 km/h : \(trace)")
+        // Trace horodatée : chaque palier intermédiaire doit durer (le tapis le rejoint d'abord).
+        var timed: [(v: Double, t: Double)] = []
+        let end = s.h.now + 170
+        var nextHR = s.h.now
+        while s.h.now < end {
+            s.h.now += 0.1
+            s.h.link.advance()
+            if s.h.now >= nextHR { s.hr.ingest(HeartRateReading(bpm: 120, receivedAt: s.h.now, source: .bleSensor)); nextHR += 1 }
+            s.session.tick()
+            if let r = s.h.controller.speed.requested, timed.last.map({ abs($0.v - r) > 0.001 }) ?? true { timed.append((r, s.h.now)) }
+        }
+        let trace = timed.map(\.v)
+        let from = timed.firstIndex { abs($0.v - 5) < 0.001 } ?? 0
+        let steps = Array(timed[from...].prefix(9))
+        XCTAssertEqual(steps.map(\.v), [5, 6, 7, 8, 9, 8, 7, 6, 5], "paliers de 1 km/h : \(trace)")
+        for k in [1, 2, 3, 5, 6, 7] {
+            XCTAssertGreaterThanOrEqual(steps[k + 1].t - steps[k].t, 1.4, "palier \(steps[k].v) km/h tenu jusqu'à ce que le tapis l'atteigne")
+        }
         XCTAssertEqual(s.h.controller.telemetry.speedKmh ?? 0, 5, accuracy: 0.05)
     }
 
