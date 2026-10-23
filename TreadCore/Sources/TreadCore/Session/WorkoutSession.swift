@@ -502,6 +502,7 @@ public final class WorkoutSession {
         if !controller.isMoving && record.beltStartDate != nil {
             beltStoppedAt = now
             record.beltStopDate = record.date(at: now - startMonotonic)
+            record.zoneSeconds = SessionAnalysis.zoneSeconds(record, zones: settings.zones)
         }
         if let src = heartRate.activeSource, src == .bleSensor || src == .treadmill,
            let r = heartRate.latest[src], now - r.receivedAt < 10 {
@@ -542,6 +543,8 @@ public final class WorkoutSession {
             record.beltStopDate = record.date(at: fin - startMonotonic)
             event(.info, "Arrêt de la bande non observé : heure de fin = commande d'arrêt")
         }
+        // Arrêt réel de la bande désormais connu : temps par zone sur la bonne période.
+        record.zoneSeconds = SessionAnalysis.zoneSeconds(record, zones: settings.zones)
         log.log(.session, "Séance finalisée (\(record.heartRateReadings?.count ?? 0) mesures de FC horodatées)")
         onRecordFinalized?(record)
     }
@@ -567,7 +570,9 @@ public final class WorkoutSession {
         r.distanceSource = distanceSource
         r.steps = steps.value
         r.stepsSource = steps.source
-        r.zoneSeconds = zoneTime.seconds
+        // Règle commune (affichage, Santé, Rythme) ; `zoneTime` ne sert qu'à l'affichage en direct.
+        r.zoneSettings = settings.zones
+        r.zoneSeconds = SessionAnalysis.zoneSeconds(r, zones: settings.zones)
         r.calories.treadmillKcal = treadmillKcal
         r.calories.estimatedKcal = estimatedKcalValue
         r.recomputeAggregates()

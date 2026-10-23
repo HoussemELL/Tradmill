@@ -325,21 +325,15 @@ public extension SessionRecord {
     }
 
     /// Même séance, zones recalculées depuis la FC enregistrée avec `zones` (changement de
-    /// méthode ou de FC max après coup) : zone de chaque échantillon, temps par zone, réglages.
-    /// Rien d'autre ne change. Mêmes bornes qu'à l'enregistrement : séance renvoyée telle quelle.
+    /// méthode ou de FC max après coup) : zone de chaque échantillon, réglages, et temps par zone
+    /// selon la règle commune (`SessionAnalysis.zoneSeconds`). Rien d'autre ne change.
     func rezoned(with zones: HeartZoneSettings) -> SessionRecord {
-        guard zonesDiffer(from: zones) else { return self }
         var r = self
-        var time = ZoneTimeAccumulator()
-        for i in r.samples.indices {
-            let s = r.samples[i]
-            let zone = s.hr.map { zones.zone(for: $0) }
-            r.samples[i].zone = zone
-            // Comme pendant la séance : pas de temps compté en pause ni sans FC.
-            if s.paused { time.interrupt() } else { time.add(zone: zone, at: s.t) }
+        if zonesDiffer(from: zones) {
+            for i in r.samples.indices { r.samples[i].zone = r.samples[i].hr.map { zones.zone(for: $0) } }
+            r.zoneSettings = zones
         }
-        r.zoneSeconds = time.seconds
-        r.zoneSettings = zones
+        r.zoneSeconds = SessionAnalysis.zoneSeconds(r, zones: zones)
         return r
     }
 }

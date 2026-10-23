@@ -68,6 +68,65 @@ public enum SessionAnalysis {
         return b.hr
     }
 
+    // MARK: - Temps par zone (règle commune Foulée / Rythme, docs/ZONES.md)
+
+    /// Durée maximale attribuée à une mesure de FC (au-delà : trou, non compté).
+    public static let zoneHoldSeconds: Double = 10
+    /// Identifiant de la règle, exporté avec les zones.
+    public static let zoneRuleID = "foulee.zones.v1: heartRate[] tenue jusqu'à la mesure suivante (max 10 s), bande en mouvement hors pauses"
+
+    /// Périodes où la bande tournait (s depuis `startDate`) : démarrage réel → arrêt réel,
+    /// pauses exclues. Ni le compte à rebours ni la récupération après l'arrêt n'en font partie.
+    public static func activeIntervals(_ r: SessionRecord) -> [(start: Double, end: Double)] {
+        let firstActive = r.samples.first { !$0.paused }?.t
+        guard let start = r.beltStartDate.map({ $0.timeIntervalSince(r.startDate) }) ?? firstActive else { return [] }
+        let lastActive = r.samples.last { !$0.paused }?.t
+        guard let end = r.beltStopDate.map({ $0.timeIntervalSince(r.startDate) }) ?? lastActive, end > start else { return [] }
+        var out: [(start: Double, end: Double)] = []
+        var from: Double? = start
+        for e in r.events where e.t > start && e.t < end {
+            switch e.kind {
+            case .pause:
+                if let f = from { if e.t > f { out.append((f, e.t)) }; from = nil }
+            case .resume:
+                if from == nil { from = e.t }
+            default:
+                break
+            }
+        }
+        if let f = from, end > f { out.append((f, end)) }
+        return out
+    }
+
+    /// Temps par zone (index 0 = sous Z1, 1…5), règle reproductible depuis l'export :
+    /// chaque mesure de FC horodatée (`heartRate[]`) compte jusqu'à la mesure suivante, au plus
+    /// `zoneHoldSeconds`, dans la zone de sa valeur, et seulement sur les périodes où la bande
+    /// tournait (`activeIntervals`). Sans mesures horodatées (anciennes séances) : échantillons 1 Hz.
+    public static func zoneSeconds(_ r: SessionRecord, zones: HeartZoneSettings) -> [Double] {
+        var out = Array(repeating: 0.0, count: 6)
+        let active = activeIntervals(r)
+        guard let readings = r.heartRateReadings?.sorted(by: { $0.t < $1.t }), !readings.isEmpty else {
+            var time = ZoneTimeAccumulator()
+            for s in r.samples {
+                if s.paused { time.interrupt() } else { time.add(zone: s.hr.map { zones.zone(for: $0) }, at: s.t) }
+            }
+            return time.seconds
+        }
+        for (i, h) in readings.enumerated() {
+            let next = i + 1 < readings.count ? readings[i + 1].t : h.t + zoneHoldSeconds
+            let a = h.t, b = min(next, h.t + zoneHoldSeconds)
+            guard b > a else { continue }
+            var covered = 0.0
+            for iv in active {
+                let lo = max(a, iv.start), hi = min(b, iv.end)
+                if hi > lo { covered += hi - lo }
+            }
+            let z = zones.zone(for: h.bpm)
+            if covered > 0, out.indices.contains(z) { out[z] += covered }
+        }
+        return out
+    }
+
     private static func zone(of bpm: Int, in r: SessionRecord) -> Int? {
         r.zoneSettings?.zone(for: bpm)
     }

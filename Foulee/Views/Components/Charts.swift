@@ -48,6 +48,8 @@ struct ZoneMethodNote: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(zones.methodDescription)
+            Text(boundsText).monospacedDigit()
+            Text("Temps compté bande en mouvement, hors pauses : chaque mesure de FC vaut jusqu'à la suivante (10 s au plus).")
             if record.zonesDiffer(from: zones) {
                 Label("Zones recalculées depuis la FC enregistrée avec vos réglages actuels"
                       + (record.zoneSettings.map { " (séance faite avec : \($0.effectiveMethod.label), FC max \($0.maxHR))" } ?? "") + ".",
@@ -56,6 +58,21 @@ struct ZoneMethodNote: View {
         }
         .font(.caption).foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// « Z1 < 128 · Z2 128–140 · … · Z5 ≥ 164 bpm » (borne haute exclue).
+    private var boundsText: String {
+        let z = zones.zones
+        guard z.count == 5 else { return "" }
+        var parts: [String] = []
+        for r in z {
+            switch r.zone {
+            case 1: parts.append(r.lower > 0 ? "Z1 \(r.lower)–\(r.upper)" : "Z1 < \(r.upper)")
+            case 5: parts.append("Z5 ≥ \(r.lower)")
+            default: parts.append("Z\(r.zone) \(r.lower)–\(r.upper)")
+            }
+        }
+        return parts.joined(separator: " · ") + " bpm"
     }
 }
 

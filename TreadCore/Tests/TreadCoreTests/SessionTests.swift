@@ -245,6 +245,26 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(normal.finished).distanceSource, .treadmill, "compteur du tapis plausible : retenu")
     }
 
+    func testZoneTimeRuleCountsBeltTimeOnly() throws {
+        let s = SessionHarness(program: program())
+        XCTAssertNoThrow(try s.session.start().get())
+        s.run(40, hrBPM: 130)
+        s.session.pause()
+        s.run(30, hrBPM: 130)
+        XCTAssertNoThrow(try s.session.resume().get())
+        s.run(200, hrBPM: 130)
+        let r = try XCTUnwrap(s.finished)
+        let zones = try XCTUnwrap(r.zoneSettings)
+        let secs = SessionAnalysis.zoneSeconds(r, zones: zones)
+        XCTAssertEqual(secs, r.zoneSeconds, "même règle à l'enregistrement et à l'affichage")
+        let active = SessionAnalysis.activeIntervals(r).reduce(0) { $0 + $1.end - $1.start }
+        XCTAssertGreaterThan(SessionAnalysis.activeIntervals(r).count, 1, "pause exclue")
+        // Toute la période de bande en mouvement est couverte (FC chaque seconde), pas la pause.
+        XCTAssertEqual(secs.reduce(0, +), active, accuracy: 2)
+        XCTAssertLessThan(secs.reduce(0, +), r.activeSeconds + 15)
+        XCTAssertEqual(r.rezoned(with: zones).zoneSeconds, r.zoneSeconds)
+    }
+
     func testWatchWorkoutStartAlignedOnBelt() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         func live(_ state: WatchLiveStatus.State, belt: Date?, sent: Date = now) -> WatchLiveStatus {

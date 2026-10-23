@@ -102,6 +102,10 @@ public struct RythmeSessionExport: Codable, Equatable, Sendable {
         public var bounds: [Int]
         /// Secondes par zone (index 0 = sous Z1, 1…5).
         public var secondsPerZone: [Double]
+        /// Règle de calcul de `secondsPerZone` (docs/ZONES.md), et origine de FC max / repos.
+        public var rule: String?
+        public var maxHRSource: String?
+        public var restingHRSource: String?
     }
 
     public struct Interruptions: Codable, Equatable, Sendable {
@@ -189,7 +193,9 @@ public struct RythmeSessionExport: Codable, Equatable, Sendable {
         }
         zones = r.zoneSettings.map {
             Zones(method: $0.effectiveMethod.rawValue, maxHR: $0.maxHR, restingHR: $0.restingHR, bounds: $0.bounds,
-                  secondsPerZone: r.zoneSeconds)
+                  secondsPerZone: r.zoneSeconds, rule: SessionAnalysis.zoneRuleID,
+                  maxHRSource: $0.maxHRIsUserValue ? "saisie dans Foulée" : $0.maxHRSource,
+                  restingHRSource: $0.restingHRIsUserValue ? "saisie dans Foulée" : $0.restingHRSource)
         }
         autoAdjustments = r.autoAdjustments ?? []
         interruptions = Interruptions(pauses: r.events.filter { $0.kind == .pause }.count,

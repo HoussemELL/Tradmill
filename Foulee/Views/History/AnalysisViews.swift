@@ -189,7 +189,7 @@ struct IntervalStatsCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Par intervalle").font(.headline)
             ForEach(stats) { st in row(st) }
-            Text("Récup. 60 s : baisse de FC dans la minute qui suit la fin de l'intervalle (phase suivante plus lente ou arrêt).")
+            Text("Consigne : vitesse demandée par le programme. Mesurée : moyenne réelle de la bande, accélération au départ comprise. Récup. 60 s : baisse de FC dans la minute qui suit la fin de l'intervalle (phase suivante plus lente ou arrêt).")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding()
@@ -212,7 +212,9 @@ struct IntervalStatsCard: View {
     }
 
     private func line(_ st: PhaseStats) -> String {
-        var parts = ["\(Format.speed(st.avgSpeed)) km/h"]
+        let target = st.auto ? "pilotée FC"
+            : st.endSpeedKmh.map { "\(Format.speed(st.targetSpeedKmh))→\(Format.speed($0)) km/h" } ?? "\(Format.speed(st.targetSpeedKmh)) km/h"
+        var parts = ["consigne \(target)", "mesurée \(Format.speed(st.avgSpeed)) moy"]
         parts.append("FC \(st.avgHR.map(String.init) ?? "—") moy · \(st.maxHR.map(String.init) ?? "—") max")
         if let d = st.recoveryDrop60 { parts.append("récup. 60 s −\(d)") }
         if let z = st.targetZone, let s = st.secondsInTargetZone, st.secondsWithHR > 0 {
