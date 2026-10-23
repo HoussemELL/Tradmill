@@ -209,6 +209,27 @@ public enum WatchStartPolicy {
     }
 }
 
+// MARK: - Début de l'exercice Watch
+
+/// Exercice Watch lancé alors que la bande de l'iPhone tourne déjà (montre réveillée ou app
+/// lancée en retard) : son début est aligné sur le démarrage de la bande, pour que la durée
+/// dans Santé couvre toute la séance.
+public enum WatchWorkoutAlignment {
+    /// Retard en dessous duquel on garde l'heure courante.
+    public static let minLag: TimeInterval = 5
+    /// Au-delà, l'écart est jugé incohérent (autre séance, horloge) : heure courante.
+    public static let maxLag: TimeInterval = 15 * 60
+    /// Âge maximal de l'état de séance reçu de l'iPhone.
+    public static let maxStatusAge: TimeInterval = 20
+
+    public static func startDate(now: Date, live: WatchLiveStatus?) -> Date {
+        guard let l = live, now.timeIntervalSince(l.sentAt) <= maxStatusAge,
+              l.state == .running || l.state == .paused, let belt = l.beltStartDate else { return now }
+        let lag = now.timeIntervalSince(belt)
+        return lag > minLag && lag < maxLag ? belt : now
+    }
+}
+
 // MARK: - Commandes horodatées
 
 /// Commande de séance depuis la montre, liée à une séance et horodatée : une commande retardée

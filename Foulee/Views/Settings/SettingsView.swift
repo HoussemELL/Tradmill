@@ -173,6 +173,7 @@ struct ZoneSettingsView: View {
                     }))
                 if zones.maxHRIsUserValue {
                     Stepper("FC max : \(zones.maxHR) bpm", value: $model.settings.session.zones.maxHR, in: 100...240)
+                    Text("Saisie dans Foulée").font(.caption).foregroundStyle(.secondary)
                 } else {
                     LabeledContent("FC max", value: "\(zones.maxHR) bpm")
                     Text(zones.maxHRSource).font(.caption).foregroundStyle(.secondary)
@@ -187,6 +188,7 @@ struct ZoneSettingsView: View {
                 if zones.restingHRIsUserValue, let rest = zones.restingHR {
                     Stepper("FC de repos : \(rest) bpm", value: Binding(
                         get: { rest }, set: { model.settings.session.zones.restingHR = $0 }), in: 30...120)
+                    Text("Saisie dans Foulée").font(.caption).foregroundStyle(.secondary)
                 } else {
                     LabeledContent("FC de repos", value: zones.restingHR.map { "\($0) bpm" } ?? "—")
                     Text(zones.restingHRSource).font(.caption).foregroundStyle(.secondary)

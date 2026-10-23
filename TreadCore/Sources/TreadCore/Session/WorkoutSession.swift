@@ -160,8 +160,16 @@ public final class WorkoutSession {
         if engine.currentPhase == nil { return engine.schedule.count > 1 && (status == .ready || status == .starting) ? engine.schedule[1] : nil }
         return engine.nextPhase
     }
-    public var distanceMeters: Double { hasDistanceCounter ? distanceCounter.sessionTotal : integratedDistance }
-    public var distanceSource: MetricSource { hasDistanceCounter ? .treadmill : (integratedDistance > 0 ? .estimated : .none) }
+    public var distanceMeters: Double { usesTreadmillDistance ? distanceCounter.sessionTotal : integratedDistance }
+    public var distanceSource: MetricSource { usesTreadmillDistance ? .treadmill : (integratedDistance > 0 ? .estimated : .none) }
+    /// Compteur du tapis retenu s'il est annoncé et plausible. Certains tapis envoient le champ
+    /// distance mais le laissent figé (0) : on prend alors la distance intégrée depuis la vitesse
+    /// mesurée, toujours calculée en parallèle, plutôt que d'afficher 0 m.
+    public var usesTreadmillDistance: Bool {
+        hasDistanceCounter && distanceCounter.sessionTotal >= integratedDistance * Self.minTreadmillDistanceRatio
+    }
+    /// En dessous de cette part de la distance intégrée, le compteur du tapis est jugé figé.
+    public static let minTreadmillDistanceRatio = 0.5
     public var treadmillKcal: Double? { energyCounter.sessionTotal > 0 ? energyCounter.sessionTotal : nil }
     public var estimatedKcalValue: Double? { settings.weightKg == nil ? nil : estimatedKcal }
 
@@ -318,18 +326,21 @@ public final class WorkoutSession {
 
     /// Télémétrie décodée (brancher sur `controller.onTelemetry`).
     public func handleTelemetry(_ d: TreadmillData, at now: TimeInterval) {
+        var counterDelta: Double?
         if let raw = d.totalDistanceMeters {
             hasDistanceCounter = true
             let before = distanceCounter.sessionTotal
             if let a = distanceCounter.ingest(UInt64(raw), at: now) { logAnomaly("distance", a) }
-            steps.ingestDistance(deltaMeters: distanceCounter.sessionTotal - before, sessionElapsed: now - startMonotonic)
-        } else if let v = d.instantaneousSpeedKmh {
-            // Pas de distance fournie : intégration de la vitesse mesurée.
-            if let last = lastSpeedSampleAt, now > last, now - last < 5 {
-                let delta = v / 3.6 * (now - last)
-                integratedDistance += delta
-                steps.ingestDistance(deltaMeters: delta, sessionElapsed: now - startMonotonic)
-            }
+            counterDelta = distanceCounter.sessionTotal - before
+        }
+        // Intégration de la vitesse mesurée, toujours (secours si le compteur du tapis reste figé).
+        var integratedDelta: Double?
+        if let v = d.instantaneousSpeedKmh, let last = lastSpeedSampleAt, now > last, now - last < 5 {
+            integratedDelta = v / 3.6 * (now - last)
+            integratedDistance += integratedDelta ?? 0
+        }
+        if let delta = usesTreadmillDistance ? counterDelta : integratedDelta, delta > 0 {
+            steps.ingestDistance(deltaMeters: delta, sessionElapsed: now - startMonotonic)
         }
         if d.instantaneousSpeedKmh != nil { lastSpeedSampleAt = now }
         if let raw = d.totalEnergyKcal {
@@ -496,6 +507,10 @@ public final class WorkoutSession {
            let r = heartRate.latest[src], now - r.receivedAt < 10 {
             recoveryWithHeartRate = true
             log.log(.session, "Enregistrement de la FC de récupération pendant 2 minutes après l'arrêt de la bande")
+        }
+        if hasDistanceCounter && !usesTreadmillDistance {
+            log.log(.session, String(format: "Distance du tapis figée (%.0f m) : distance intégrée depuis la vitesse mesurée (%.0f m)",
+                                     distanceCounter.sessionTotal, integratedDistance))
         }
         log.log(.session, String(format: "Séance terminée : %.0f s actives, %.0f m", record.activeSeconds, record.distanceMeters))
         changed()

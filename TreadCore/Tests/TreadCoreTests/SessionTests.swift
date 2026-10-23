@@ -226,6 +226,55 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertEqual(SessionExport.fileName(for: r, ext: "csv").hasSuffix(".csv"), true)
     }
 
+    func testFrozenTreadmillDistanceFallsBackToMeasuredSpeed() throws {
+        var q = SimulatedTreadmill.Quirks.urtm047Like
+        q.frozenDistance = true
+        let s = SessionHarness(program: program(), quirks: q)
+        XCTAssertNoThrow(try s.session.start().get())
+        s.run(200, hrBPM: 130)
+        let r = try XCTUnwrap(s.finished)
+        XCTAssertFalse(s.session.usesTreadmillDistance)
+        XCTAssertEqual(r.distanceSource, .estimated, "distance intégrée depuis la vitesse mesurée")
+        // 60 s à 4 km/h + 60 s à 6 km/h + 30 s à 3 km/h ≈ 192 m (rampes comprises).
+        XCTAssertGreaterThan(r.distanceMeters, 150)
+        XCTAssertLessThan(r.distanceMeters, 230)
+
+        let normal = SessionHarness(program: program())
+        XCTAssertNoThrow(try normal.session.start().get())
+        normal.run(200, hrBPM: 130)
+        XCTAssertEqual(try XCTUnwrap(normal.finished).distanceSource, .treadmill, "compteur du tapis plausible : retenu")
+    }
+
+    func testWatchWorkoutStartAlignedOnBelt() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        func live(_ state: WatchLiveStatus.State, belt: Date?, sent: Date = now) -> WatchLiveStatus {
+            WatchLiveStatus(state: state, stateLabel: "", programName: nil, activeSeconds: 0, speedKmh: nil, inclinePercent: nil,
+                            targetSpeedKmh: 0, targetInclinePercent: 0, phaseName: nil, phaseIndex: nil, phaseCount: 0,
+                            phaseRemaining: nil, programRemaining: nil, nextPhaseName: nil, zoneBounds: [], zoneSeconds: [],
+                            targetZone: nil, phoneHeartRate: nil, phoneHeartRateSource: nil, phoneZone: nil,
+                            autopilotStatus: nil, autopilotManual: false, sentAt: sent, beltStartDate: belt)
+        }
+        let belt = now.addingTimeInterval(-120)
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: belt)), belt, "montre en retard de 2 min")
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.starting, belt: nil)), now, "bande pas encore partie")
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: now.addingTimeInterval(-2))), now)
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: now.addingTimeInterval(-3600))), now)
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: belt, sent: now.addingTimeInterval(-60))), now,
+                       "état trop ancien")
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: nil), now)
+    }
+
+    func testLegacyDefaultZonesDetected() {
+        var legacy = HeartZoneSettings(maxHR: 200, method: .percentOfMax)
+        XCTAssertTrue(legacy.isLegacyDefault)
+        legacy.maxHRIsUserValue = true
+        XCTAssertFalse(legacy.isLegacyDefault, "FC max saisie : réglage choisi, pas de migration")
+        var custom = HeartZoneSettings(method: .percentOfMax)
+        custom.percentBounds = [0.5, 0.62, 0.72, 0.82, 0.9, 1.0]
+        XCTAssertFalse(custom.isLegacyDefault)
+        XCTAssertFalse(HeartZoneSettings().isLegacyDefault, "méthode Rythme")
+    }
+
     func testFreeRunDerivedTemplate() throws {
         let s = SessionHarness(program: nil)
         _ = s.session.start()

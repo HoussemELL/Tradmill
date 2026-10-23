@@ -90,6 +90,13 @@ public struct HeartZoneSettings: Codable, Equatable, Sendable {
         restingHRSource = try c.decodeIfPresent(String.self, forKey: .restingHRSource) ?? d.restingHRSource
     }
 
+    /// Anciens réglages par défaut (versions antérieures à la méthode Rythme) : % de FC max avec
+    /// les bornes d'origine, sans FC max ni FC de repos saisies. Rien n'y a été choisi.
+    public var isLegacyDefault: Bool {
+        method == .percentOfMax && !maxHRIsUserValue && !restingHRIsUserValue
+            && percentBounds == HeartZoneSettings().percentBounds
+    }
+
     /// Méthode réellement appliquée (la réserve personnalisée exige une FC de repos).
     public var effectiveMethod: ZoneMethod {
         if method == .heartRateReserve && (restingHR == nil || (restingHR ?? 0) >= maxHR) { return .percentOfMax }

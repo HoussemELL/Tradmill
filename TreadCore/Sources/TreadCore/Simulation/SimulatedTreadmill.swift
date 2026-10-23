@@ -28,6 +28,8 @@ public final class SimulatedTreadmill {
         public var dropsResponses = false
         /// Envoie l'extension Step Count (bit 13).
         public var reportsStepCount = false
+        /// Annonce le champ distance mais le laisse à 0 (compteur figé).
+        public var frozenDistance = false
         public var countdown: TimeInterval = 3
         public var accelerationKmhPerSecond: Double = 0.6
         public var inclineRatePercentPerSecond: Double = 0.5
@@ -204,7 +206,7 @@ public final class SimulatedTreadmill {
             lastDataAt = now
             var d = TreadmillData()
             d.instantaneousSpeedKmh = (currentSpeed * 100).rounded() / 100
-            d.totalDistanceMeters = UInt32(distanceMeters)
+            d.totalDistanceMeters = quirks.frozenDistance ? 0 : UInt32(distanceMeters)
             d.inclinationPercent = (currentIncline * 10).rounded() / 10
             d.rampAngleDegrees = nil
             d.totalEnergyKcal = UInt16(energyKcal)

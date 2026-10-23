@@ -38,6 +38,8 @@ struct AppSettings: Codable, Equatable {
     var seededTemplateIDs: [String]?
     /// Révision de la bibliothèque de programmes prédéfinis installée (nil = 1).
     var templatesRevision: Int?
+    /// Migration des anciens réglages de zones par défaut vers la méthode Rythme déjà faite.
+    var didMigrateLegacyZones: Bool?
 }
 
 final class SettingsStore {

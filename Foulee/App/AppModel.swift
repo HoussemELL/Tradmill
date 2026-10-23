@@ -30,6 +30,8 @@ final class AppModel {
     }
 
     @ObservationIgnored let dataStore: DataStore
+    /// Partage automatique des séances avec Rythme (App Group).
+    @ObservationIgnored let rythmeShare: RythmeShare
     @ObservationIgnored private let settingsStore = SettingsStore()
     @ObservationIgnored private let checkpointStore: CheckpointStore
     @ObservationIgnored private var timer: DispatchSourceTimer?
@@ -67,6 +69,7 @@ final class AppModel {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         checkpointStore = CheckpointStore(directory: support)
+        rythmeShare = RythmeShare(log: log)
         log.log(.info, "Foulée démarrée")
         wireServices()
         seedTemplatesIfNeeded()
@@ -76,6 +79,8 @@ final class AppModel {
             s.configure()
         }
         recoverInterruptedSession()
+        migrateLegacyZonesIfNeeded()
+        syncRythmeShare()
         startLoop()
         // Aussi utile quand iOS lance l'app en arrière-plan (demande de la montre).
         connectRememberedDevices()
@@ -84,6 +89,11 @@ final class AppModel {
     // MARK: - Câblage
 
     private func wireServices() {
+        dataStore.onSessionSaved = { [weak self] r in
+            guard let self else { return }
+            self.rythmeShare.write(r, zones: self.settings.session.zones)
+        }
+        dataStore.onSessionDeleted = { [weak self] id in self?.rythmeShare.remove(id: id) }
         treadmill.onDeviceRemembered = { [weak self] id, name in
             self?.settings.lastTreadmillID = id
             self?.settings.lastTreadmillName = name
@@ -263,6 +273,9 @@ final class AppModel {
             }
         }
         sessionService?.session.settings.zones = settings.session.zones
+        if RythmeShare.zonesFingerprint(settings.session.zones) != RythmeShare.zonesFingerprint(old.session.zones) {
+            syncRythmeShare()
+        }
         sessionService?.session.settings.zoneAlertsEnabled = settings.session.zoneAlertsEnabled
         sessionService?.session.settings.smoothTransitions = settings.session.smoothTransitions
         sessionService?.session.settings.maxSpeedStepKmh = settings.session.maxSpeedStepKmh
@@ -492,6 +505,12 @@ final class AppModel {
         return r
     }
 
+    /// Fichiers partagés avec Rythme : historique manquant, zones modifiées, séances retirées.
+    func syncRythmeShare() {
+        guard rythmeShare.directory != nil else { return }
+        rythmeShare.sync(dataStore.allSessionRecords(), zones: settings.session.zones)
+    }
+
     /// Séance telle qu'affichée et exportée pour Rythme : zones recalculées depuis la FC
     /// enregistrée avec les réglages de zones actuels (l'enregistrement d'origine reste intact).
     func displayRecord(_ r: SessionRecord) -> SessionRecord {
@@ -522,6 +541,7 @@ final class AppModel {
     /// Au premier lancement : demande les autorisations Santé (une fois), puis calcule les zones.
     @MainActor
     func prepareHealth() async {
+        migrateLegacyZonesIfNeeded()
         guard health.isAvailable, !ScenarioRunner.isActive else { return }
         if settings.didRequestHealthAuthorization != true {
             _ = await health.requestAuthorization()
@@ -531,6 +551,18 @@ final class AppModel {
     }
 
     // MARK: - Zones (comme Rythme)
+
+    /// Une seule fois : des réglages restés aux anciennes valeurs par défaut (% de FC max, rien de
+    /// saisi) passent à la méthode Rythme ; FC max et repos sont ensuite calculées depuis Santé.
+    /// Un réglage choisi ensuite, même % de FC max, n'est plus jamais modifié.
+    func migrateLegacyZonesIfNeeded() {
+        guard settings.didMigrateLegacyZones != true else { return }
+        if settings.session.zones.isLegacyDefault {
+            settings.session.zones.method = .rythme
+            log.log(.heart, "Zones : anciens réglages par défaut (% de FC max) remplacés par la méthode Rythme")
+        }
+        settings.didMigrateLegacyZones = true
+    }
 
     /// Recalcule FC max et FC de repos depuis Santé (sauf valeurs saisies dans Foulée).
     @MainActor

@@ -266,6 +266,7 @@ final class WorkoutManager {
             return
         }
         await requestAuthorization()
+        await refreshLiveBeforeStart()
         let config = HKWorkoutConfiguration()
         config.activityType = activity
         config.locationType = .indoor
@@ -280,7 +281,9 @@ final class WorkoutManager {
             session = s
             builder = b
             discardOnEnd = false
-            let date = Date()
+            // Bande déjà en route (montre lancée en retard) : début aligné sur la bande.
+            let date = WatchWorkoutAlignment.startDate(now: Date(), live: live)
+            if Date().timeIntervalSince(date) > 1 { onEvent?("start-aligned:\(Int(Date().timeIntervalSince(date)))") }
             startDate = date
             s.startActivity(with: date)
             try await b.beginCollection(at: date)
@@ -299,6 +302,20 @@ final class WorkoutManager {
             }
         } catch {
             phase = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Avant de démarrer : état de séance récent de l'iPhone (au plus ~2 s d'attente), pour
+    /// savoir si la bande tourne déjà et depuis quand.
+    @MainActor
+    private func refreshLiveBeforeStart() async {
+        if let at = liveReceivedAt, Date().timeIntervalSince(at) < 5 { return }
+        guard WCSession.isSupported(), WCSession.default.isReachable else { return }
+        let asked = Date()
+        requestContext()
+        for _ in 0..<10 {
+            if let at = liveReceivedAt, at >= asked { return }
+            try? await Task.sleep(nanoseconds: 200_000_000)
         }
     }
 

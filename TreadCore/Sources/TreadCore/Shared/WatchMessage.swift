@@ -101,13 +101,16 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
     public var treadmillLinkLost: Bool?
     /// Dernière alerte (perte de FC, écart…) à signaler sur la montre.
     public var alert: String?
+    /// Démarrage réel de la bande (nil avant) : la montre y aligne le début de son exercice.
+    public var beltStartDate: Date?
 
     public init(state: State, stateLabel: String, programName: String?, activeSeconds: Double, speedKmh: Double?,
                 inclinePercent: Double?, targetSpeedKmh: Double, targetInclinePercent: Double, phaseName: String?,
                 phaseIndex: Int?, phaseCount: Int, phaseRemaining: Double?, programRemaining: Double?,
                 nextPhaseName: String?, zoneBounds: [Int], zoneSeconds: [Double], targetZone: Int?,
                 phoneHeartRate: Int?, phoneHeartRateSource: String?, phoneZone: Int?, autopilotStatus: String?,
-                autopilotManual: Bool, sentAt: Date, sessionID: UUID? = nil, treadmillLinkLost: Bool? = nil, alert: String? = nil) {
+                autopilotManual: Bool, sentAt: Date, sessionID: UUID? = nil, treadmillLinkLost: Bool? = nil, alert: String? = nil,
+                beltStartDate: Date? = nil) {
         self.state = state
         self.stateLabel = stateLabel
         self.programName = programName
@@ -134,6 +137,7 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
         self.sessionID = sessionID
         self.treadmillLinkLost = treadmillLinkLost
         self.alert = alert
+        self.beltStartDate = beltStartDate
     }
 
     /// Zone (1…5) d'une FC avec les bornes reçues (même règle que `HeartZoneSettings.zone(for:)` :
@@ -191,6 +195,6 @@ public extension WatchLiveStatus {
             phoneHeartRate: hr.liveBPM, phoneHeartRateSource: hr.liveBPM != nil ? s.heartRate.activeSource?.shortLabel : nil,
             phoneZone: s.currentZone, autopilotStatus: a?.status, autopilotManual: a?.mode == .manual, sentAt: date,
             sessionID: s.record.id, treadmillLinkLost: s.controller.state == .linkLost || s.status == .paused(.connectionLost),
-            alert: s.lastAlert)
+            alert: s.lastAlert, beltStartDate: s.record.beltStartDate)
     }
 }

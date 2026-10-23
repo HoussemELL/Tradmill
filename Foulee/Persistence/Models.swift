@@ -83,6 +83,9 @@ final class SessionEntity {
 /// Accès aux données hors des vues (sauvegarde idempotente par identifiant).
 final class DataStore {
     let context: ModelContext
+    /// Appelés après chaque enregistrement / suppression de séance (partage avec Rythme).
+    var onSessionSaved: ((SessionRecord) -> Void)?
+    var onSessionDeleted: ((UUID) -> Void)?
 
     /// Utiliser le `mainContext` du conteneur pour que les vues (@Query) voient les changements.
     init(context: ModelContext) {
@@ -98,6 +101,12 @@ final class DataStore {
             context.insert(SessionEntity(record: record))
         }
         try? context.save()
+        onSessionSaved?(record)
+    }
+
+    func allSessionRecords() -> [SessionRecord] {
+        let d = FetchDescriptor<SessionEntity>(sortBy: [SortDescriptor(\.startDate)])
+        return ((try? context.fetch(d)) ?? []).compactMap(\.record)
     }
 
     func upsert(_ program: WorkoutProgram) {
@@ -116,6 +125,7 @@ final class DataStore {
         let d = FetchDescriptor<SessionEntity>(predicate: #Predicate { $0.id == id })
         for e in (try? context.fetch(d)) ?? [] { context.delete(e) }
         try? context.save()
+        onSessionDeleted?(id)
     }
 
     func deleteProgram(id: UUID) {

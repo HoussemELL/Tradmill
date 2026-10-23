@@ -5,6 +5,25 @@ exporter pour Rythme* (toutes). Format : `foulee.rythme.session`, version 1, JSO
 Un fichier d'une séance contient un objet ; l'export de tout l'historique, un tableau d'objets.
 Défini dans `TreadCore/Sources/TreadCore/Session/RythmeExport.swift` (testé).
 
+## Partage automatique (sans export)
+
+Foulée et Rythme partagent l'App Group `group.com.houssemelloumi.rythme` (même équipe de
+signature, `Config/Foulee.entitlements`, app iPhone). Foulée y tient à jour, dans
+`Foulee/sessions/`, **un fichier `<session.id>.json` par séance** : un objet
+`foulee.rythme.session`, même encodage que l'export manuel, écriture atomique
+(`Foulee/Services/RythmeShare.swift`).
+
+| Quand | Effet |
+|---|---|
+| Séance enregistrée (`DataStore.upsert`) : fin, FC de récupération, ressenti saisi après coup, correction, séance lancée depuis la Watch | fichier (ré)écrit |
+| Séance supprimée (`DataStore.delete`) | fichier supprimé |
+| Lancement de Foulée | fichiers manquants écrits (historique) ; fichiers de séances supprimées retirés |
+| Méthode de zones ou FC max modifiée | tous les fichiers réécrits (zones = réglages actuels, comme à l'écran) |
+| Séance simulée | jamais écrite |
+
+Contrat : ajouter des champs optionnels est permis ; renommer ou supprimer un champ demande
+`formatVersion` 2 (à coordonner avec Rythme). `templateID` et `protocolSignature` sont stables.
+
 **Règle** : les champs `target…` sont des **consignes** (programme, pilote FC ou utilisateur), les
 champs `measured…` des **mesures** du tapis. Une mesure indisponible vaut `null`, jamais la
 consigne ni 0. Les heures relatives `t` sont en secondes depuis `session.startDate`.
