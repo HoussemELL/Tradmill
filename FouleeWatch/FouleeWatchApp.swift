@@ -433,7 +433,6 @@ struct MetricsPage: View {
         let linked = manager.isPhoneLinked(now: now)
         let l = linked ? manager.live : nil
         let zone = bpm.flatMap { WatchLiveStatus.zone(for: $0, bounds: manager.zoneBounds) }
-        let color = WatchStyle.zoneColor(zone)
         VStack(alignment: .leading, spacing: 3) {
             if let l {
                 statusLine(l)
@@ -449,9 +448,7 @@ struct MetricsPage: View {
                 ZoneBadge(zone: zone, bounds: manager.zoneBounds)
             }
             if let z = zone, let b = bpm {
-                ProgressView(value: WatchLiveStatus.progress(of: b, in: z, bounds: manager.zoneBounds) ?? 0)
-                    .tint(color)
-                    .accessibilityLabel("Position dans la zone \(z)")
+                ZoneGauge(bpm: b, zone: z, bounds: manager.zoneBounds)
             }
             if let l {
                 HStack {
@@ -500,16 +497,45 @@ struct ZoneBadge: View {
     let bounds: [Int]
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            Text(zone.map { "Z\($0)" } ?? "—").font(.system(.title3, design: .rounded).bold())
-                .foregroundStyle(WatchStyle.zoneColor(zone))
-            if let z = zone, let r = WatchLiveStatus.range(of: z, bounds: bounds) {
-                Text(ZoneRange(zone: z, lower: r.lower, upper: r.upper).inclusiveText).font(.system(size: 10)).monospacedDigit()
-                    .foregroundStyle(.secondary)
+        Text(zone.map { "Z\($0)" } ?? "—").font(.system(.title3, design: .rounded).bold())
+            .foregroundStyle(WatchStyle.zoneColor(zone))
+            .accessibilityLabel(zone.map { "Zone \($0)" } ?? "Zone inconnue")
+    }
+}
+
+/// Où se situe la FC dans sa zone : un repère sur la plage de la zone, bornes aux extrémités
+/// (bpm compris dans la zone). Ce n'est pas une progression de séance : rien ne s'y remplit.
+struct ZoneGauge: View {
+    let bpm: Int
+    let zone: Int
+    let bounds: [Int]
+
+    var body: some View {
+        if let r = WatchLiveStatus.range(of: zone, bounds: bounds),
+           let p = WatchLiveStatus.progress(of: bpm, in: zone, bounds: bounds) {
+            let color = WatchStyle.zoneColor(zone)
+            // Z1 sans plancher : pas de borne basse ; Z5 : jusqu'à la FC max.
+            let low = r.lower == 0 ? "" : "\(r.lower)"
+            let high = zone == 5 ? "\(r.upper)" : "\(r.upper - 1)"
+            HStack(spacing: 4) {
+                Text(low)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(color.opacity(0.3)).frame(height: 4)
+                        Circle().fill(color).frame(width: 10, height: 10)
+                            .overlay(Circle().stroke(Color.black, lineWidth: 1.5))
+                            .offset(x: (geo.size.width - 10) * p)
+                    }
+                    .frame(maxHeight: .infinity)
+                }
+                .frame(height: 10)
+                Text(high)
             }
+            .font(.system(size: 10, weight: .semibold)).monospacedDigit()
+            .foregroundStyle(.secondary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("FC \(bpm) dans la zone \(zone), de \(low.isEmpty ? "moins de" : low) à \(high) bpm")
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(zone.map { "Zone \($0)" } ?? "Zone inconnue")
     }
 }
 
