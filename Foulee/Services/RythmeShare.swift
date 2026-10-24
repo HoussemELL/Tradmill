@@ -48,7 +48,11 @@ final class RythmeShare {
     /// Au lancement et quand les zones changent : écrit les fichiers manquants (historique),
     /// réécrit tout si les zones ont changé depuis la dernière fois, retire les fichiers de
     /// séances supprimées ou simulées.
-    func sync(_ records: [SessionRecord], zones: HeartZoneSettings) {
+    ///
+    /// Prudence : `records` doit venir d'une lecture réussie de la vraie base. Les fichiers des
+    /// séances de `keep` (présentes mais illisibles) sont gardés, et rien n'est retiré si la base
+    /// ne contient aucune séance (une suppression passe de toute façon par `remove(id:)`).
+    func sync(_ records: [SessionRecord], keep: Set<UUID> = [], zones: HeartZoneSettings) {
         guard let dir = directory else { return }
         let key = Self.zonesFingerprint(zones)
         queue.async { [log, defaults] in
@@ -62,10 +66,12 @@ final class RythmeShare {
             for r in shared where zonesChanged || !existing.contains(Self.fileName(r.id)) {
                 if Self.writeFile(r.rezoned(with: zones), in: dir, log: log) { written += 1 }
             }
-            let keep = Set(shared.map { Self.fileName($0.id) })
+            let keepNames = Set(shared.map { Self.fileName($0.id) } + keep.map(Self.fileName))
             var removed = 0
-            for name in existing where name.hasSuffix(".json") && !keep.contains(name) {
-                if (try? fm.removeItem(at: dir.appendingPathComponent(name))) != nil { removed += 1 }
+            if !records.isEmpty || !keep.isEmpty {
+                for name in existing where name.hasSuffix(".json") && !keepNames.contains(name) {
+                    if (try? fm.removeItem(at: dir.appendingPathComponent(name))) != nil { removed += 1 }
+                }
             }
             defaults.set(key, forKey: Self.zonesKey)
             if written > 0 || removed > 0 {

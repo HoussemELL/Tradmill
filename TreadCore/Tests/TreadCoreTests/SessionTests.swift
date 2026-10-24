@@ -265,6 +265,33 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertEqual(r.rezoned(with: zones).zoneSeconds, r.zoneSeconds)
     }
 
+    func testPilotZoneBoundsKeptWhenZonesRecomputed() throws {
+        let s = SessionHarness(program: .zone2Auto)
+        XCTAssertNoThrow(try s.session.start().get())
+        s.run(30, hrBPM: 120)
+        s.session.stop()
+        s.run(5, hrBPM: 120)
+        let r = try XCTUnwrap(s.finished)
+        let pilot = try XCTUnwrap(r.pilotZoneBounds)
+        XCTAssertEqual(pilot, r.zoneSettings?.bounds)
+        let other = HeartZoneSettings(maxHR: 200, method: .customBPM, customBounds: [90, 110, 125, 140, 160, 200])
+        let z = r.rezoned(with: other)
+        XCTAssertEqual(z.zoneSettings?.bounds, other.bounds)
+        XCTAssertEqual(z.pilotZoneBounds, pilot, "limites du pilote conservées")
+        let export = RythmeSessionExport(record: z)
+        XCTAssertEqual(export.pilotZoneBounds, pilot)
+        XCTAssertEqual(export.zones?.bounds, other.bounds)
+        // Séance antérieure au champ : bornes enregistrées avec la séance.
+        var old = r
+        old.pilotZoneBounds = nil
+        XCTAssertEqual(old.rezoned(with: other).pilotZoneBounds, pilot)
+        // Sans phase pilotée : rien.
+        let plain = SessionHarness(program: program())
+        XCTAssertNoThrow(try plain.session.start().get())
+        plain.run(200, hrBPM: 130)
+        XCTAssertNil(try XCTUnwrap(plain.finished).effectivePilotZoneBounds)
+    }
+
     func testWatchWorkoutStartAlignedOnBelt() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         func live(_ state: WatchLiveStatus.State, belt: Date?, sent: Date = now) -> WatchLiveStatus {

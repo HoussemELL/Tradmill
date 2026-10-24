@@ -230,6 +230,16 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     public var programLevel: Int?
     /// Ressenti de l'effort saisi par l'utilisateur (échelle CR10 de Borg : 0 = repos, 10 = maximal).
     public var perceivedExertion: Int?
+    /// Bornes de zones (6 valeurs) visées par le pilote FC pendant la séance. Conservées telles
+    /// quelles quand les zones sont recalculées après coup avec d'autres réglages.
+    public var pilotZoneBounds: [Int]?
+
+    /// Bornes du pilote : celles notées pendant la séance, sinon (séances antérieures) celles
+    /// des zones enregistrées avec la séance. nil sans phase pilotée par la FC.
+    public var effectivePilotZoneBounds: [Int]? {
+        guard program?.hasAutoSpeed == true else { return nil }
+        return pilotZoneBounds ?? zoneSettings?.bounds
+    }
 
     public init(id: UUID = UUID(), startDate: Date, program: WorkoutProgram?, treadmillName: String?,
                 profileID: String?, simulated: Bool) {
@@ -330,6 +340,8 @@ public extension SessionRecord {
     func rezoned(with zones: HeartZoneSettings) -> SessionRecord {
         var r = self
         if zonesDiffer(from: zones) {
+            // Les limites réellement visées par le pilote restent celles de la séance.
+            r.pilotZoneBounds = effectivePilotZoneBounds
             for i in r.samples.indices { r.samples[i].zone = r.samples[i].hr.map { zones.zone(for: $0) } }
             r.zoneSettings = zones
         }

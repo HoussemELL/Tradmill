@@ -102,6 +102,11 @@ final class AppModel {
             self.rythmeShare.write(r, zones: self.settings.session.zones)
         }
         dataStore.onSessionDeleted = { [weak self] id in self?.rythmeShare.remove(id: id) }
+        dataStore.onSaveError = { [weak self] message in
+            guard let self else { return }
+            self.log.log(.error, "Base : \(message)")
+            self.storageWarning = "\(message). Rien n'a été enregistré ni partagé avec Rythme ; si l'erreur revient, exportez le journal (Réglages)."
+        }
         treadmill.onDeviceRemembered = { [weak self] id, name in
             self?.settings.lastTreadmillID = id
             self?.settings.lastTreadmillName = name
@@ -516,7 +521,13 @@ final class AppModel {
     /// Fichiers partagés avec Rythme : historique manquant, zones modifiées, séances retirées.
     func syncRythmeShare() {
         guard rythmeShare.directory != nil else { return }
-        rythmeShare.sync(dataStore.allSessionRecords(), zones: settings.session.zones)
+        // Base en mémoire (ouverture impossible) : elle ne reflète pas l'historique, ne rien toucher.
+        guard StoreLocation.openError == nil else { return }
+        guard let s = dataStore.sessionsForSharing() else {
+            log.log(.warning, "Partage Rythme : base illisible, synchronisation reportée (aucun fichier supprimé)")
+            return
+        }
+        rythmeShare.sync(s.records, keep: s.undecodable, zones: settings.session.zones)
     }
 
     /// Séance telle qu'affichée et exportée pour Rythme : zones recalculées depuis la FC
@@ -535,6 +546,8 @@ final class AppModel {
     /// Supprime la séance de Foulée et, si elle y est, de Santé (séance et échantillons).
     @MainActor
     func delete(_ record: SessionRecord) async -> String {
+        // D'abord Foulée : si la base refuse, rien n'est retiré de Santé ni de Rythme.
+        guard dataStore.delete(id: record.id) else { return "La séance n'a pas pu être supprimée de Foulée (voir l'alerte)." }
         var message = "Séance supprimée de Foulée"
         switch record.healthStatus {
         case .saved, .ownedByWatch:
@@ -542,7 +555,6 @@ final class AppModel {
         default:
             break
         }
-        dataStore.delete(id: record.id)
         return message
     }
 

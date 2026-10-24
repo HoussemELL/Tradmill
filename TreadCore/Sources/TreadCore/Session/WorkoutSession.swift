@@ -572,6 +572,8 @@ public final class WorkoutSession {
         r.stepsSource = steps.source
         // Règle commune (affichage, Santé, Rythme) ; `zoneTime` ne sert qu'à l'affichage en direct.
         r.zoneSettings = settings.zones
+        // Le pilote lit les réglages courants : bornes visées (les dernières si elles ont changé).
+        if program?.hasAutoSpeed == true { r.pilotZoneBounds = settings.zones.bounds }
         r.zoneSeconds = SessionAnalysis.zoneSeconds(r, zones: settings.zones)
         r.calories.treadmillKcal = treadmillKcal
         r.calories.estimatedKcal = estimatedKcalValue

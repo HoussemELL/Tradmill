@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import SwiftData
 import TreadCore
 
@@ -35,34 +36,69 @@ enum StoreLocation {
         }
     }
 
-    /// Une seule fois : séances et programmes personnels enregistrés dans la base ouverte par
-    /// erreur dans le dossier commun, recopiés dans la vraie base (ceux qui y manquent).
-    /// Ouverture en lecture seule : une base qui n'est pas celle de Foulée (Rythme) est refusée
-    /// sans être modifiée.
+    /// Séances et programmes personnels enregistrés dans la base ouverte par erreur dans le
+    /// dossier commun, recopiés dans la vraie base (ceux qui y manquent). Séances de moins d'une
+    /// minute ignorées (essais de démarrage). Ouverture en lecture seule.
+    ///
+    /// Marquée comme faite seulement si elle a réussi, ou si la base n'est pas celle de Foulée
+    /// (Rythme) ; sinon retentée au lancement suivant.
     static func recoverMisplacedData(into store: DataStore, log: DiagnosticLog, defaults: UserDefaults = .standard) {
-        let doneKey = "foulee.store.misplacedRecovered"
+        // v2 : la version précédente notait la récupération comme faite même après un échec.
+        let doneKey = "foulee.store.misplacedRecovered.v2"
         guard !defaults.bool(forKey: doneKey) else { return }
-        defer { defaults.set(true, forKey: doneKey) }
-        guard let u = misplacedURL, FileManager.default.fileExists(atPath: u.path) else { return }
+        guard let u = misplacedURL, FileManager.default.fileExists(atPath: u.path) else {
+            defaults.set(true, forKey: doneKey)
+            return
+        }
+        switch hasFouleeTables(u) {
+        case false?:
+            log.log(.info, "Base du dossier commun : ce n'est pas celle de Foulée, ignorée")
+            defaults.set(true, forKey: doneKey)
+            return
+        case nil:
+            log.log(.warning, "Base du dossier commun illisible pour l'instant : récupération retentée au prochain lancement")
+            return
+        case true?:
+            break
+        }
         do {
             let config = ModelConfiguration(schema: schema, url: u, allowsSave: false, cloudKitDatabase: .none)
             let other = ModelContext(try ModelContainer(for: schema, configurations: config))
-            var sessions = 0, programs = 0
+            var sessions = 0, programs = 0, skipped = 0, failures = 0
             for e in try other.fetch(FetchDescriptor<SessionEntity>()) {
-                guard let r = e.record, store.record(id: r.id) == nil else { continue }
-                store.upsert(r)
-                sessions += 1
+                guard let r = e.record else { failures += 1; continue }
+                guard store.record(id: r.id) == nil else { continue }
+                guard r.activeSeconds >= 60 else { skipped += 1; continue }
+                if store.upsert(r) { sessions += 1 } else { failures += 1 }
             }
             // Programmes prédéfinis : déjà présents (même modèle) ; seuls les programmes personnels.
             let known = Set(store.allPrograms().map(\.id))
             for e in try other.fetch(FetchDescriptor<ProgramEntity>()) {
-                guard let p = e.program, p.templateID == nil, !known.contains(p.id) else { continue }
-                store.upsert(p)
-                programs += 1
+                guard let p = e.program else { failures += 1; continue }
+                guard p.templateID == nil, !known.contains(p.id) else { continue }
+                if store.upsert(p) { programs += 1 } else { failures += 1 }
             }
-            log.log(.info, "Base du dossier commun : \(sessions) séance(s) et \(programs) programme(s) récupérés")
+            log.log(.info, "Base du dossier commun : \(sessions) séance(s) et \(programs) programme(s) récupérés, "
+                    + "\(skipped) séance(s) de moins d'1 min ignorée(s), \(failures) échec(s)")
+            if failures == 0 { defaults.set(true, forKey: doneKey) }
         } catch {
-            log.log(.info, "Base du dossier commun non lue (pas celle de Foulée) : \(error.localizedDescription)")
+            log.log(.warning, "Base du dossier commun non lue (\(error.localizedDescription)) : récupération retentée au prochain lancement")
         }
+    }
+
+    /// La base SQLite contient-elle les tables de Foulée ? nil si elle ne peut pas être lue.
+    static func hasFouleeTables(_ url: URL) -> Bool? {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+            sqlite3_close(db)
+            return nil
+        }
+        defer { sqlite3_close(db) }
+        var stmt: OpaquePointer?
+        let sql = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('ZSESSIONENTITY', 'ZPROGRAMENTITY')"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+        return sqlite3_column_int(stmt, 0) == 2
     }
 }

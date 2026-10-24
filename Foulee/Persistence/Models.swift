@@ -83,55 +83,104 @@ final class SessionEntity {
 /// Accès aux données hors des vues (sauvegarde idempotente par identifiant).
 final class DataStore {
     let context: ModelContext
-    /// Appelés après chaque enregistrement / suppression de séance (partage avec Rythme).
+    /// Appelés après chaque enregistrement / suppression **réussi** de séance (partage avec Rythme).
     var onSessionSaved: ((SessionRecord) -> Void)?
     var onSessionDeleted: ((UUID) -> Void)?
+    /// Échec d'enregistrement : à montrer à l'utilisateur (rien n'est enregistré en silence).
+    var onSaveError: ((String) -> Void)?
 
     /// Utiliser le `mainContext` du conteneur pour que les vues (@Query) voient les changements.
     init(context: ModelContext) {
         self.context = context
     }
 
-    func upsert(_ record: SessionRecord) {
+    /// Enregistre ; en cas d'échec, annule les modifications en attente (l'écran ne montre pas
+    /// une donnée absente de la base) et signale l'erreur.
+    private func save(_ what: String) -> Bool {
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            onSaveError?("\(what) : \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func failed(_ what: String, _ error: Error) -> Bool {
+        onSaveError?("\(what) : \(error.localizedDescription)")
+        return false
+    }
+
+    @discardableResult
+    func upsert(_ record: SessionRecord) -> Bool {
         let id = record.id
-        let existing = try? context.fetch(FetchDescriptor<SessionEntity>(predicate: #Predicate { $0.id == id }))
-        if let e = existing?.first {
+        let existing: [SessionEntity]
+        do {
+            existing = try context.fetch(FetchDescriptor<SessionEntity>(predicate: #Predicate { $0.id == id }))
+        } catch {
+            // Lecture impossible : insérer créerait un doublon.
+            return failed("Séance « \(record.title) » non enregistrée", error)
+        }
+        if let e = existing.first {
             e.update(from: record)
         } else {
             context.insert(SessionEntity(record: record))
         }
-        try? context.save()
+        guard save("Séance « \(record.title) » non enregistrée") else { return false }
         onSessionSaved?(record)
+        return true
     }
 
-    func allSessionRecords() -> [SessionRecord] {
+    /// Séances pour le partage avec Rythme. nil si la base n'a pas pu être lue (rien ne doit
+    /// alors être supprimé du dossier commun). Les séances illisibles sont listées à part, pour
+    /// garder leur fichier.
+    func sessionsForSharing() -> (records: [SessionRecord], undecodable: Set<UUID>)? {
         let d = FetchDescriptor<SessionEntity>(sortBy: [SortDescriptor(\.startDate)])
-        return ((try? context.fetch(d)) ?? []).compactMap(\.record)
+        guard let entities = try? context.fetch(d) else { return nil }
+        var records: [SessionRecord] = []
+        var undecodable = Set<UUID>()
+        for e in entities {
+            if let r = e.record { records.append(r) } else { undecodable.insert(e.id) }
+        }
+        return (records, undecodable)
     }
 
-    func upsert(_ program: WorkoutProgram) {
+    @discardableResult
+    func upsert(_ program: WorkoutProgram) -> Bool {
         let id = program.id
-        let existing = try? context.fetch(FetchDescriptor<ProgramEntity>(predicate: #Predicate { $0.id == id }))
-        if let e = existing?.first {
+        let existing: [ProgramEntity]
+        do {
+            existing = try context.fetch(FetchDescriptor<ProgramEntity>(predicate: #Predicate { $0.id == id }))
+        } catch {
+            return failed("Programme « \(program.name) » non enregistré", error)
+        }
+        if let e = existing.first {
             e.update(from: program)
         } else {
             let count = (try? context.fetchCount(FetchDescriptor<ProgramEntity>())) ?? 0
             context.insert(ProgramEntity(program: program, sortIndex: count))
         }
-        try? context.save()
+        return save("Programme « \(program.name) » non enregistré")
     }
 
-    func delete(id: UUID) {
+    @discardableResult
+    func delete(id: UUID) -> Bool {
         let d = FetchDescriptor<SessionEntity>(predicate: #Predicate { $0.id == id })
-        for e in (try? context.fetch(d)) ?? [] { context.delete(e) }
-        try? context.save()
+        do {
+            for e in try context.fetch(d) { context.delete(e) }
+        } catch {
+            return failed("Séance non supprimée", error)
+        }
+        guard save("Séance non supprimée") else { return false }
         onSessionDeleted?(id)
+        return true
     }
 
     func deleteProgram(id: UUID) {
         let d = FetchDescriptor<ProgramEntity>(predicate: #Predicate { $0.id == id })
         for e in (try? context.fetch(d)) ?? [] { context.delete(e) }
-        try? context.save()
+        _ = save("Programme non supprimé")
     }
 
     func record(id: UUID) -> SessionRecord? {

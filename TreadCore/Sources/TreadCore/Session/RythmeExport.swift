@@ -146,6 +146,9 @@ public struct RythmeSessionExport: Codable, Equatable, Sendable {
     public var recovery: Recovery?
     /// Échelle CR10 de Borg (0–10), saisie par l'utilisateur ; nil si non renseigné.
     public var perceivedExertion: Int?
+    /// Bornes de zones (6 valeurs, comme `zones.bounds`) visées par le pilote FC pendant la
+    /// séance ; `zones.bounds` suit les réglages actuels. nil sans phase pilotée.
+    public var pilotZoneBounds: [Int]?
     public var distanceMeters: Double
     public var steps: Int?
     public var avgHR: Int?
@@ -210,6 +213,7 @@ public struct RythmeSessionExport: Codable, Equatable, Sendable {
             Recovery(hrAtStop: $0.hrAtStop, hrAfter60: $0.hrAfter60, hrAfter120: $0.hrAfter120)
         }
         perceivedExertion = r.perceivedExertion
+        pilotZoneBounds = r.effectivePilotZoneBounds
         distanceMeters = r.distanceMeters
         steps = r.steps
         avgHR = r.avgHR
