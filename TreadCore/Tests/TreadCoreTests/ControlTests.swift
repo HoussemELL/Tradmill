@@ -185,6 +185,22 @@ final class TreadmillControllerTests: XCTestCase {
         XCTAssertTrue(h.events.contains(.speedReached(7)))
     }
 
+    func testURTM047SendsTargetAsSoonAsBeltRunsAtInitialSpeed() {
+        // Plus d'attente de 2 s de vitesse stable à 1 km/h : la consigne part dès la vitesse initiale mesurée.
+        let h = ControllerHarness(profile: .urtm047, quirks: .urtm047Like)
+        XCTAssertNoThrow(try h.controller.start(targetSpeed: 4, targetIncline: nil).get())
+        var movingAt: TimeInterval?
+        var targetAt: TimeInterval?
+        while h.now < 30, targetAt == nil {
+            h.run(seconds: 0.05)
+            if movingAt == nil, (h.controller.telemetry.speedKmh ?? 0) >= 0.9 { movingAt = h.now }
+            if h.sentCommands.contains(.setTargetSpeed(kmh: 4)) { targetAt = h.now }
+        }
+        let moving = try? XCTUnwrap(movingAt)
+        let target = try? XCTUnwrap(targetAt)
+        XCTAssertLessThan((target ?? 99) - (moving ?? 0), 1.0, "consigne envoyée dans la seconde")
+    }
+
     func testGenericSequenceFailsToMoveOnURTM047LikeTreadmill() {
         // Reproduit l'observation : Request Control → Start ne produit pas de mouvement.
         let h = ControllerHarness(profile: .genericFTMS, quirks: .urtm047Like)

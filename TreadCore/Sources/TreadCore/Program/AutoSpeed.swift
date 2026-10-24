@@ -23,11 +23,17 @@ public struct AutoSpeedSettings: Codable, Equatable, Hashable, Sendable {
     public var nudgeTowardMiddle: Bool
     /// Allure lente sécurisée en cas de perte de la FC.
     public var fallbackKmh: Double
+    /// Pilotage centré sur la zone : paliers proportionnels à l'écart sous la zone, et tendance
+    /// de la FC anticipée (pas d'accélération si la FC monte déjà vers la zone, ralentissement
+    /// anticipé si elle monte vite vers la limite haute). nil/faux : pilotage d'origine.
+    public var adaptive: Bool?
+
+    public var isAdaptive: Bool { adaptive ?? false }
 
     public init(targetZone: Int = 2, minKmh: Double = 4.0, maxKmh: Double = 7.0, stepKmh: Double = 0.2,
                 increaseInterval: TimeInterval = 60, decreaseInterval: TimeInterval = 20,
                 filterSeconds: TimeInterval = 18, upperMarginBpm: Int = 3, nudgeTowardMiddle: Bool = true,
-                fallbackKmh: Double = 4.5) {
+                fallbackKmh: Double = 4.5, adaptive: Bool? = nil) {
         self.targetZone = targetZone
         self.minKmh = minKmh
         self.maxKmh = maxKmh
@@ -38,11 +44,13 @@ public struct AutoSpeedSettings: Codable, Equatable, Hashable, Sendable {
         self.upperMarginBpm = upperMarginBpm
         self.nudgeTowardMiddle = nudgeTowardMiddle
         self.fallbackKmh = fallbackKmh
+        self.adaptive = adaptive
     }
 
     var signature: String {
         String(format: "z%d,%.1f-%.1f,s%.2f,u%.0f,d%.0f,f%.0f,m%d,n%d,fb%.1f", targetZone, minKmh, maxKmh, stepKmh,
                increaseInterval, decreaseInterval, filterSeconds, upperMarginBpm, nudgeTowardMiddle ? 1 : 0, fallbackKmh)
+            + (isAdaptive ? ",a1" : "")
     }
 
     public func validationError() -> String? {
@@ -175,6 +183,22 @@ public final class ZoneAutopilot {
     /// immédiatement) : une mesure retardée de la montre ne fait pas freiner le tapis.
     public static let heartRateGrace: TimeInterval = 15
     private var heartRateMissingSince: TimeInterval?
+    /// FC filtrées récentes (tendance).
+    private var history: [(t: TimeInterval, bpm: Double)] = []
+    /// Fenêtre de la tendance et horizon d'anticipation (inertie cardiaque ≈ 1 min).
+    public static let trendWindow: TimeInterval = 60
+    public static let anticipation: TimeInterval = 60
+
+    /// Pente de la FC filtrée (bpm/s) sur la dernière minute, si l'historique couvre ≥ 40 s.
+    public var heartRateSlope: Double? {
+        guard let last = history.last, let first = history.first, last.t - first.t >= 40 else { return nil }
+        return (last.bpm - first.bpm) / (last.t - first.t)
+    }
+
+    private func record(_ hr: Double, at now: TimeInterval) {
+        history.append((now, hr))
+        history.removeAll { now - $0.t > Self.trendWindow }
+    }
 
     /// - Parameters:
     ///   - startKmh: vitesse de départ de la phase.
@@ -201,6 +225,7 @@ public final class ZoneAutopilot {
     public func didResume(at now: TimeInterval) {
         lastChangeAt = now
         aboveSince = nil
+        history.removeAll()
         if mode == .suspended { mode = .warmingUp }
     }
 
@@ -221,6 +246,7 @@ public final class ZoneAutopilot {
         targetKmh = snap(current)
         lastChangeAt = now
         aboveSince = nil
+        history.removeAll()
         status = mode.label
     }
 
@@ -245,6 +271,7 @@ public final class ZoneAutopilot {
             let since = heartRateMissingSince ?? now
             heartRateMissingSince = since
             trend = .unknown
+            history.removeAll()
             aboveSince = nil
             if now - since < Self.heartRateGrace {
                 if mode != .heartRateLost { mode = .heartRateGap }
@@ -274,6 +301,10 @@ public final class ZoneAutopilot {
             return nil
         }
         mode = .regulating
+        record(hr, at: now)
+        if settings.isAdaptive {
+            return adaptiveUpdate(hr: hr, zone: zone, now: now, sessionTime: sessionTime)
+        }
 
         let lower = Double(zone.lower)
         let upper = Double(zone.upper)
@@ -313,6 +344,73 @@ public final class ZoneAutopilot {
         trend = .inZone
         if settings.nudgeTowardMiddle, hr < lower + width * 0.25, targetKmh < speedMax - 0.001,
            sinceChange >= settings.increaseInterval * 2 {
+            return change(to: snap(targetKmh + settings.stepKmh), now: now, sessionTime: sessionTime, kind: .increase,
+                          reason: String(format: "FC %.0f dans le bas de la zone : légère accélération vers le milieu", hr))
+        }
+        status = "Dans la zone : vitesse maintenue"
+        return nil
+    }
+
+    /// Pilotage centré sur la zone (`adaptive`) :
+    /// - sous la zone : palier proportionnel à l'écart (0,2 / 0,3 / 0,5 km/h), au plus une
+    ///   accélération par `increaseInterval`, sauf si la FC monte déjà assez vite pour entrer dans
+    ///   la zone dans la minute (on laisse l'inertie cardiaque faire) ;
+    /// - dans la zone : maintien ; léger ralentissement anticipé si la FC monte vite vers la
+    ///   limite haute ; légère accélération si elle reste dans le bas de la zone sans monter ;
+    /// - au-dessus de la limite haute − marge : ralentissement comme le pilotage d'origine.
+    private func adaptiveUpdate(hr: Double, zone: ZoneRange, now: TimeInterval, sessionTime: Double) -> AutoAdjustment? {
+        let lower = Double(zone.lower)
+        let upper = Double(zone.upper)
+        let ceiling = upper - Double(settings.upperMarginBpm)
+        let width = max(upper - lower, 1)
+        let sinceChange = now - lastChangeAt
+        let slope = heartRateSlope ?? 0
+        let projected = hr + slope * Self.anticipation
+
+        if hr >= ceiling {
+            trend = hr >= upper ? .above : .nearTop
+            if aboveSince == nil { aboveSince = now }
+            let sustained = now - (aboveSince ?? now) >= settings.decreaseInterval
+            if sustained, sinceChange >= settings.decreaseInterval, targetKmh > speedMin + 0.001 {
+                let steps = hr > upper + 5 ? 2.0 : 1.0
+                return change(to: snap(targetKmh - settings.stepKmh * steps), now: now, sessionTime: sessionTime,
+                              kind: .decrease,
+                              reason: String(format: "FC %.0f ≥ %.0f (limite haute − marge) : ralentissement", hr, ceiling))
+            }
+            status = targetKmh <= speedMin + 0.001 ? "FC haute, vitesse minimale atteinte" : "FC haute : ralentissement si elle se maintient"
+            return nil
+        }
+        aboveSince = nil
+
+        if hr < lower {
+            trend = .below
+            if targetKmh >= speedMax - 0.001 {
+                status = "Sous la zone, vitesse maximale automatique atteinte"
+                return nil
+            }
+            if projected >= lower + 1 {
+                status = String(format: "FC en hausse (%.0f → ≈ %.0f dans 1 min) : vitesse maintenue", hr, projected)
+                return nil
+            }
+            guard sinceChange >= settings.increaseInterval else {
+                status = "Sous la zone : prochaine accélération dans \(Int(settings.increaseInterval - sinceChange)) s"
+                return nil
+            }
+            let gap = lower - hr
+            let step = gap >= 15 ? 0.5 : gap >= 8 ? 0.3 : settings.stepKmh
+            return change(to: snap(targetKmh + step), now: now, sessionTime: sessionTime, kind: .increase,
+                          reason: String(format: "FC %.0f, %.0f bpm sous la zone (%.0f) : +%.1f km/h", hr, gap, lower, step))
+        }
+
+        trend = .inZone
+        // Montée rapide vers la limite haute : on ralentit un peu avant de la dépasser.
+        if projected >= ceiling + 2, slope > 0.05, sinceChange >= settings.decreaseInterval * 2, targetKmh > speedMin + 0.001 {
+            return change(to: snap(targetKmh - settings.stepKmh), now: now, sessionTime: sessionTime, kind: .decrease,
+                          reason: String(format: "FC %.0f en hausse rapide (≈ %.0f dans 1 min) : léger ralentissement anticipé", hr, projected))
+        }
+        // Bas de la zone et FC stable : légère accélération vers le milieu.
+        if settings.nudgeTowardMiddle, hr < lower + width * 0.25, projected < lower + width * 0.4,
+           targetKmh < speedMax - 0.001, sinceChange >= settings.increaseInterval * 2 {
             return change(to: snap(targetKmh + settings.stepKmh), now: now, sessionTime: sessionTime, kind: .increase,
                           reason: String(format: "FC %.0f dans le bas de la zone : légère accélération vers le milieu", hr))
         }

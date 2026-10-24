@@ -236,6 +236,12 @@ public struct WorkoutProgram: Codable, Identifiable, Equatable, Hashable, Sendab
     }
 
     public var maxSpeedKmh: Double { schedule.map(\.phase.speedBounds.max).max() ?? 0 }
+
+    /// Exercice de course plutôt que de marche (≥ 8 km/h prévus). Une phase pilotée par la FC
+    /// compte pour sa vitesse de départ, pas pour son plafond automatique.
+    public var suggestsRunning: Bool {
+        (schedule.map { $0.phase.isAuto ? $0.phase.speedKmh : $0.phase.speedBounds.max }.max() ?? 0) >= 8
+    }
 }
 
 public struct ScheduledPhase: Equatable, Sendable, Identifiable {

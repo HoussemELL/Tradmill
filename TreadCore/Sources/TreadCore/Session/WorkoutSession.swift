@@ -80,6 +80,9 @@ public final class WorkoutSession {
     public let heartRate: HeartRateMonitor
     public let engine: ProgramEngine
     public let program: WorkoutProgram?
+    /// Vitesse qui a maintenu la FC dans la zone visée lors de la dernière séance de ce programme
+    /// (fournie par l'app) : départ de la phase pilotée, si son pilotage est centré sur la zone.
+    public var learnedAutoStartKmh: Double?
     public var settings: SessionSettings
     public let log: DiagnosticLog
     private let clock: () -> TimeInterval
@@ -602,10 +605,15 @@ public final class WorkoutSession {
                                                     targetZone: sp.phase.targetZone,
                                                     endSpeedKmh: sp.phase.isRamp ? sp.phase.endSpeedKmh : nil))
                 if let a = sp.phase.autoSpeed {
-                    autopilot = ZoneAutopilot(settings: a, startKmh: sp.phase.speedKmh, capabilities: controller.capabilities, now: now)
+                    // Pilotage centré sur la zone : départ à la vitesse qui a tenu la zone la dernière fois.
+                    let learned = a.isAdaptive ? learnedAutoStartKmh : nil
+                    autopilot = ZoneAutopilot(settings: a, startKmh: learned ?? sp.phase.speedKmh,
+                                              capabilities: controller.capabilities, now: now)
                     heartFilter = HeartRateFilter(window: a.filterSeconds)
-                    event(.autoAdjust, String(format: "Pilotage FC : départ %.1f km/h, zone %d visée, limites %.1f–%.1f km/h",
-                                              autopilot?.targetKmh ?? sp.phase.speedKmh, a.targetZone, a.minKmh, a.maxKmh))
+                    event(.autoAdjust, String(format: "Pilotage FC : départ %.1f km/h%@, zone %d visée, limites %.1f–%.1f km/h",
+                                              autopilot?.targetKmh ?? sp.phase.speedKmh,
+                                              learned != nil ? " (vitesse tenue en zone la dernière fois)" : "",
+                                              a.targetZone, a.minKmh, a.maxKmh))
                 } else {
                     autopilot = nil
                 }

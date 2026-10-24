@@ -136,7 +136,7 @@ n'est qu'une hypothèse parmi d'autres :
 | # | Hypothèse | Ce que fait Foulée | Comment la vérifier |
 |---|-----------|--------------------|---------------------|
 | H1 | Start exige une consigne de vitesse préalable | vitesse initiale explicite (1,0 km/h) avant Start | test de démarrage |
-| H2 | une consigne reçue pendant le compte à rebours ou l'accélération est acquittée mais ignorée | consigne du palier envoyée seulement quand la vitesse initiale est **stable 2 s** (max 8 s) ; un seul renvoi si non observée | test de réponse en vitesse : renvoi nécessaire ? |
+| H2 | une consigne reçue pendant le compte à rebours ou l'accélération est acquittée mais ignorée | consigne du palier envoyée seulement quand la bande tourne à la vitesse initiale (URTM047 : dès qu'elle est mesurée, plus d'attente de 2 s depuis le 25/10 ; autres tapis : stable 2 s ; max 8 s) ; un seul renvoi si non observée | test de réponse en vitesse : renvoi nécessaire ? |
 | H3 | consigne mal encodée par le client (résolution 0,1 au lieu de 0,01 → 7 km/h = 0,70 km/h, ramené au minimum 1 km/h) | encodage 0,01 km/h conforme à la spécification, octets visibles dans chaque `[TX]` | journal : `[TX] Set Target Speed 7.00 km/h | 02 BC 02` |
 | H4 | le contrôle doit être redemandé avant certaines commandes | Request Control au démarrage/reprise ; option du test : Request Control avant chaque consigne | comparer le test avec et sans l'option |
 | H5 | le tapis annonce la consigne (statut 0x05) sans l'appliquer | consigne « annoncée » affichée séparément de la mesure | colonne « tapis annonce » du test |
@@ -146,7 +146,8 @@ La comparaison la plus décisive reste une capture du trafic de Treadmill
 Assistant (voir docs/VALIDATION_MATERIELLE.md, étape 7).
 
 Paramètres du profil (dans `TreadmillProfile.urtm047`) : vitesse initiale
-1,0 km/h, attente du mouvement 15 s, stabilisation sur vitesse stable 2 s
+1,0 km/h, attente du mouvement 15 s, consigne du palier dès que 1,0 km/h est mesuré
+(`initialSpeedSettleDwell` = 0 ; auparavant vitesse stable 2 s)
 (max 8 s, quelle que soit la valeur atteinte), tolérance
 0,15 km/h, accélération supposée 0,25 km/h/s pour le délai d'atteinte,
 1 renvoi maximum, espacement des commandes 0,4 s, délai de réponse 4 s.

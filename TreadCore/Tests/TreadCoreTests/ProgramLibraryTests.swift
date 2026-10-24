@@ -77,11 +77,12 @@ final class ProgramLibraryTests: XCTestCase {
         let a = try! XCTUnwrap(auto.schedule[1].phase.autoSpeed)
         XCTAssertEqual(a.targetZone, 2)
         XCTAssertEqual(a.minKmh, 4)
-        XCTAssertEqual(a.maxKmh, 7)
+        XCTAssertEqual(a.maxKmh, 8.5)
         XCTAssertEqual(a.stepKmh, 0.2)
         XCTAssertEqual(a.increaseInterval, 60)
         XCTAssertEqual(auto.schedule[1].phase.speedKmh, 5.8)
-        XCTAssertEqual(auto.maxSpeedKmh, 7)
+        XCTAssertEqual(auto.maxSpeedKmh, 8.5)
+        XCTAssertFalse(auto.suggestsRunning, "plafond automatique ≠ allure prévue : exercice de marche")
 
         // Football Endurance : récupération uniquement ENTRE les efforts.
         let f1 = WorkoutProgram.footballEndurance1, f2 = WorkoutProgram.footballEndurance2, f3 = WorkoutProgram.footballEndurance3
@@ -194,7 +195,7 @@ final class ProgramLibraryTests: XCTestCase {
         let data = try ProgramExchange.export(WorkoutProgram.templates)
         let back = try ProgramExchange.importPrograms(from: data)
         XCTAssertEqual(back.map(\.protocolSignature), WorkoutProgram.templates.map(\.protocolSignature))
-        XCTAssertEqual(back.first { $0.name == "Zone 2 Auto" }?.schedule[1].phase.autoSpeed, AutoSpeedSettings())
+        XCTAssertEqual(back.first { $0.name == "Zone 2 Auto" }?.schedule[1].phase.autoSpeed, AutoSpeedSettings(maxKmh: 8.5, adaptive: true))
         let old = #"{"id":"6F1C2B1E-0000-0000-0000-000000000001","name":"A","durationSeconds":60,"speedKmh":4,"inclinePercent":0,"kind":"steady"}"#
         let p = try CoreJSON.decode(ProgramPhase.self, from: Data(old.utf8))
         XCTAssertNil(p.autoSpeed)
@@ -204,7 +205,7 @@ final class ProgramLibraryTests: XCTestCase {
     func testValidationOfRampsAndAutoPhases() {
         var p = WorkoutProgram.zone2Auto
         if case var .phase(ph) = p.items[1] {
-            ph.speedKmh = 7.5
+            ph.speedKmh = 9.0
             p.items[1] = .phase(ph)
         }
         XCTAssertTrue(ProgramValidator.validateStructure(p).contains { $0.message.contains("hors des limites automatiques") })
@@ -330,6 +331,59 @@ final class ProgramLibraryTests: XCTestCase {
         XCTAssertEqual(changes.map(\.t), [60, 120, 180])
         XCTAssertEqual(changes.map(\.toKmh), [6.0, 6.2, 6.4])
         XCTAssertTrue(changes.allSatisfy { $0.kind == .increase })
+    }
+
+    // MARK: - Pilotage centré sur la zone (Zone 2 Auto v3)
+
+    private let adaptive = AutoSpeedSettings(maxKmh: 8.5, adaptive: true)
+
+    private func run(_ a: ZoneAutopilot, from: Double = 1, to: Double, hr: (Double) -> Double) -> [AutoAdjustment] {
+        var out: [AutoAdjustment] = []
+        for t in stride(from: from, through: to, by: 1) {
+            if let c = a.update(now: t, sessionTime: t, filteredBPM: hr(t), heartRateLive: true, zone: zone2, controllable: true) {
+                out.append(c)
+            }
+        }
+        return out
+    }
+
+    func testZone2AutoTemplateUsesZoneCenteredPilotUpTo8_5() throws {
+        let p = WorkoutProgram.zone2Auto
+        let a = try XCTUnwrap(p.schedule.first { $0.phase.isAuto }?.phase.autoSpeed)
+        XCTAssertEqual(a.maxKmh, 8.5)
+        XCTAssertTrue(a.isAdaptive)
+        XCTAssertEqual(p.protocolVersion, 3)
+        XCTAssertNotEqual(a.signature, AutoSpeedSettings().signature, "nouveau protocole : nouvelle série de comparaison")
+    }
+
+    func testAdaptivePilotStepsByDistanceToZone() {
+        // Zone 120–140. Loin dessous (100) : +0,5 ; à 8–14 bpm : +0,3 ; plus près : +0,2.
+        XCTAssertEqual(run(pilot(settings: adaptive), to: 60) { _ in 100 }.map(\.toKmh), [6.3])
+        XCTAssertEqual(run(pilot(settings: adaptive), to: 60) { _ in 110 }.map(\.toKmh), [6.1])
+        XCTAssertEqual(run(pilot(settings: adaptive), to: 60) { _ in 116 }.map(\.toKmh), [6.0])
+        // Au plus une accélération par minute.
+        XCTAssertEqual(run(pilot(settings: adaptive), to: 180) { _ in 100 }.map(\.t), [60, 120, 180])
+    }
+
+    func testAdaptivePilotWaitsWhileHeartRateIsClimbingIntoZone() {
+        // FC 95 → 116 en 60 s (+0,35 bpm/s) : elle entrera dans la zone d'elle-même, pas d'accélération.
+        let changes = run(pilot(settings: adaptive), to: 70) { 95 + 0.35 * $0 }
+        XCTAssertTrue(changes.isEmpty)
+    }
+
+    func testAdaptivePilotSlowsBeforeOvershootingTheTopOfTheZone() {
+        // Dans la zone (125 → 135) mais en montée rapide vers la limite haute (137) : léger ralentissement anticipé.
+        let changes = run(pilot(settings: adaptive), to: 50) { 125 + 0.2 * $0 }
+        XCTAssertEqual(changes.count, 1)
+        XCTAssertEqual(changes.first?.kind, .decrease)
+        XCTAssertEqual(changes.first?.toKmh, 5.6)
+    }
+
+    func testAdaptivePilotCanGoUpTo8_5() {
+        let a = pilot(start: 8.0, settings: adaptive)
+        _ = run(a, to: 300) { _ in 100 }
+        XCTAssertEqual(a.targetKmh, 8.5)
+        XCTAssertTrue(a.status.contains("vitesse maximale"))
     }
 
     func testAutopilotHoldsInZoneAndNudgesFromTheBottom() {

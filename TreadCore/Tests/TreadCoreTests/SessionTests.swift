@@ -312,6 +312,24 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertNil(try XCTUnwrap(plain.finished).effectivePilotZoneBounds)
     }
 
+    func testZone2AutoStartsAtLearnedSpeedAndLearnsFromSession() throws {
+        // Zones par défaut (FC max 200, sans repos) : Z2 = 120–139.
+        let s = SessionHarness(program: .zone2Auto)
+        s.session.learnedAutoStartKmh = 7.2
+        XCTAssertNoThrow(try s.session.start().get())
+        s.run(310, hrBPM: 100)
+        XCTAssertEqual(s.session.autopilot?.targetKmh ?? 0, 7.2, accuracy: 0.01, "départ appris")
+        s.run(240, hrBPM: 130)
+        s.session.stop()
+        s.run(5, hrBPM: 130)
+        var r = try XCTUnwrap(s.finished)
+        XCTAssertNil(SessionAnalysis.learnedAutoStart(for: .zone2Auto, records: [r]), "séance simulée : rien appris")
+        r.simulated = false
+        let learned = try XCTUnwrap(SessionAnalysis.learnedAutoStart(for: .zone2Auto, records: [r]))
+        XCTAssertEqual(learned, 7.2, accuracy: 0.3)
+        XCTAssertNil(SessionAnalysis.learnedAutoStart(for: .cardioBaseline, records: [r]))
+    }
+
     func testWatchWorkoutStartAlignedOnBelt() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         func live(_ state: WatchLiveStatus.State, belt: Date?, sent: Date = now) -> WatchLiveStatus {

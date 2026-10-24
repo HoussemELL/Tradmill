@@ -74,7 +74,7 @@ public struct WatchProgramSummary: Codable, Equatable, Hashable, Sendable, Ident
             case let .block(b): return WatchProgramGroup(isBlock: true, repeatCount: b.repeatCount, steps: b.phases.map(WatchProgramStep.init))
             }
         }
-        suggestsRunning = p.maxSpeedKmh >= 8
+        suggestsRunning = p.suggestsRunning
         level = p.level
         isAdvanced = p.isAdvanced ? true : nil
     }

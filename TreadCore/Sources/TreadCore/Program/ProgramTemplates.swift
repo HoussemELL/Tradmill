@@ -23,7 +23,9 @@ public extension WorkoutProgram {
     /// 2 : inclinaison minimale 1 % partout, Football Endurance (3 niveaux), HIIT avancé.
     /// 3 : retrait des anciens programmes de la première version, s'ils n'ont pas été modifiés.
     /// 4 : tous les programmes prédéfinis verrouillés (comparables au fil des séances).
-    static let templatesRevision = 4
+    /// 5 : Zone 2 Auto v3 — plafond 8,5 km/h, pilotage centré sur la zone (paliers selon l'écart,
+    ///     tendance de la FC anticipée), départ à la vitesse apprise.
+    static let templatesRevision = 5
 
     /// Programmes installés par la toute première version (avant les identifiants de modèle),
     /// remplacés par la bibliothèque actuelle. Retirés seulement s'ils sont restés intacts.
@@ -147,18 +149,22 @@ public extension WorkoutProgram {
     static var zone2Auto: WorkoutProgram {
         WorkoutProgram(name: "Zone 2 Auto", notes: """
             Programme d'endurance principal (35 min, 1 % fixe). Pendant 25 min, la vitesse suit votre FC filtrée \
-            (≈ 18 s) pour rester dans votre zone 2 (Réglages › FC max et zones) : paliers de 0,2 km/h, au plus une \
-            accélération par minute, maintien dans la zone, ralentissement si la FC dépasse la zone. Limites \
-            automatiques 4–7 km/h. Sans FC : accélérations coupées, puis retour progressif à 4,5 km/h. Vos réglages \
-            manuels sont prioritaires. L'inclinaison ne change jamais automatiquement.
+            (≈ 18 s) pour vous amener puis vous garder dans votre zone 2 (Réglages › FC max et zones). Départ à la \
+            vitesse qui vous a maintenu en zone 2 la dernière fois. Sous la zone : accélération d'autant plus nette \
+            que la FC est loin (0,2 à 0,5 km/h, au plus une par minute), sauf si la FC monte déjà vers la zone. \
+            Dans la zone : vitesse maintenue, léger ralentissement anticipé si la FC monte vite vers la limite haute. \
+            Au-dessus : ralentissement. Limites automatiques 4–8,5 km/h. Sans FC : accélérations coupées, puis retour \
+            progressif à 4,5 km/h. Vos réglages manuels sont prioritaires. L'inclinaison ne change jamais \
+            automatiquement.
             """, items: [
                 .phase(.init(name: "Échauffement progressif", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0,
                              inclinePercent: i1, targetZone: 1, endSpeedKmh: 5.5)),
                 .phase(.init(name: "Zone 2 pilotée", kind: .steady, durationSeconds: min(25), speedKmh: 5.8,
-                             inclinePercent: i1, targetZone: 2, autoSpeed: AutoSpeedSettings())),
+                             inclinePercent: i1, targetZone: 2,
+                             autoSpeed: AutoSpeedSettings(maxKmh: 8.5, adaptive: true))),
                 .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 4.0,
                              inclinePercent: i1, targetZone: 1, endSpeedKmh: 3.5)),
-            ], templateID: ProgramTemplateID.zone2Auto, locked: true, protocolVersion: 2)
+            ], templateID: ProgramTemplateID.zone2Auto, locked: true, protocolVersion: 3)
     }
 
     // MARK: - Football Endurance (3 niveaux)

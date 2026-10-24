@@ -773,15 +773,22 @@ public final class TreadmillController {
                 // Critère : vitesse mesurée stable (±0,05 km/h) pendant `settleDwell`, quelle que
                 // soit sa valeur. La consigne initiale n'est qu'une demande : on ne suppose pas
                 // que le tapis l'a appliquée.
+                let dwell = profile.initialSpeedSettleDwell ?? Self.settleDwell
                 if let v = telemetry.speedKmh, v >= 0.1 {
-                    if let ref = settleReference, abs(v - ref) <= 0.05 {
+                    if dwell <= 0 {
+                        // Vitesse initiale atteinte (à la tolérance près) : consigne immédiate.
+                        if speed.verifying.map({ v >= $0 - profile.speedToleranceKmh }) ?? true {
+                            settleReference = v
+                            settleStableSince = now
+                        }
+                    } else if let ref = settleReference, abs(v - ref) <= 0.05 {
                         settleStableSince = settleStableSince ?? now
                     } else {
                         settleReference = v
                         settleStableSince = now
                     }
                 }
-                let reached = settleStableSince.map { now - $0 >= Self.settleDwell } ?? false
+                let reached = settleStableSince.map { now - $0 >= dwell } ?? false
                 if reached || now > deadline {
                     let stableValue = settleReference
                     settleDeadline = nil

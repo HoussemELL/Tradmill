@@ -1,11 +1,11 @@
 # Programmes prédéfinis, pilotage Zone 2 et Apple Watch
 
 Toutes les vitesses sont en km/h. Les programmes sont installés au premier lancement (et
-ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 4) : chaque
+ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 5) : chaque
 séance est comparée aux précédentes du même programme (*Historique › Progression*). Pour une
 variante, dupliquez-le ; *Programmes › + › Réinitialiser les programmes prédéfinis* les remet en place.
 
-## 1. La bibliothèque (révision 4)
+## 1. La bibliothèque (révision 5)
 
 Inclinaison minimale **1 %** dans toutes les phases (Incline Walk monte à 2 %). Les programmes
 déjà installés sont **mis à jour en place** (mêmes identifiants, aucun doublon) ; un programme
@@ -13,7 +13,7 @@ prédéfini que vous aviez supprimé n'est pas réinstallé ; vos programmes per
 
 | Programme | Durée | Étapes (durée · km/h · %) |
 |---|---|---|
-| **Zone 2 Auto** ❤️ | 35 min | 5 min 4,0 → 5,5 progressif · 1 → 25 min pilotées par la FC (départ 5,8, limites 4–7) · 1 → 5 min 4,0 → 3,5 · 1 |
+| **Zone 2 Auto** ❤️ | 35 min | 5 min 4,0 → 5,5 progressif · 1 → 25 min pilotées par la FC (départ : vitesse tenue en zone 2 la dernière fois, sinon 5,8 ; limites 4–8,5) · 1 → 5 min 4,0 → 3,5 · 1 |
 | **Cardio Baseline** | 30 min | 5 min · 4,0 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
 | **Zone 2 Endurance** | 35 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
 | **Interval Run 9/11** | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 (tout à 1 %) |
@@ -74,7 +74,23 @@ la correspondance n'est pas garantie : voir le contrôle dans
 
 ## 3. Pilotage Zone 2 (programme Zone 2 Auto)
 
-Réglages par défaut (modifiables dans l'éditeur de phase, *Vitesse › Pilotée par la FC*) :
+**Protocole 3 (révision 5, 25/10) : pilotage centré sur la zone.** Constat sur une séance réelle :
+plafond de 7,0 km/h atteint avec une FC encore sous la zone 2 ; la zone n'était atteinte qu'en fin
+de séance. Désormais :
+
+| Paramètre | Zone 2 Auto (protocole 3) |
+|---|---|
+| Limites automatiques | **4,0–8,5 km/h** (plus celles du tapis) |
+| Départ | **vitesse mesurée pendant que la FC était en zone 2 lors de la dernière séance Zone 2 Auto** (≥ 2 min en zone), sinon 5,8 km/h |
+| Sous la zone | palier selon l'écart : **+0,5** si ≥ 15 bpm sous la zone, **+0,3** si ≥ 8, sinon +0,2 ; au plus une accélération par minute ; **aucune** si la FC monte déjà assez vite pour entrer dans la zone dans la minute (tendance sur 60 s) |
+| Dans la zone | vitesse maintenue ; **−0,2 anticipé** si la FC monte vite vers la limite haute ; +0,2 vers le milieu si elle reste dans le bas de la zone sans monter |
+| Au-dessus | inchangé (ci-dessous) |
+
+Nouvelle empreinte : les séances Zone 2 Auto suivantes forment une nouvelle série de comparaison.
+Un plafond automatique ≥ 8 km/h ne fait pas passer l'exercice Watch en « course » (allure prévue
+= vitesse de départ).
+
+Réglages du pilotage d'origine (programmes personnels, éditeur de phase, *Vitesse › Pilotée par la FC*) :
 
 | Paramètre | Défaut |
 |---|---|

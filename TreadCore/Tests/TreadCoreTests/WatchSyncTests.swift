@@ -19,7 +19,7 @@ final class WatchSyncTests: XCTestCase {
         let auto = WatchProgramSummary(.zone2Auto)
         XCTAssertTrue(auto.isAuto)
         XCTAssertEqual(auto.groups[0].steps[0].speedText, "4.0 → 5.5 km/h")
-        XCTAssertEqual(auto.groups[1].steps[0].speedText, "auto 4.0–7.0 km/h")
+        XCTAssertEqual(auto.groups[1].steps[0].speedText, "auto 4.0–8.5 km/h")
         XCTAssertEqual(auto.groups[1].steps[0].targetZone, 2)
         XCTAssertTrue(WatchProgramSummary(.cardioBaseline).isLocked)
     }

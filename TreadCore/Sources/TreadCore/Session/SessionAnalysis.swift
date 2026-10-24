@@ -177,6 +177,25 @@ public enum SessionAnalysis {
         return PostStopRecovery(hrAtStop: h0, hrAfter60: heartRate(at: t0 + 60, in: r), hrAfter120: heartRate(at: t0 + 120, in: r, tolerance: 8))
     }
 
+    /// Vitesse de départ apprise pour la phase pilotée d'un programme : vitesse mesurée pendant
+    /// que la FC était dans la zone visée, lors de la séance la plus récente du même programme
+    /// (même `templateID`, ou même programme personnel) qui y a passé au moins 2 minutes.
+    /// `records` doivent avoir les zones à jour (réglages actuels).
+    public static func learnedAutoStart(for program: WorkoutProgram, records: [SessionRecord]) -> Double? {
+        guard let zone = program.schedule.first(where: { $0.phase.isAuto })?.phase.autoSpeed?.targetZone else { return nil }
+        let same = records.filter { r in
+            guard !r.simulated, let p = r.program, p.hasAutoSpeed else { return false }
+            if let t = program.templateID { return (r.templateID ?? p.templateID) == t }
+            return p.id == program.id
+        }
+        for r in same.sorted(by: { $0.startDate > $1.startDate }) {
+            let f = zoneFocus(r, zone: zone)
+            guard let v = f.speedInZone, let frac = f.autoPhaseFraction, frac * f.autoPhaseSeconds >= 120 else { continue }
+            return (v * 10).rounded() / 10
+        }
+        return nil
+    }
+
     /// Bilan « zone visée » : part de temps en zone, vitesse nécessaire, ajustements.
     public static func zoneFocus(_ r: SessionRecord, zone: Int) -> ZoneFocusSummary {
         let total = r.zoneSeconds.reduce(0, +)

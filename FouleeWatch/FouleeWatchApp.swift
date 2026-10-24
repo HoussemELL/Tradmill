@@ -481,10 +481,13 @@ struct MetricsPage: View {
         } else if l.state == .paused {
             Text(l.stateLabel).font(.caption2.bold()).foregroundStyle(.orange).lineLimit(1)
         } else if let name = l.phaseName {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Text(name).font(.caption2.bold()).lineLimit(1)
                 Spacer(minLength: 2)
-                Text(WatchStyle.duration(l.phaseRemaining)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                // Temps restant dans l'étape : bien lisible d'un coup d'œil.
+                Text(WatchStyle.duration(l.phaseRemaining))
+                    .font(.system(size: 19, weight: .bold, design: .rounded)).monospacedDigit()
+                    .accessibilityLabel("Reste \(WatchStyle.duration(l.phaseRemaining)) dans l'étape")
             }
         } else {
             Text(l.stateLabel).font(.caption2).foregroundStyle(.secondary)

@@ -365,6 +365,9 @@ final class AppModel {
                                settings: settings.session, treadmillName: treadmill.deviceName,
                                simulated: treadmill.isSimulated, log: log,
                                clock: MonotonicClock.now, wallClock: Date.init)
+        if let p = program, p.hasAutoSpeed, let records = dataStore.sessionsForSharing()?.records {
+            s.learnedAutoStartKmh = SessionAnalysis.learnedAutoStart(for: p, records: records.map { displayRecord($0) })
+        }
         let service = SessionService(session: s, checkpointStore: checkpointStore)
         service.onFinished = { [weak self] r in self?.sessionFinished(r) }
         service.onFinalized = { [weak self] r in self?.sessionFinalized(r) }
@@ -391,7 +394,7 @@ final class AppModel {
             watch.beginSession(id: s.session.record.id, title: s.session.record.title,
                                metadata: .workoutMetadata(standard: std, foulee: meta))
             if !fromWatch && settings.startWatchWorkoutWithSession && watch.isAppInstalled && watch.linkState != .mirrored {
-                watch.launchWatchWorkout(running: (s.program?.maxSpeedKmh ?? s.session.effectiveTargets.speed) >= 8)
+                watch.launchWatchWorkout(running: s.program?.suggestsRunning ?? (s.session.effectiveTargets.speed >= 8))
             }
             s.saveCheckpoint()
             updateIdleTimer()

@@ -48,6 +48,9 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
     public var tolerateUnansweredSetpoints: Bool
     public var waitForInitialSpeedBeforeTarget: Bool
     public var initialSpeedSettleTimeout: TimeInterval
+    /// Durée de vitesse stable exigée avant la consigne du palier (nil = 2 s). 0 : consigne dès
+    /// que la bande tourne à la vitesse initiale (tapis qui démarrent directement à leur minimum).
+    public var initialSpeedSettleDwell: TimeInterval?
     public var responseTimeout: TimeInterval
     public var commandSpacing: TimeInterval
     /// Capacités supposées si la lecture des plages échoue.
@@ -115,6 +118,9 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
         tolerateUnansweredSetpoints: true,
         waitForInitialSpeedBeforeTarget: true,
         initialSpeedSettleTimeout: 8,
+        // Démarre directement à 1,0 km/h (son minimum) : inutile d'attendre 2 s de vitesse stable,
+        // la consigne part dès que cette vitesse est mesurée (renvoi unique si non appliquée).
+        initialSpeedSettleDwell: 0,
         responseTimeout: 4,
         commandSpacing: 0.4,
         fallbackCapabilities: TreadmillCapabilities(
