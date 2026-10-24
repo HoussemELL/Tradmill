@@ -1,21 +1,26 @@
 # Programmes prédéfinis, pilotage Zone 2 et Apple Watch
 
 Toutes les vitesses sont en km/h. Les programmes sont installés au premier lancement (et
-ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 5) : chaque
+ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 6) : chaque
 séance est comparée aux précédentes du même programme (*Historique › Progression*). Pour une
 variante, dupliquez-le ; *Programmes › + › Réinitialiser les programmes prédéfinis* les remet en place.
 
-## 1. La bibliothèque (révision 5)
+## 1. La bibliothèque (révision 6)
 
 Inclinaison minimale **1 %** dans toutes les phases (Incline Walk monte à 2 %). Les programmes
 déjà installés sont **mis à jour en place** (mêmes identifiants, aucun doublon) ; un programme
 prédéfini que vous aviez supprimé n'est pas réinstallé ; vos programmes personnels ne changent pas.
 
+Révision 6 (25/10) : seul **Zone 2 Endurance** change (20 min à 7,0 km/h au lieu de 6,0,
+protocole 3, même identifiant ; nouvelle empreinte, donc nouvelle série de comparaison dans Foulée
+et Rythme). Depuis cette révision, une mise à jour de la bibliothèque ne réécrit que les programmes
+dont la définition a changé.
+
 | Programme | Durée | Étapes (durée · km/h · %) |
 |---|---|---|
 | **Zone 2 Auto** ❤️ | 35 min | 5 min 4,0 → 5,5 progressif · 1 → 25 min pilotées par la FC (départ : vitesse tenue en zone 2 la dernière fois, sinon 5,8 ; limites 4–8,5) · 1 → 5 min 4,0 → 3,5 · 1 |
 | **Cardio Baseline** | 30 min | 5 min · 4,0 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
-| **Zone 2 Endurance** | 35 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
+| **Zone 2 Endurance** (protocole 3) | 35 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 20 min · **7,0** · 1 (valeur de départ, à ajuster à la main selon FC et ressenti) → 5 min · 3,8 · 1 |
 | **Interval Run 9/11** | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 (tout à 1 %) |
 | **Football Endurance · Niveau 1** | 35 min | échauffement 4 min · 4,5 + 4 min · 5,5 + 2 min · 6,5 → 3 × 3 min · 8,5 avec 3 min · 5,0 **entre** les efforts → 5 min · 6,0 → 5 min · 4,0 (1 %) |
 | **Football Endurance · Niveau 2** | 41 min | même échauffement → 4 × 3 min · 8,5, 3 min · 5,0 entre → 5 min · 6,0 → 5 min · 4,0 (1 %) |

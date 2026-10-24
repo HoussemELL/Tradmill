@@ -42,7 +42,8 @@ final class ProgramLibraryTests: XCTestCase {
 
         let z2 = WorkoutProgram.zone2Endurance
         XCTAssertEqual(durations(z2), [5, 5, 20, 5])
-        XCTAssertEqual(speeds(z2), [4.0, 5.5, 6.0, 3.8])
+        XCTAssertEqual(speeds(z2), [4.0, 5.5, 7.0, 3.8])
+        XCTAssertEqual(z2.protocolVersion, 3)
         XCTAssertEqual(inclines(z2), ones(4))
         XCTAssertFalse(z2.hasAutoSpeed, "aucune accélération automatique selon la FC")
 
@@ -121,7 +122,8 @@ final class ProgramLibraryTests: XCTestCase {
         XCTAssertEqual(updatedBaseline.map(inclines), ones(3))
         XCTAssertNotEqual(updatedBaseline?.protocolSignature, oldBaseline.protocolSignature,
                           "nouveau protocole à 1 % : série de comparaison distincte des anciens tests à 0 %")
-        XCTAssertEqual(plan.upserts.first { $0.templateID == ProgramTemplateID.zone2Auto }?.id, oldZ2.id)
+        XCTAssertNil(plan.upserts.first { $0.templateID == ProgramTemplateID.zone2Auto },
+                     "définition inchangée : programme laissé intact")
         XCTAssertFalse(plan.upserts.contains { $0.templateID == ProgramTemplateID.postMealWalk }, "supprimé : pas réinstallé")
         XCTAssertFalse(plan.upserts.contains { $0.id == personal.id }, "programme personnel intact")
         XCTAssertTrue(plan.addedNames.contains("Football Endurance · Niveau 1"))
@@ -189,6 +191,28 @@ final class ProgramLibraryTests: XCTestCase {
         }
         XCTAssertNotEqual(renamed.protocolSignature, base.protocolSignature)
         XCTAssertEqual(WorkoutProgram.cardioBaseline.protocolSignature, base.protocolSignature, "empreinte stable")
+    }
+
+    func testRevision6UpdatesOnlyZone2Endurance() throws {
+        // Installation en révision 5 : Zone 2 Endurance encore à 6 km/h (protocole 2).
+        var installed = WorkoutProgram.templates
+        let i = try XCTUnwrap(installed.firstIndex { $0.templateID == ProgramTemplateID.zone2Endurance })
+        var old = installed[i]
+        old.items = old.items.map {
+            guard case var .phase(p) = $0, p.durationSeconds == 20 * 60 else { return $0 }
+            p.speedKmh = 6.0
+            return .phase(p)
+        }
+        old.protocolVersion = 2
+        installed[i] = old
+        let plan = TemplateLibrary.plan(installed: installed, seededIDs: installed.compactMap(\.templateID), installedRevision: 5)
+        XCTAssertEqual(plan.upserts.map(\.templateID), [ProgramTemplateID.zone2Endurance], "seul Zone 2 Endurance est réécrit")
+        let updated = try XCTUnwrap(plan.upserts.first)
+        XCTAssertEqual(updated.id, old.id, "identifiant conservé")
+        XCTAssertEqual(updated.protocolVersion, 3)
+        XCTAssertNotEqual(updated.protocolSignature, old.protocolSignature, "nouvelle série de comparaison")
+        XCTAssertTrue(plan.removals.isEmpty)
+        XCTAssertEqual(plan.revision, 6)
     }
 
     func testProgramsRoundTripAndOldFormatStillDecodes() throws {
@@ -554,7 +578,7 @@ final class ProgramLibraryTests: XCTestCase {
         XCTAssertNoThrow(try s.session.start().get())
         let trace = requestedTrace(s, seconds: 16 * 60) { _ in 95 }  // FC très basse
         XCTAssertNil(s.session.autopilot)
-        XCTAssertTrue(trace.allSatisfy { [1.0, 4.0, 5.0, 5.5, 6.0].contains($0) }, "\(trace)")
+        XCTAssertTrue(trace.allSatisfy { [1.0, 4.0, 5.0, 5.5, 6.5, 7.0].contains($0) }, "\(trace)")
         XCTAssertNil(s.session.record.autoAdjustments)
     }
 

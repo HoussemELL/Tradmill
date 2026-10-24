@@ -25,7 +25,8 @@ public extension WorkoutProgram {
     /// 4 : tous les programmes prédéfinis verrouillés (comparables au fil des séances).
     /// 5 : Zone 2 Auto v3 — plafond 8,5 km/h, pilotage centré sur la zone (paliers selon l'écart,
     ///     tendance de la FC anticipée), départ à la vitesse apprise.
-    static let templatesRevision = 5
+    /// 6 : Zone 2 Endurance v3 — bloc de 20 min à 7 km/h (valeur de départ, ajustée à la main).
+    static let templatesRevision = 6
 
     /// Programmes installés par la toute première version (avant les identifiants de modèle),
     /// remplacés par la bibliothèque actuelle. Retirés seulement s'ils sont restés intacts.
@@ -87,15 +88,15 @@ public extension WorkoutProgram {
 
     static var zone2Endurance: WorkoutProgram {
         WorkoutProgram(name: "Zone 2 Endurance", notes: """
-            Endurance aérobie (35 min, 1 %). À 5,5 km/h vous êtes généralement à la limite supérieure de la \
-            zone 1 : les 6 km/h sont un point de départ à ajuster selon votre FC (boutons +/−), pas une garantie \
-            d'être en zone 2. La FC ne pilote pas le tapis dans ce programme.
+            Endurance aérobie (35 min, 1 %). Les 7 km/h du bloc de 20 min sont une valeur de départ, à ajuster \
+            vous-même (boutons +/−) selon votre FC et votre ressenti. La FC ne pilote pas le tapis dans ce \
+            programme (pour un pilotage automatique : Zone 2 Auto).
             """, items: [
                 .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: i1, targetZone: 1)),
                 .phase(.init(name: "Montée en allure", kind: .steady, durationSeconds: min(5), speedKmh: 5.5, inclinePercent: i1, targetZone: 1)),
-                .phase(.init(name: "Zone 2", kind: .steady, durationSeconds: min(20), speedKmh: 6.0, inclinePercent: i1, targetZone: 2)),
+                .phase(.init(name: "Zone 2", kind: .steady, durationSeconds: min(20), speedKmh: 7.0, inclinePercent: i1, targetZone: 2)),
                 .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1, targetZone: 1)),
-            ], templateID: ProgramTemplateID.zone2Endurance, locked: true, protocolVersion: 2)
+            ], templateID: ProgramTemplateID.zone2Endurance, locked: true, protocolVersion: 3)
     }
 
     static var intervalRun911: WorkoutProgram {
@@ -238,6 +239,13 @@ public enum TemplateLibrary {
         public var addedNames: [String]
     }
 
+    /// Même définition (déroulé, nom, notes, verrou, version, niveau) — identifiants et dates ignorés.
+    static func sameDefinition(_ a: WorkoutProgram, _ b: WorkoutProgram) -> Bool {
+        a.protocolSignature == b.protocolSignature && a.name == b.name && a.notes == b.notes
+            && a.isLocked == b.isLocked && a.protocolVersion == b.protocolVersion && a.level == b.level
+            && a.isAdvanced == b.isAdvanced
+    }
+
     public static func plan(installed: [WorkoutProgram], seededIDs: [String], installedRevision: Int,
                             templates: [WorkoutProgram] = WorkoutProgram.templates,
                             revision: Int = WorkoutProgram.templatesRevision, now: Date = Date()) -> Plan {
@@ -248,7 +256,9 @@ public enum TemplateLibrary {
         for t in templates {
             guard let id = t.templateID else { continue }
             if let current = installed.first(where: { $0.templateID == id }) {
-                if installedRevision < revision {
+                // Seuls les programmes dont la définition a changé sont réécrits (les autres restent
+                // intacts, même date de modification).
+                if installedRevision < revision && !Self.sameDefinition(current, t) {
                     var fresh = t
                     fresh.id = current.id
                     fresh.createdAt = current.createdAt
