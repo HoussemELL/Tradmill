@@ -24,11 +24,12 @@ la partie après la 2ᵉ pause était dans Santé.)
 
 **Récupérer une séance Watch incomplète** (*Historique › séance › Récupérer la séance complète
 dans Santé*, séances enregistrées par la Watch) : si Santé ne contient qu'une partie de la séance
-(moins de 90 % du créneau), l'iPhone supprime la séance partielle puis écrit la séance complète à
-partir des données Foulée (bande réelle, pauses, phases, distance, pas, énergie ; la FC de la
-montre est déjà dans Santé), avec une version supérieure (`HealthRecoveryDecision`). Si Santé
-refuse que l'iPhone supprime la séance de la montre, rien n'est écrit (pas de doublon) :
-supprimez-la dans l'app Santé, puis relancez la récupération.
+(moins de 90 % du créneau), l'iPhone écrit **d'abord** la séance complète à partir des données
+Foulée (bande réelle, pauses, phases, distance, pas, énergie ; la FC de la montre est déjà dans
+Santé), avec une version supérieure (`HealthRecoveryDecision`), **puis** supprime la séance
+partielle. Les autorisations sont vérifiées (et demandées si besoin) avant toute modification ;
+un échec d'écriture ne supprime rien. Si Santé refuse que l'iPhone supprime la séance de la
+montre, supprimez-la dans l'app Santé pour éviter le doublon.
 
 Identifiant stable sur chaque séance (iPhone **et** Watch) :
 `HKMetadataKeySyncIdentifier` = `HKMetadataKeyExternalUUID` = UUID Foulée,

@@ -172,7 +172,11 @@ struct HistoryDetailView: View {
                 .padding()
                 .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
                 healthCard(r)
-                if let message { Banner(text: message, color: Theme.accent, systemImage: "checkmark.circle") }
+                if let message {
+                    let failed = message.hasPrefix("Échec") || message.hasPrefix("Non écrite")
+                    Banner(text: message, color: failed ? Theme.danger : Theme.accent,
+                           systemImage: failed ? "exclamationmark.triangle.fill" : "checkmark.circle")
+                }
             }
             .padding()
         }

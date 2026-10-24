@@ -147,9 +147,11 @@ final class HealthService {
             break
         }
         guard isAvailable else { return WriteResult(status: .failed("Santé indisponible"), report: nil) }
-        if store.authorizationStatus(for: HKObjectType.workoutType()) == .sharingDenied {
+        guard await ensureWorkoutSharing() else {
             return WriteResult(status: .denied, report: HealthWriteReport(plan: plan, outcome: "écriture des séances refusée", workoutUUID: nil))
         }
+        var plan = plan
+        _ = keepAuthorizedQuantities(&plan)
 
         let existing = await existingWorkouts(syncIdentifier: plan.standard.syncIdentifier, start: plan.start, end: plan.end)
         let decision = HealthWriteDecision.decide(plan: plan, existing: existing)
@@ -279,6 +281,35 @@ final class HealthService {
         }
     }
 
+    // MARK: - Autorisations d'écriture
+
+    /// Demande les autorisations si l'une n'a jamais été posée (sinon une écriture échoue avec
+    /// « Not authorized »). Vrai si l'écriture des séances est accordée.
+    @MainActor
+    private func ensureWorkoutSharing() async -> Bool {
+        if Self.writeTypes.contains(where: { store.authorizationStatus(for: $0.0) == .notDetermined }) {
+            _ = await requestAuthorization()
+        }
+        return store.authorizationStatus(for: HKObjectType.workoutType()) == .sharingAuthorized
+    }
+
+    /// Retire du plan les échantillons dont l'écriture n'est pas accordée (la séance est écrite
+    /// sans eux plutôt que pas du tout) ; renvoie ce qui est omis.
+    private func keepAuthorizedQuantities(_ plan: inout HealthWritePlan) -> [String] {
+        var skipped = Set<String>()
+        plan.quantities = plan.quantities.filter { q in
+            let type = quantityType(q.kind)
+            guard store.authorizationStatus(for: type) == .sharingAuthorized else {
+                skipped.insert(Self.writeTypes.first { $0.0 == (type as HKSampleType) }?.1 ?? q.kind.rawValue)
+                return false
+            }
+            return true
+        }
+        let list = skipped.sorted()
+        plan.notWritten += list.map { "Autorisation refusée : \($0)" }
+        return list
+    }
+
     // MARK: - Récupération d'une séance Watch incomplète
 
     /// Remplace dans Santé une séance Watch partielle (exercice coupé) par la séance complète,
@@ -291,9 +322,12 @@ final class HealthService {
         r.healthStatus = .notRequested
         var plan = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: true, watchWorkoutUsed: false, bodyMassKg: bodyMassKg))
         guard plan.owner == .phone else { return (nil, "Rien à écrire : \(plan.reason)") }
-        if store.authorizationStatus(for: HKObjectType.workoutType()) == .sharingDenied {
-            return (nil, "Écriture des séances refusée dans Santé (Réglages › Santé › Accès aux données › Foulée)")
+        // Autorisation vérifiée AVANT de toucher à quoi que ce soit dans Santé.
+        guard await ensureWorkoutSharing() else {
+            return (nil, "Échec : Foulée n'est pas autorisée à écrire les séances dans Santé (Réglages › Santé › "
+                    + "Accès aux données et appareils › Foulée › activer « Entraînements »). Rien n'a été modifié.")
         }
+        let skipped = keepAuthorizedQuantities(&plan)
         let existing = await existingWorkouts(syncIdentifier: plan.standard.syncIdentifier, start: plan.start, end: plan.end)
         switch HealthRecoveryDecision.decide(plan: plan, existing: existing) {
         case let .complete(_, minutes):
@@ -302,37 +336,44 @@ final class HealthService {
             return (nil, "Non écrite : une séance de \(by) couvre déjà ce créneau")
         case let .replace(partial, version):
             let partialText = partial.map { "\(Int(($0.end.timeIntervalSince($0.start) / 60).rounded())) min" }.joined(separator: ", ")
-            if !partial.isEmpty {
-                let refused = await deleteWorkouts(syncIdentifier: plan.standard.syncIdentifier)
-                if !refused.isEmpty {
-                    return (nil, "Santé ne laisse pas Foulée supprimer la séance partielle de la montre (\(partialText)). "
-                            + "Supprimez-la dans l'app Santé (Parcourir › Activité › Entraînements), puis touchez à nouveau « Récupérer ».")
-                }
-            }
             plan.standard.syncVersion = version
             plan.reason = "récupération : séance Watch incomplète dans Santé" + (partial.isEmpty ? "" : " (\(partialText))")
                 + ", séance complète écrite par l'iPhone"
+            // D'abord écrire la séance complète ; la partie de la montre n'est supprimée qu'ensuite
+            // (un échec d'écriture ne fait jamais rien perdre).
+            let uuid: String
             do {
-                let uuid = try await build(plan)
-                log.log(.health, "Séance complète récupérée dans Santé (\(uuid), version \(version))")
-                r.healthStatus = .saved(workoutUUID: uuid)
-                r.healthSyncVersion = version
-                r.revision = max(r.revision ?? 1, version)
-                r.healthReport = HealthWriteReport(plan: plan, outcome: "séance complète écrite par l'iPhone"
-                                                   + (partial.isEmpty ? "" : ", remplace l'exercice Watch partiel (\(partialText))"),
-                                                   workoutUUID: uuid, replaced: partial.map(\.uuid))
-                return (r, "Séance complète écrite dans Santé (\(Int((plan.activeDuration / 60).rounded())) min actives)")
+                uuid = try await build(plan)
             } catch {
                 log.log(.error, "Récupération Santé : \(error.localizedDescription)")
-                return (nil, "Échec de l'écriture dans Santé : \(error.localizedDescription)")
+                return (nil, "Échec de l'écriture dans Santé : \(error.localizedDescription). Rien n'a été supprimé.")
             }
+            log.log(.health, "Séance complète récupérée dans Santé (\(uuid), version \(version))")
+            let refused = await deleteWorkouts(uuids: Set(partial.map(\.uuid)))
+            r.healthStatus = .saved(workoutUUID: uuid)
+            r.healthSyncVersion = version
+            r.revision = max(r.revision ?? 1, version)
+            var outcome = "séance complète écrite par l'iPhone"
+            if !partial.isEmpty {
+                outcome += refused.isEmpty ? ", remplace l'exercice Watch partiel (\(partialText))"
+                    : " ; exercice Watch partiel (\(partialText)) à supprimer dans l'app Santé"
+            }
+            r.healthReport = HealthWriteReport(plan: plan, outcome: outcome, workoutUUID: uuid, replaced: partial.map(\.uuid))
+            var message = "Séance complète écrite dans Santé (\(Int((plan.activeDuration / 60).rounded())) min actives)"
+            if !refused.isEmpty {
+                message += ". Santé ne laisse pas Foulée supprimer la partie enregistrée par la montre (\(partialText)) : "
+                    + "supprimez-la dans l'app Santé (Parcourir › Activité › Entraînements) pour éviter un doublon."
+            }
+            if !skipped.isEmpty { message += ". Non écrits (autorisation refusée) : " + skipped.joined(separator: ", ") }
+            return (r, message)
         }
     }
 
-    /// Supprime les séances portant ce SyncIdentifier ; renvoie les sources refusées.
-    private func deleteWorkouts(syncIdentifier id: String) async -> [String] {
-        let workouts = await query(HKObjectType.workoutType(),
-                                   predicate: HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [id]),
+    /// Supprime ces séances (par identifiant) ; renvoie les sources qui ont refusé.
+    private func deleteWorkouts(uuids: Set<String>) async -> [String] {
+        guard !uuids.isEmpty else { return [] }
+        let ids = Set(uuids.compactMap(UUID.init(uuidString:)))
+        let workouts = await query(HKObjectType.workoutType(), predicate: HKQuery.predicateForObjects(with: ids),
                                    limit: HKObjectQueryNoLimit, newestFirst: false)
         var refused: [String] = []
         for w in workouts {
