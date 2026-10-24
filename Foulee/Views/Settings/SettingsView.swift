@@ -284,6 +284,17 @@ struct HealthSettingsView: View {
             } footer: {
                 Text("Écriture : séances, distance, pas, énergie active, fréquence cardiaque. Lecture : séances (éviter les doublons), poids (énergie), date de naissance, FC et FC de repos (zones). L'app reste utilisable si une autorisation est refusée ; seul ce qui est refusé n'est pas enregistré.")
             }
+            Section {
+                ForEach(model.health.writeStatuses, id: \.label) { s in
+                    LabeledContent(s.label, value: s.status)
+                        .foregroundStyle(s.status == "autorisée" ? Color.primary : Theme.warning)
+                }
+            } header: {
+                Text("Écriture par Foulée")
+            } footer: {
+                Text("« Jamais demandée » : touchez « Demander les autorisations » ci-dessus, la fenêtre de Santé propose ces données. « Refusée » : app Santé › votre profil › Apps › Foulée › Autoriser l'écriture.")
+            }
+            .id(status)
             Section("Qui enregistre la séance") {
                 Text("""
                 • Un exercice Apple Watch tourne pendant la séance : la Watch enregistre la séance (FC, énergie, pas, distance). Foulée y ajoute ses métadonnées (programme, vitesses, inclinaison) ; l'iPhone n'écrit rien d'autre.

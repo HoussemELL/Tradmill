@@ -51,6 +51,21 @@ final class HealthService {
         return Self.writeTypes.filter { store.authorizationStatus(for: $0.0) == .sharingDenied }.map(\.1)
     }
 
+    /// État de l'autorisation d'écriture de chaque type, tel que HealthKit le donne (fiable pour
+    /// l'écriture, contrairement à la lecture).
+    var writeStatuses: [(label: String, status: String)] {
+        guard isAvailable else { return [] }
+        return Self.writeTypes.map { type, label in
+            let status: String
+            switch store.authorizationStatus(for: type) {
+            case .sharingAuthorized: status = "autorisée"
+            case .sharingDenied: status = "refusée"
+            default: status = "jamais demandée"
+            }
+            return (label.prefix(1).uppercased() + label.dropFirst(), status)
+        }
+    }
+
     var sharingStatusLabel: String {
         guard isAvailable else { return "Santé indisponible sur cet appareil" }
         let keys = Self.missingUsageKeys
@@ -299,14 +314,16 @@ final class HealthService {
         var skipped = Set<String>()
         plan.quantities = plan.quantities.filter { q in
             let type = quantityType(q.kind)
-            guard store.authorizationStatus(for: type) == .sharingAuthorized else {
-                skipped.insert(Self.writeTypes.first { $0.0 == (type as HKSampleType) }?.1 ?? q.kind.rawValue)
+            let status = store.authorizationStatus(for: type)
+            guard status == .sharingAuthorized else {
+                let label = Self.writeTypes.first { $0.0 == (type as HKSampleType) }?.1 ?? q.kind.rawValue
+                skipped.insert(label + (status == .sharingDenied ? " (écriture refusée)" : " (écriture jamais demandée)"))
                 return false
             }
             return true
         }
         let list = skipped.sorted()
-        plan.notWritten += list.map { "Autorisation refusée : \($0)" }
+        plan.notWritten += list.map { "Non autorisé : \($0)" }
         return list
     }
 
@@ -364,7 +381,10 @@ final class HealthService {
                 message += ". Santé ne laisse pas Foulée supprimer la partie enregistrée par la montre (\(partialText)) : "
                     + "supprimez-la dans l'app Santé (Parcourir › Activité › Entraînements) pour éviter un doublon."
             }
-            if !skipped.isEmpty { message += ". Non écrits (autorisation refusée) : " + skipped.joined(separator: ", ") }
+            if !skipped.isEmpty {
+                message += ". Non écrits : " + skipped.joined(separator: ", ")
+                    + " — Foulée › Réglages › Apple Santé › Demander les autorisations"
+            }
             return (r, message)
         }
     }
