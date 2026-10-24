@@ -47,8 +47,11 @@ final class WorkoutManager {
     private(set) var stopRequestedAt: Date?
     /// Message important à afficher (iPhone injoignable pendant un arrêt…).
     var warning: String?
-    /// Séance de l'iPhone suivie par cet exercice.
-    private(set) var linkedSessionID: UUID?
+    /// Séance de l'iPhone suivie par cet exercice (mémorisée : reprise après fermeture de l'app).
+    private(set) var linkedSessionID: UUID? {
+        didSet { UserDefaults.standard.set(linkedSessionID?.uuidString, forKey: Self.linkedKey) }
+    }
+    private static let linkedKey = "foulee.watch.linkedSession"
     /// Exercice simulé (tests dans le simulateur : pas de HealthKit, FC calculée).
     let simulated: Bool
 
@@ -253,6 +256,9 @@ final class WorkoutManager {
     @MainActor
     func start(activity: HKWorkoutActivityType) async {
         guard !isActive else { return }
+        // Un exercice tourne encore (app fermée puis relancée) : on le reprend au lieu d'en
+        // démarrer un second, qui couperait la séance en deux dans Santé.
+        if !simulated, await recoverActiveWorkout() { return }
         phase = .starting
         heartRate = nil
         steps = nil
@@ -287,6 +293,16 @@ final class WorkoutManager {
             startDate = date
             s.startActivity(with: date)
             try await b.beginCollection(at: date)
+            // Début aligné sur la bande : les pauses déjà faites sont reportées dans l'exercice.
+            let past = WatchWorkoutAlignment.pastPauses(start: date, now: Date(), live: live)
+            if !past.isEmpty {
+                let events = past.flatMap { p in
+                    [HKWorkoutEvent(type: .pause, dateInterval: DateInterval(start: p.start, duration: 0), metadata: nil),
+                     HKWorkoutEvent(type: .resume, dateInterval: DateInterval(start: p.end, duration: 0), metadata: nil)]
+                }
+                try? await b.addWorkoutEvents(events)
+                onEvent?("past-pauses:\(past.count)")
+            }
             do {
                 try await s.startMirroringToCompanionDevice()
                 mirroring = true
@@ -317,6 +333,40 @@ final class WorkoutManager {
             if let at = liveReceivedAt, at >= asked { return }
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
+    }
+
+    /// Reprend l'exercice resté actif après une fermeture de l'app (plantage, mémoire, mise à jour) :
+    /// même exercice, même séance Santé. Renvoie vrai si un exercice a été repris.
+    @MainActor
+    @discardableResult
+    func recoverActiveWorkout() async -> Bool {
+        guard !isActive, !simulated else { return false }
+        let recovered: HKWorkoutSession? = await withCheckedContinuation { cont in
+            healthStore.recoverActiveWorkoutSession { s, _ in cont.resume(returning: s) }
+        }
+        guard let s = recovered else { return false }
+        let b = s.associatedWorkoutBuilder()
+        b.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: s.workoutConfiguration)
+        s.delegate = proxy
+        b.delegate = proxy
+        session = s
+        builder = b
+        discardOnEnd = false
+        startDate = b.startDate ?? s.startDate ?? Date()
+        if linkedSessionID == nil, let id = UserDefaults.standard.string(forKey: Self.linkedKey).flatMap(UUID.init) {
+            linkedSessionID = id
+        }
+        phase = s.state == .paused ? .paused : .running
+        do {
+            try await s.startMirroringToCompanionDevice()
+            mirroring = true
+        } catch {
+            mirroring = false
+        }
+        send(.workoutState(phase == .paused ? .paused : .running, startDate: startDate))
+        onEvent?("recovered")
+        requestContext()
+        return true
     }
 
     func pause() {

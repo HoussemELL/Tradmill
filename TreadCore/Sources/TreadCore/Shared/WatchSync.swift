@@ -212,13 +212,15 @@ public enum WatchStartPolicy {
 // MARK: - Début de l'exercice Watch
 
 /// Exercice Watch lancé alors que la bande de l'iPhone tourne déjà (montre réveillée ou app
-/// lancée en retard) : son début est aligné sur le démarrage de la bande, pour que la durée
-/// dans Santé couvre toute la séance.
+/// lancée en retard, exercice relancé après une coupure) : son début est aligné sur le
+/// démarrage de la bande et les pauses passées y sont reportées, pour que la séance Santé
+/// couvre toute la séance (un seul exercice : il remplace dans Santé un morceau précédent,
+/// même identifiant de synchronisation).
 public enum WatchWorkoutAlignment {
     /// Retard en dessous duquel on garde l'heure courante.
     public static let minLag: TimeInterval = 5
-    /// Au-delà, l'écart est jugé incohérent (autre séance, horloge) : heure courante.
-    public static let maxLag: TimeInterval = 15 * 60
+    /// Au-delà, l'écart est jugé incohérent (horloge) : heure courante.
+    public static let maxLag: TimeInterval = 4 * 3600
     /// Âge maximal de l'état de séance reçu de l'iPhone.
     public static let maxStatusAge: TimeInterval = 20
 
@@ -227,6 +229,15 @@ public enum WatchWorkoutAlignment {
               l.state == .running || l.state == .paused, let belt = l.beltStartDate else { return now }
         let lag = now.timeIntervalSince(belt)
         return lag > minLag && lag < maxLag ? belt : now
+    }
+
+    /// Pauses passées à reporter dans un exercice qui commence à `start` (aligné sur la bande).
+    public static func pastPauses(start: Date, now: Date, live: WatchLiveStatus?) -> [DateInterval] {
+        guard start < now, let pauses = live?.pauses else { return [] }
+        return pauses.compactMap { p in
+            guard p.count == 2, p[0] >= start, p[1] > p[0], p[1] <= now else { return nil }
+            return DateInterval(start: p[0], end: p[1])
+        }
     }
 }
 

@@ -13,6 +13,15 @@ Linux et macOS) et `Foulee/Services/HealthService.swift` (appels HealthKit).
 | Une autre séance Santé (Watch, Exercice, app « UR »…) couvre > 50 % du créneau | personne | rien ; l'historique affiche « Déjà enregistrée par … » |
 | Moins d'1 minute hors pauses, ou séance simulée | personne | rien (exercice Watch annulé si < 1 min) |
 
+**Exercice Watch d'une seule pièce.** Si l'app Watch est fermée pendant la séance (plantage,
+mémoire), watchOS la relance et elle **reprend le même exercice**
+(`handleActiveWorkoutRecovery`, `recoverActiveWorkoutSession`) ; un démarrage ultérieur reprend
+aussi l'exercice encore actif au lieu d'en créer un second. Si un nouvel exercice démarre malgré
+tout en cours de séance, son début est aligné sur le démarrage de la bande et les pauses déjà
+faites y sont reportées (`WatchWorkoutAlignment`) : avec le même identifiant de synchronisation,
+il remplace dans Santé le morceau précédent par la séance entière. (Cas observé le 24/10 : seule
+la partie après la 2ᵉ pause était dans Santé.)
+
 Identifiant stable sur chaque séance (iPhone **et** Watch) :
 `HKMetadataKeySyncIdentifier` = `HKMetadataKeyExternalUUID` = UUID Foulée,
 `HKMetadataKeySyncVersion` = révision (1, puis +1 à chaque correction).

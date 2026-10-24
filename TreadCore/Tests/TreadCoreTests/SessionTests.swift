@@ -245,6 +245,26 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(normal.finished).distanceSource, .treadmill, "compteur du tapis plausible : retenu")
     }
 
+    func testWatchLiveStatusCarriesClosedPauses() throws {
+        let s = SessionHarness(program: program())
+        XCTAssertNoThrow(try s.session.start().get())
+        s.run(30, hrBPM: 120)
+        s.session.pause()
+        s.run(20, hrBPM: 120)
+        XCTAssertNoThrow(try s.session.resume().get())
+        s.run(20, hrBPM: 120)
+        s.session.pause()
+        let status = WatchLiveStatus.make(session: s.session, now: s.h.now, date: Date(timeIntervalSince1970: 1_700_000_100))
+        let pauses = try XCTUnwrap(status.pauses)
+        XCTAssertEqual(pauses.count, 1, "seule la pause terminée")
+        XCTAssertEqual(pauses[0][1].timeIntervalSince(pauses[0][0]), 20, accuracy: 6)
+        let belt = try XCTUnwrap(status.beltStartDate)
+        let past = WatchWorkoutAlignment.pastPauses(start: belt, now: pauses[0][1].addingTimeInterval(60), live: status)
+        XCTAssertEqual(past.count, 1)
+        XCTAssertTrue(WatchWorkoutAlignment.pastPauses(start: pauses[0][1], now: pauses[0][1].addingTimeInterval(60), live: status).isEmpty,
+                      "pause antérieure au début de l'exercice : ignorée")
+    }
+
     func testZoneTimeRuleCountsBeltTimeOnly() throws {
         let s = SessionHarness(program: program())
         XCTAssertNoThrow(try s.session.start().get())
@@ -305,7 +325,9 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: belt)), belt, "montre en retard de 2 min")
         XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.starting, belt: nil)), now, "bande pas encore partie")
         XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: now.addingTimeInterval(-2))), now)
-        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: now.addingTimeInterval(-3600))), now)
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: now.addingTimeInterval(-1140))), now.addingTimeInterval(-1140),
+                       "exercice relancé 19 min après le départ (coupure) : aligné sur la bande")
+        XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: now.addingTimeInterval(-5 * 3600))), now)
         XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: live(.running, belt: belt, sent: now.addingTimeInterval(-60))), now,
                        "état trop ancien")
         XCTAssertEqual(WatchWorkoutAlignment.startDate(now: now, live: nil), now)

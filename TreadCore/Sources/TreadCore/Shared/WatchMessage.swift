@@ -103,6 +103,9 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
     public var alert: String?
     /// Démarrage réel de la bande (nil avant) : la montre y aligne le début de son exercice.
     public var beltStartDate: Date?
+    /// Pauses terminées de la séance [début, fin] : un exercice Watch démarré en cours de séance
+    /// les reprend, pour que sa durée dans Santé soit celle de la séance.
+    public var pauses: [[Date]]?
 
     public init(state: State, stateLabel: String, programName: String?, activeSeconds: Double, speedKmh: Double?,
                 inclinePercent: Double?, targetSpeedKmh: Double, targetInclinePercent: Double, phaseName: String?,
@@ -110,7 +113,7 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
                 nextPhaseName: String?, zoneBounds: [Int], zoneSeconds: [Double], targetZone: Int?,
                 phoneHeartRate: Int?, phoneHeartRateSource: String?, phoneZone: Int?, autopilotStatus: String?,
                 autopilotManual: Bool, sentAt: Date, sessionID: UUID? = nil, treadmillLinkLost: Bool? = nil, alert: String? = nil,
-                beltStartDate: Date? = nil) {
+                beltStartDate: Date? = nil, pauses: [[Date]]? = nil) {
         self.state = state
         self.stateLabel = stateLabel
         self.programName = programName
@@ -138,6 +141,7 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
         self.treadmillLinkLost = treadmillLinkLost
         self.alert = alert
         self.beltStartDate = beltStartDate
+        self.pauses = pauses
     }
 
     /// Zone (1…5) d'une FC avec les bornes reçues (même règle que `HeartZoneSettings.zone(for:)` :
@@ -163,6 +167,21 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
 }
 
 public extension WatchLiveStatus {
+    /// Pauses terminées (événements pause → reprise), en dates.
+    static func closedPauses(_ r: SessionRecord) -> [[Date]]? {
+        var out: [[Date]] = []
+        var open: Double?
+        for e in r.events {
+            switch e.kind {
+            case .pause: if open == nil { open = e.t }
+            case .resume:
+                if let o = open { out.append([r.date(at: o), r.date(at: e.t)]); open = nil }
+            default: break
+            }
+        }
+        return out.isEmpty ? nil : out
+    }
+
     /// Instantané de la séance pour la Watch.
     static func make(session s: WorkoutSession, now: TimeInterval, date: Date) -> WatchLiveStatus {
         let state: State
@@ -195,6 +214,6 @@ public extension WatchLiveStatus {
             phoneHeartRate: hr.liveBPM, phoneHeartRateSource: hr.liveBPM != nil ? s.heartRate.activeSource?.shortLabel : nil,
             phoneZone: s.currentZone, autopilotStatus: a?.status, autopilotManual: a?.mode == .manual, sentAt: date,
             sessionID: s.record.id, treadmillLinkLost: s.controller.state == .linkLost || s.status == .paused(.connectionLost),
-            alert: s.lastAlert, beltStartDate: s.record.beltStartDate)
+            alert: s.lastAlert, beltStartDate: s.record.beltStartDate, pauses: closedPauses(s.record))
     }
 }

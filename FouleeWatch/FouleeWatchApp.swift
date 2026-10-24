@@ -25,6 +25,14 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
             await WorkoutManager.shared.start(activity: activity)
         }
     }
+
+    /// watchOS relance l'app alors qu'un exercice était en cours (plantage, fermeture) :
+    /// on reprend ce même exercice.
+    func handleActiveWorkoutRecovery() {
+        Task { @MainActor in
+            await WorkoutManager.shared.recoverActiveWorkout()
+        }
+    }
 }
 
 struct WatchRootView: View {
