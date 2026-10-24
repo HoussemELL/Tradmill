@@ -421,6 +421,37 @@ public enum HealthWriteDecision: Equatable, Sendable {
     }
 }
 
+/// Récupération d'une séance dont l'exercice Apple Watch n'a gardé qu'une partie dans Santé
+/// (exercice coupé puis relancé) : l'iPhone réécrit la séance complète depuis les données Foulée.
+public enum HealthRecoveryDecision: Equatable, Sendable {
+    /// Santé contient déjà une séance Foulée couvrant (presque) toute la séance.
+    case complete(uuid: String, minutes: Int)
+    /// Une séance d'une autre app couvre déjà plus de la moitié du créneau : rien n'est écrit.
+    case blocked(by: String)
+    /// Séances Foulée partielles à remplacer, et version de la séance complète.
+    case replace(partial: [ExistingHealthWorkout], version: Int)
+
+    /// Part minimale du créneau couverte pour considérer la séance comme complète.
+    public static let completeRatio = 0.9
+
+    public static func decide(plan: HealthWritePlan, existing: [ExistingHealthWorkout]) -> HealthRecoveryDecision {
+        let id = plan.standard.syncIdentifier
+        let own = existing.filter { $0.syncIdentifier == id }
+        let span = plan.end.timeIntervalSince(plan.start)
+        if let full = own.first(where: { $0.end.timeIntervalSince($0.start) >= span * completeRatio }) {
+            return .complete(uuid: full.uuid, minutes: Int((full.end.timeIntervalSince(full.start) / 60).rounded()))
+        }
+        if span > 0 {
+            for w in existing where w.syncIdentifier != id {
+                let overlap = min(w.end, plan.end).timeIntervalSince(max(w.start, plan.start))
+                if overlap / span > HealthWriteDecision.overlapThreshold { return .blocked(by: w.sourceName) }
+            }
+        }
+        let version = max(own.compactMap(\.syncVersion).max() ?? 0, plan.standard.syncVersion) + 1
+        return .replace(partial: own, version: version)
+    }
+}
+
 /// Résumé de ce qui a été écrit, conservé avec la séance et exportable.
 public struct HealthWriteReport: Codable, Equatable, Sendable {
     public struct QuantitySummary: Codable, Equatable, Sendable {

@@ -259,6 +259,17 @@ struct HistoryDetailView: View {
                 }
                 .disabled(savingHealth)
             }
+            if canRecoverInHealth(r) {
+                Button {
+                    recoverInHealth(r)
+                } label: {
+                    Label(savingHealth ? "Vérification…" : "Récupérer la séance complète dans Santé",
+                          systemImage: "arrow.triangle.2.circlepath.circle")
+                }
+                .disabled(savingHealth)
+                Text("Si la montre n'a enregistré qu'une partie de la séance (exercice coupé), l'iPhone la remplace dans Santé par la séance complète enregistrée par Foulée. Rien n'est touché si Santé a déjà la séance entière.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -291,6 +302,20 @@ struct HistoryDetailView: View {
         }
         .padding()
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func canRecoverInHealth(_ r: SessionRecord) -> Bool {
+        guard model.health.isAvailable, model.settings.health.enabled, !r.simulated else { return false }
+        if case .ownedByWatch = r.healthStatus { return true }
+        return false
+    }
+
+    private func recoverInHealth(_ r: SessionRecord) {
+        savingHealth = true
+        Task {
+            message = await model.recoverHealthSession(r)
+            savingHealth = false
+        }
     }
 
     private func canSaveToHealth(_ r: SessionRecord) -> Bool {

@@ -279,6 +279,68 @@ final class HealthService {
         }
     }
 
+    // MARK: - Récupération d'une séance Watch incomplète
+
+    /// Remplace dans Santé une séance Watch partielle (exercice coupé) par la séance complète,
+    /// écrite par l'iPhone depuis les données Foulée. Ne supprime rien si une séance complète
+    /// existe déjà ; n'écrit rien si la séance partielle ne peut pas être supprimée (doublon).
+    @MainActor
+    func recoverFullSession(_ record: SessionRecord, bodyMassKg: Double?) async -> (updated: SessionRecord?, message: String) {
+        guard isAvailable else { return (nil, "Santé indisponible") }
+        var r = record
+        r.healthStatus = .notRequested
+        var plan = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: true, watchWorkoutUsed: false, bodyMassKg: bodyMassKg))
+        guard plan.owner == .phone else { return (nil, "Rien à écrire : \(plan.reason)") }
+        if store.authorizationStatus(for: HKObjectType.workoutType()) == .sharingDenied {
+            return (nil, "Écriture des séances refusée dans Santé (Réglages › Santé › Accès aux données › Foulée)")
+        }
+        let existing = await existingWorkouts(syncIdentifier: plan.standard.syncIdentifier, start: plan.start, end: plan.end)
+        switch HealthRecoveryDecision.decide(plan: plan, existing: existing) {
+        case let .complete(_, minutes):
+            return (nil, "Santé contient déjà la séance complète (\(minutes) min) : rien à récupérer")
+        case let .blocked(by):
+            return (nil, "Non écrite : une séance de \(by) couvre déjà ce créneau")
+        case let .replace(partial, version):
+            let partialText = partial.map { "\(Int(($0.end.timeIntervalSince($0.start) / 60).rounded())) min" }.joined(separator: ", ")
+            if !partial.isEmpty {
+                let refused = await deleteWorkouts(syncIdentifier: plan.standard.syncIdentifier)
+                if !refused.isEmpty {
+                    return (nil, "Santé ne laisse pas Foulée supprimer la séance partielle de la montre (\(partialText)). "
+                            + "Supprimez-la dans l'app Santé (Parcourir › Activité › Entraînements), puis touchez à nouveau « Récupérer ».")
+                }
+            }
+            plan.standard.syncVersion = version
+            plan.reason = "récupération : séance Watch incomplète dans Santé" + (partial.isEmpty ? "" : " (\(partialText))")
+                + ", séance complète écrite par l'iPhone"
+            do {
+                let uuid = try await build(plan)
+                log.log(.health, "Séance complète récupérée dans Santé (\(uuid), version \(version))")
+                r.healthStatus = .saved(workoutUUID: uuid)
+                r.healthSyncVersion = version
+                r.revision = max(r.revision ?? 1, version)
+                r.healthReport = HealthWriteReport(plan: plan, outcome: "séance complète écrite par l'iPhone"
+                                                   + (partial.isEmpty ? "" : ", remplace l'exercice Watch partiel (\(partialText))"),
+                                                   workoutUUID: uuid, replaced: partial.map(\.uuid))
+                return (r, "Séance complète écrite dans Santé (\(Int((plan.activeDuration / 60).rounded())) min actives)")
+            } catch {
+                log.log(.error, "Récupération Santé : \(error.localizedDescription)")
+                return (nil, "Échec de l'écriture dans Santé : \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Supprime les séances portant ce SyncIdentifier ; renvoie les sources refusées.
+    private func deleteWorkouts(syncIdentifier id: String) async -> [String] {
+        let workouts = await query(HKObjectType.workoutType(),
+                                   predicate: HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [id]),
+                                   limit: HKObjectQueryNoLimit, newestFirst: false)
+        var refused: [String] = []
+        for w in workouts {
+            do { try await delete(w) } catch { refused.append(w.sourceRevision.source.name) }
+        }
+        return refused
+    }
+
     // MARK: - Suppression
 
     /// Supprime la séance Foulée de Santé : échantillons marqués FouleeSessionID puis séance(s)

@@ -330,6 +330,29 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertNil(SessionAnalysis.learnedAutoStart(for: .cardioBaseline, records: [r]))
     }
 
+    func testHealthRecoveryReplacesPartialWatchWorkout() throws {
+        let r = makePhoneSessionWithBelt(program: nil, minutes: 35, pauseSeconds: 0, speed: nil)
+        let plan = HealthWritePlan.make(record: r, inputs: .init(healthEnabled: true, watchWorkoutUsed: false, bodyMassKg: nil))
+        XCTAssertEqual(plan.owner, .phone)
+        let id = r.id.uuidString
+        let span = plan.end.timeIntervalSince(plan.start)
+        func workout(_ from: Double, _ to: Double, sync: String? = nil, version: Int? = 1, source: String = "Foulée") -> ExistingHealthWorkout {
+            ExistingHealthWorkout(uuid: UUID().uuidString, sourceName: source, syncIdentifier: sync, syncVersion: version,
+                                  start: plan.start.addingTimeInterval(from * span), end: plan.start.addingTimeInterval(to * span))
+        }
+        // Exercice Watch n'ayant gardé que la fin (≈ 50 %) : remplacé, version supérieure.
+        let partial = workout(0.5, 1.0, sync: id)
+        XCTAssertEqual(HealthRecoveryDecision.decide(plan: plan, existing: [partial]), .replace(partial: [partial], version: 2))
+        // Rien dans Santé : écrite.
+        XCTAssertEqual(HealthRecoveryDecision.decide(plan: plan, existing: []), .replace(partial: [], version: 2))
+        // Séance complète déjà là : rien.
+        if case .complete = HealthRecoveryDecision.decide(plan: plan, existing: [workout(0, 0.97, sync: id)]) {} else {
+            XCTFail("séance complète non reconnue")
+        }
+        // Autre app sur le créneau : rien.
+        XCTAssertEqual(HealthRecoveryDecision.decide(plan: plan, existing: [workout(0, 1, source: "UREVO")]), .blocked(by: "UREVO"))
+    }
+
     func testWatchWorkoutStartAlignedOnBelt() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         func live(_ state: WatchLiveStatus.State, belt: Date?, sent: Date = now) -> WatchLiveStatus {

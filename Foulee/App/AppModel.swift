@@ -488,6 +488,20 @@ final class AppModel {
         return r
     }
 
+    /// Séance Watch incomplète dans Santé : l'iPhone écrit la séance complète (données Foulée).
+    @MainActor
+    func recoverHealthSession(_ record: SessionRecord) async -> String {
+        let mass = await health.latestBodyMass()
+        let (updated, message) = await health.recoverFullSession(record, bodyMassKg: mass)
+        if let u = updated {
+            var keep = u
+            keep.perceivedExertion = dataStore.record(id: u.id)?.perceivedExertion ?? u.perceivedExertion
+            dataStore.upsert(keep)
+        }
+        log.log(.health, "Récupération Santé : \(message)")
+        return message
+    }
+
     /// Correction d'une séance : nouvelle révision, réécrite dans Santé si Foulée l'y avait écrite.
     @MainActor
     func correct(_ record: SessionRecord, title: String, activityType: HealthActivityType?, endAfterMinutes: Double?) async -> SessionRecord {
