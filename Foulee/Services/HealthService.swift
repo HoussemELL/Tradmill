@@ -333,7 +333,11 @@ final class HealthService {
     /// écrite par l'iPhone depuis les données Foulée. Ne supprime rien si une séance complète
     /// existe déjà ; n'écrit rien si la séance partielle ne peut pas être supprimée (doublon).
     @MainActor
-    func recoverFullSession(_ record: SessionRecord, bodyMassKg: Double?) async -> (updated: SessionRecord?, message: String) {
+    /// - Parameter onlyIfPartialExists: vérification automatique de fin de séance : n'écrit que
+    ///   si une séance partielle de la montre est déjà dans Santé (sinon la montre n'a peut-être
+    ///   pas fini d'enregistrer : on ne crée pas de doublon).
+    func recoverFullSession(_ record: SessionRecord, bodyMassKg: Double?,
+                            onlyIfPartialExists: Bool = false) async -> (updated: SessionRecord?, message: String) {
         guard isAvailable else { return (nil, "Santé indisponible") }
         var r = record
         r.healthStatus = .notRequested
@@ -352,6 +356,9 @@ final class HealthService {
         case let .blocked(by):
             return (nil, "Non écrite : une séance de \(by) couvre déjà ce créneau")
         case let .replace(partial, version):
+            if onlyIfPartialExists && partial.isEmpty {
+                return (nil, "Aucune séance de la montre dans Santé pour l'instant : rien n'est écrit automatiquement")
+            }
             let partialText = partial.map { "\(Int(($0.end.timeIntervalSince($0.start) / 60).rounded())) min" }.joined(separator: ", ")
             plan.standard.syncVersion = version
             plan.reason = "récupération : séance Watch incomplète dans Santé" + (partial.isEmpty ? "" : " (\(partialText))")

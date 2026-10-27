@@ -463,7 +463,10 @@ final class AppModel {
         }
         dataStore.upsert(r)
         finishingServices.removeAll { $0.session.isFinalized }
-        guard !usedWatch else { return }
+        guard !usedWatch else {
+            verifyWatchHealthSession(id: r.id)
+            return
+        }
         Task { @MainActor [weak self] in
             guard let self else { return }
             var updated = await self.writeToHealth(r)
@@ -488,11 +491,35 @@ final class AppModel {
         return r
     }
 
+    /// Après une séance enregistrée par la montre : une fois sa séance Santé enregistrée (état
+    /// « terminé » reçu, au plus ~3 min), on vérifie qu'elle couvre bien toute la séance. Si la
+    /// montre n'en a gardé qu'une partie (exercice coupé ou démarré en retard), l'iPhone la
+    /// remplace automatiquement par la séance complète. Rien n'est fait si Santé n'a encore
+    /// aucune séance de la montre (le bouton de l'historique reste disponible).
+    private func verifyWatchHealthSession(id: UUID) {
+        guard settings.health.enabled, health.isAvailable else { return }
+        Task { @MainActor [weak self] in
+            for _ in 0..<36 {
+                guard let self else { return }
+                if self.watch.watchState == .ended || self.watch.watchState == .failed { break }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+            // Laisser à Santé le temps de synchroniser la séance de la montre vers l'iPhone.
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            guard let self, let r = self.dataStore.record(id: id), r.healthStatus == .ownedByWatch, !r.simulated else { return }
+            let message = await self.recoverHealthSession(r, automatic: true)
+            if self.dataStore.record(id: id)?.healthStatus != .ownedByWatch {
+                self.notice = "Santé : la montre n'avait enregistré qu'une partie de la séance, remplacée par la séance complète."
+            }
+            self.log.log(.health, "Vérification automatique de la séance Santé de la montre : \(message)")
+        }
+    }
+
     /// Séance Watch incomplète dans Santé : l'iPhone écrit la séance complète (données Foulée).
     @MainActor
-    func recoverHealthSession(_ record: SessionRecord) async -> String {
+    func recoverHealthSession(_ record: SessionRecord, automatic: Bool = false) async -> String {
         let mass = await health.latestBodyMass()
-        let (updated, message) = await health.recoverFullSession(record, bodyMassKg: mass)
+        let (updated, message) = await health.recoverFullSession(record, bodyMassKg: mass, onlyIfPartialExists: automatic)
         if let u = updated {
             var keep = u
             keep.perceivedExertion = dataStore.record(id: u.id)?.perceivedExertion ?? u.perceivedExertion

@@ -22,6 +22,12 @@ faites y sont reportées (`WatchWorkoutAlignment`) : avec le même identifiant d
 il remplace dans Santé le morceau précédent par la séance entière. (Cas observé le 24/10 : seule
 la partie après la 2ᵉ pause était dans Santé.)
 
+**Vérification automatique** : à la fin d'une séance enregistrée par la Watch (état « terminé »
+reçu, au plus ~3 min, puis 20 s), l'iPhone vérifie la séance Santé de la montre. Si elle ne
+couvre qu'une partie de la séance, elle est remplacée automatiquement par la séance complète
+(même procédure que ci-dessous). Si Santé n'a encore aucune séance de la montre, rien n'est écrit
+automatiquement (pas de doublon) : le bouton de l'historique reste disponible.
+
 **Récupérer une séance Watch incomplète** (*Historique › séance › Récupérer la séance complète
 dans Santé*, séances enregistrées par la Watch) : si Santé ne contient qu'une partie de la séance
 (moins de 90 % du créneau), l'iPhone écrit **d'abord** la séance complète à partir des données
