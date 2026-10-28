@@ -715,6 +715,18 @@ final class AppModel {
         settings.seededTemplateIDs = plan.seededIDs
         settings.templatesRevision = plan.revision
         settings.didSeedTemplates = true
+        // Une seule fois : les programmes prédéfinis ajoutés pendant le bug du dossier commun
+        // (23/10, base ouverte au mauvais endroit) étaient notés « déjà proposés » sans être dans
+        // la vraie base, donc jamais réinstallés (ex. Football Endurance). On remet ceux qui manquent.
+        if settings.didRepairMissingTemplates != true, StoreLocation.openError == nil {
+            let before = Set(dataStore.allPrograms().compactMap(\.templateID))
+            let missing = WorkoutProgram.templates.filter { t in t.templateID.map { !before.contains($0) } ?? false }
+            missing.forEach { dataStore.upsert($0) }
+            if !missing.isEmpty {
+                log.log(.info, "Programmes prédéfinis manquants réinstallés : \(missing.map(\.name).joined(separator: ", "))")
+            }
+            settings.didRepairMissingTemplates = true
+        }
     }
 
     /// Réinstalle les programmes prédéfinis absents (ou les remet à l'état d'origine).

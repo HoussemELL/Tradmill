@@ -40,6 +40,9 @@ struct AppSettings: Codable, Equatable {
     var templatesRevision: Int?
     /// Migration des anciens réglages de zones par défaut vers la méthode Rythme déjà faite.
     var didMigrateLegacyZones: Bool?
+    /// Réparation unique : programmes prédéfinis installés dans la base ouverte par erreur (23/10)
+    /// puis considérés comme « supprimés », réinstallés dans la vraie base.
+    var didRepairMissingTemplates: Bool?
 }
 
 final class SettingsStore {
