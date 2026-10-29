@@ -231,6 +231,30 @@ final class WorkoutManager {
     }
 
     /// Suit une séance lancée sur l'iPhone : démarre l'exercice de la montre (FC).
+    /// Séances de l'iPhone dont l'exercice montre a déjà été terminé (jamais relancé automatiquement).
+    private var finishedPhoneSessions: [String] {
+        get { UserDefaults.standard.stringArray(forKey: "foulee.watch.finishedSessions") ?? [] }
+        set { UserDefaults.standard.set(Array(newValue.suffix(10)), forKey: "foulee.watch.finishedSessions") }
+    }
+
+    /// App montre ouverte pendant une séance de l'iPhone sans exercice en cours (lancement par
+    /// l'iPhone raté, montre verrouillée…) : l'enregistrement démarre tout seul, aligné sur le
+    /// démarrage de la bande. Jamais pour une séance dont l'exercice a déjà été terminé.
+    private func autoFollowPhoneSession(_ s: WatchLiveStatus) {
+        guard !simulated, !isActive, let id = s.sessionID,
+              s.state == .starting || s.state == .running || s.state == .paused,
+              Date().timeIntervalSince(s.sentAt) < 20,
+              !finishedPhoneSessions.contains(id.uuidString) else { return }
+        switch phase {
+        case .idle, .ended, .failed: break
+        default: return
+        }
+        linkedSessionID = id
+        linkedTitle = s.programName
+        onEvent?("auto-follow")
+        Task { @MainActor in await self.start(activity: s.targetSpeedKmh >= 8 ? .running : .walking) }
+    }
+
     func followPhoneSession() {
         guard let s = phoneSessionToFollow else { return }
         linkedSessionID = s.id
@@ -569,6 +593,7 @@ final class WorkoutManager {
             }
             onEvent?("live:\(s.state.rawValue):\(s.phaseName ?? "-"):\(s.targetSpeedKmh)")
             followPhoneState(s)
+            autoFollowPhoneSession(s)
         case let .context(c):
             hasFreshContext = true
             apply(context: c)
@@ -633,6 +658,7 @@ final class WorkoutManager {
     }
 
     private func finish(at date: Date) {
+        if let id = linkedSessionID { finishedPhoneSessions.append(id.uuidString) }
         guard let b = builder else { return }
         let discard = discardOnEnd
         b.endCollection(withEnd: date) { [weak self] _, _ in

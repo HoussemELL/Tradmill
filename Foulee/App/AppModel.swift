@@ -393,8 +393,9 @@ final class AppModel {
             let (std, meta) = HealthWritePlan.watchMetadata(record: s.session.record)
             watch.beginSession(id: s.session.record.id, title: s.session.record.title,
                                metadata: .workoutMetadata(standard: std, foulee: meta))
-            if !fromWatch && settings.startWatchWorkoutWithSession && watch.isAppInstalled && watch.linkState != .mirrored {
-                watch.launchWatchWorkout(running: s.program?.suggestsRunning ?? (s.session.effectiveTargets.speed >= 8))
+            if !fromWatch && settings.startWatchWorkoutWithSession && watch.isWatchPaired && !watch.watchWorkoutActive {
+                launchWatchWorkoutWithRetry(sessionID: s.session.record.id,
+                                            running: s.program?.suggestsRunning ?? (s.session.effectiveTargets.speed >= 8))
             }
             s.saveCheckpoint()
             updateIdleTimer()
@@ -402,6 +403,27 @@ final class AppModel {
             return nil
         case let .failure(e):
             return e.description
+        }
+    }
+
+    /// Lance l'exercice de la montre ; s'il ne tourne toujours pas après 12 s puis 40 s (montre
+    /// verrouillée, poignet baissé, lancement perdu), nouvel essai. Au-delà, un bandeau demande
+    /// d'ouvrir Foulée sur la montre : elle démarre alors seule l'enregistrement de la séance.
+    private func launchWatchWorkoutWithRetry(sessionID: UUID, running: Bool) {
+        watch.launchWatchWorkout(running: running)
+        Task { @MainActor [weak self] in
+            for (attempt, delay) in [(2, 12.0), (3, 28.0)] {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard let self, self.hasActiveSession, self.sessionService?.session.record.id == sessionID else { return }
+                if self.watch.watchWorkoutActive { return }
+                self.log.log(.watch, "Exercice Watch toujours absent : nouvel essai de lancement (\(attempt))")
+                self.watch.launchWatchWorkout(running: running)
+            }
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            guard let self, self.hasActiveSession, self.sessionService?.session.record.id == sessionID,
+                  !self.watch.watchWorkoutActive else { return }
+            self.notice = "La montre ne s'est pas ouverte : ouvrez Foulée sur la montre, l'enregistrement de la séance démarrera seul."
+            self.log.log(.warning, "Exercice Watch non démarré après 3 essais")
         }
     }
 

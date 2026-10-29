@@ -105,6 +105,8 @@ final class WatchBridge {
     /// (renvoyés dès que le miroir s'établit si la Watch n'est pas encore reliée).
     func beginSession(id: UUID, title: String, metadata: WatchMessage) {
         usedDuringSession = false
+        // État d'une séance précédente : ne doit pas faire croire que l'exercice tourne déjà.
+        if mirrored == nil { watchState = .notStarted }
         pendingLink = .linkSession(id: id, title: title)
         pendingMetadata = metadata
         if mirrored != nil {
@@ -122,10 +124,15 @@ final class WatchBridge {
     /// démarrer l'exercice depuis la Watch.
     func launchWatchWorkout(running: Bool) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        if WCSession.isSupported(), WCSession.default.activationState == .activated, !WCSession.default.isWatchAppInstalled {
-            linkState = .failed(WCSession.default.isPaired ? "app non installée sur la montre" : "aucune montre jumelée")
-            log.log(.warning, "Lancement Watch impossible : \(installationStatus). \(Self.installHelp)")
+        if WCSession.isSupported(), WCSession.default.activationState == .activated, !WCSession.default.isPaired {
+            linkState = .failed("aucune montre jumelée")
+            log.log(.warning, "Lancement Watch impossible : aucune montre jumelée")
             return
+        }
+        // « App non installée » d'après WatchConnectivity n'est pas fiable (app installée depuis
+        // Xcode, état pas encore à jour) : on tente quand même, HealthKit dira si ça échoue.
+        if WCSession.isSupported(), WCSession.default.activationState == .activated, !WCSession.default.isWatchAppInstalled {
+            log.log(.warning, "WatchConnectivity indique l'app Watch non installée : lancement tenté quand même")
         }
         let config = HKWorkoutConfiguration()
         config.activityType = running ? .running : .walking
@@ -144,6 +151,11 @@ final class WatchBridge {
                 }
             }
         }
+    }
+
+    /// L'exercice de la montre tourne (relié en miroir ou état reçu).
+    var watchWorkoutActive: Bool {
+        mirrored != nil || watchState == .running || watchState == .paused
     }
 
     /// App Watch ouverte et joignable par WatchConnectivity.

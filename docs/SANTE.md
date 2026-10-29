@@ -13,6 +13,12 @@ Linux et macOS) et `Foulee/Services/HealthService.swift` (appels HealthKit).
 | Une autre séance Santé (Watch, Exercice, app « UR »…) couvre > 50 % du créneau | personne | rien ; l'historique affiche « Déjà enregistrée par … » |
 | Moins d'1 minute hors pauses, ou séance simulée | personne | rien (exercice Watch annulé si < 1 min) |
 
+**Lancement de l'exercice Watch.** Au démarrage d'une séance sur l'iPhone, l'app Watch est lancée
+(`startWatchApp`) ; si l'exercice ne tourne toujours pas 12 s puis 40 s après, nouvel essai, puis
+bandeau « ouvrez Foulée sur la montre ». Ouvrir l'app Watch pendant une séance de l'iPhone sans
+exercice en cours démarre l'enregistrement tout seul, aligné sur le démarrage de la bande (jamais
+pour une séance dont l'exercice montre a déjà été terminé).
+
 **Exercice Watch d'une seule pièce.** Si l'app Watch est fermée pendant la séance (plantage,
 mémoire), watchOS la relance et elle **reprend le même exercice**
 (`handleActiveWorkoutRecovery`, `recoverActiveWorkoutSession`) ; un démarrage ultérieur reprend
