@@ -130,8 +130,8 @@ public struct AutoAdjustment: Codable, Equatable, Sendable {
 ///   quart bas de la zone, pour viser le milieu).
 /// - FC au-dessus de (limite haute − marge) pendant `decreaseInterval` : −palier, toutes les
 ///   `decreaseInterval` (20 s) ; −2 paliers si la FC dépasse la limite haute de plus de 5 bpm.
-/// - FC indisponible : plus aucune accélération, immédiatement ; après 15 s sans FC, descente
-///   progressive (−palier toutes les 5 s) vers l'allure de sécurité, si le tapis est pilotable ;
+/// - FC indisponible : plus aucune accélération, immédiatement ; après 60 s sans FC, descente
+///   progressive (−palier toutes les 15 s) vers l'allure de sécurité, si le tapis est pilotable ;
 ///   sinon pilotage suspendu.
 /// - Consigne manuelle : le pilote se retire jusqu'à réactivation explicite.
 public final class ZoneAutopilot {
@@ -178,10 +178,13 @@ public final class ZoneAutopilot {
     private var lastChangeAt: TimeInterval
     private var aboveSince: TimeInterval?
     private var lastSafetyStepAt: TimeInterval = -.infinity
-    public static let safetyStepInterval: TimeInterval = 5
+    /// Un palier de ralentissement (−0,2 km/h) toutes les 15 s quand la FC reste absente.
+    public static let safetyStepInterval: TimeInterval = 15
     /// Délai sans FC avant le ralentissement de sécurité (les accélérations, elles, cessent
-    /// immédiatement) : une mesure retardée de la montre ne fait pas freiner le tapis.
-    public static let heartRateGrace: TimeInterval = 15
+    /// immédiatement ; la vitesse est figée). Séance réelle du 31/10 : une coupure de 74 s de la
+    /// FC de la montre faisait descendre le tapis de 6,8 à 4,8 km/h et coûtait 9 min avant de
+    /// revenir en zone 2. Une coupure de moins d'1 min ne change plus la vitesse.
+    public static let heartRateGrace: TimeInterval = 60
     private var heartRateMissingSince: TimeInterval?
     /// FC filtrées récentes (tendance).
     private var history: [(t: TimeInterval, bpm: Double)] = []
