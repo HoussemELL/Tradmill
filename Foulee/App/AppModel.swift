@@ -87,6 +87,9 @@ final class AppModel {
             StoreLocation.recoverMisplacedData(into: dataStore, log: log)
         }
         recoverInterruptedSession()
+        if !ScenarioRunner.isActive {
+            Task { @MainActor [log] in await SigningExpiry.scheduleReminder(log: log) }
+        }
         migrateLegacyZonesIfNeeded()
         syncRythmeShare()
         startLoop()

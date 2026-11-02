@@ -23,6 +23,14 @@ struct SettingsView: View {
                     NavigationLink { SessionPreferencesView() } label: { Text("Séance, pas et énergie") }
                     NavigationLink { DisplaySettingsView() } label: { Text("Écran et affichage") }
                 }
+                if let expiry = SigningExpiry.expirationDate() {
+                    Section {
+                        LabeledContent("Signature valable jusqu'au",
+                                       value: expiry.formatted(.dateTime.day().month(.wide).hour().minute().locale(Locale(identifier: "fr_FR"))))
+                    } footer: {
+                        Text("Un rappel est envoyé la veille à 9 h. Réinstallez alors Foulee puis FouleeWatch depuis Xcode.")
+                    }
+                }
                 Section {
                     NavigationLink { DiagnosticView() } label: { Label("Diagnostic et journaux", systemImage: "stethoscope") }
                     NavigationLink { AboutView() } label: { Label("Sécurité et limites", systemImage: "exclamationmark.shield") }
