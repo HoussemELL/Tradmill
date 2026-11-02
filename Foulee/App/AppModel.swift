@@ -433,14 +433,17 @@ final class AppModel {
     func pauseSession() {
         sessionService?.session.pause()
         sessionService?.saveCheckpoint()
-        if watch.linkState == .mirrored || watch.linkState == .connectivity || watch.isReachable { watch.send(.command(.pause)) }
+        // L'exercice de la montre n'est PAS mis en pause : un exercice en pause ne mesure plus la FC,
+        // et un ordre de reprise perdu (montre en veille) la laissait sans FC jusqu'à la fin
+        // (séance du 02/11). Les pauses sont reportées dans sa séance Santé à la fin.
         sendWatchStatus(force: true)
     }
 
     func resumeSession() -> String? {
         guard let s = sessionService else { return nil }
         if case let .failure(e) = s.session.resume() { return e.description }
-        if watch.watchState == .paused || watch.isReachable { watch.send(.command(.resume)) }
+        // Montre encore en pause (ancienne version, ou pause faite sur la montre) : on la relance.
+        if watch.watchState == .paused || watch.linkState == .mirrored || watch.isReachable { watch.send(.command(.resume)) }
         sendWatchStatus(force: true)
         return nil
     }

@@ -602,7 +602,9 @@ final class WorkoutManager {
         case let .command(c):
             onEvent?("command:\(c.rawValue)")
             switch c {
-            case .pause: pause()
+            // Pause de la séance iPhone : l'exercice continue (FC mesurée pendant la pause, pas de
+            // reprise perdue) ; les pauses sont reportées dans la séance Santé à la fin.
+            case .pause: if !isPhoneLinked() { pause() }
             case .resume: resume()
             case .end: stopRequestedAt = nil; end()
             case .discard: end(discard: true)
@@ -617,7 +619,7 @@ final class WorkoutManager {
     private func followPhoneState(_ s: WatchLiveStatus) {
         guard isActive, phase != .ending, s.sessionID == nil || linkedSessionID == nil || s.sessionID == linkedSessionID else { return }
         switch s.state {
-        case .paused where phase == .running: pause()
+        // Une séance iPhone en cours relance l'exercice s'il est resté en pause (jamais l'inverse).
         case .running where phase == .paused: resume()
         case .finished:
             // L'iPhone envoie normalement « terminer » avec les métadonnées ; sinon on termine ici.
@@ -661,6 +663,24 @@ final class WorkoutManager {
         if let id = linkedSessionID { finishedPhoneSessions.append(id.uuidString) }
         guard let b = builder else { return }
         let discard = discardOnEnd
+        // Pauses de la séance iPhone (l'exercice, lui, n'a pas été mis en pause) : reportées pour
+        // que la durée dans Santé soit la durée active, comme dans Foulée.
+        let start = startDate ?? .distantPast
+        let pauses = (live?.pauses ?? []).compactMap { p -> DateInterval? in
+            guard p.count == 2, p[0] >= start, p[1] > p[0], p[1] <= date else { return nil }
+            return DateInterval(start: p[0], end: p[1])
+        }
+        let events = pauses.flatMap {
+            [HKWorkoutEvent(type: .pause, dateInterval: DateInterval(start: $0.start, duration: 0), metadata: nil),
+             HKWorkoutEvent(type: .resume, dateInterval: DateInterval(start: $0.end, duration: 0), metadata: nil)]
+        }
+        guard !events.isEmpty else { return endAndSave(b, at: date, discard: discard) }
+        b.addWorkoutEvents(events) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.endAndSave(b, at: date, discard: discard) }
+        }
+    }
+
+    private func endAndSave(_ b: HKLiveWorkoutBuilder, at date: Date, discard: Bool) {
         b.endCollection(withEnd: date) { [weak self] _, _ in
             if discard {
                 b.discardWorkout()
