@@ -96,7 +96,41 @@ final class WorkoutManager {
     /// démonstration ne compte pas).
     private(set) var hasFreshContext = false
 
+    /// Dernier essai de (ré)établissement du miroir vers l'iPhone.
+    @ObservationIgnored private var lastMirrorAttemptAt = Date.distantPast
+
+    /// Miroir perdu (iPhone hors de portée, app iPhone relancée…) : on le rétablit au plus vite.
+    fileprivate func mirroringLost(_ error: Error?) {
+        mirroring = false
+        onEvent?("mirror-lost:\(error?.localizedDescription ?? "-")")
+        lastMirrorAttemptAt = .distantPast
+        ensureMirroring()
+    }
+
+    /// Exercice en cours sans miroir (échec au démarrage ou coupure) : nouvel essai toutes les
+    /// 10 s. Le miroir est le canal fiable pendant l'exercice (FC, état, commandes) ;
+    /// WatchConnectivity seul se perd dès que l'iPhone n'est plus « joignable ».
+    private func ensureMirroring() {
+        guard !simulated, isActive, phase != .ending, !mirroring, let s = session,
+              Date().timeIntervalSince(lastMirrorAttemptAt) >= 10 else { return }
+        lastMirrorAttemptAt = Date()
+        Task { @MainActor [weak self] in
+            do {
+                try await s.startMirroringToCompanionDevice()
+                guard let self, self.session === s else { return }
+                self.mirroring = true
+                self.onEvent?("mirror-restored")
+                // L'iPhone rattache la séance : on lui renvoie l'état et le lien de séance.
+                self.send(.workoutState(self.phase == .paused ? .paused : .running, startDate: self.startDate))
+                self.requestContext()
+            } catch {
+                self?.onEvent?("mirror-retry-failed:\(error.localizedDescription)")
+            }
+        }
+    }
+
     private func poll() {
+        ensureMirroring()
         let now = Date()
         var urgent = context == nil || !hasFreshContext
         if case .requesting = launch { urgent = true }
@@ -747,6 +781,10 @@ private final class WorkoutProxy: NSObject, HKWorkoutSessionDelegate, HKLiveWork
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         DispatchQueue.main.async { self.owner?.failed(error) }
+    }
+
+    func workoutSession(_ workoutSession: HKWorkoutSession, didDisconnectFromRemoteDeviceWithError error: Error?) {
+        DispatchQueue.main.async { self.owner?.mirroringLost(error) }
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {

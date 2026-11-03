@@ -237,6 +237,9 @@ final class WatchBridge {
         mirrored = session
         session.delegate = sessionProxy
         linkState = .mirrored
+        // Miroir (r)établi pendant une séance : l'exercice de la montre tourne et la suit.
+        if pendingLink != nil { usedDuringSession = true }
+        if session.state == .running { watchState = .running } else if session.state == .paused { watchState = .paused }
         log.log(.watch, "Session d'exercice Watch reçue en miroir")
         if let m = pendingLink { send(m) }
         if let m = pendingMetadata { send(m) }

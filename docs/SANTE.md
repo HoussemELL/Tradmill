@@ -19,6 +19,11 @@ bandeau « ouvrez Foulée sur la montre ». Ouvrir l'app Watch pendant une séan
 exercice en cours démarre l'enregistrement tout seul, aligné sur le démarrage de la bande (jamais
 pour une séance dont l'exercice montre a déjà été terminé).
 
+**Liaison montre ↔ iPhone.** Pendant l'exercice, le canal fiable est le miroir HealthKit
+(`startMirroringToCompanionDevice`) ; WatchConnectivity seul se perd dès que l'iPhone n'est plus
+« joignable ». Si le miroir échoue au démarrage ou se coupe (`didDisconnectFromRemoteDevice`), la
+montre le rétablit toute seule (nouvel essai toutes les 10 s) et renvoie son état à l'iPhone.
+
 **Pauses.** Une pause de la séance iPhone ne met plus l'exercice de la montre en pause : un
 exercice en pause ne mesure plus la FC, et un ordre de reprise perdu (montre en veille) la
 laissait sans FC jusqu'à la fin (séance libre du 02/11 : FC arrêtée 20 s après la pause, plus
