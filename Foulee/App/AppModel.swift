@@ -644,7 +644,8 @@ final class AppModel {
         migrateLegacyZonesIfNeeded()
         guard health.isAvailable, !ScenarioRunner.isActive else { return }
         // Une fois, puis seulement si une donnée n'a jamais été proposée (nouvelle version).
-        if settings.didRequestHealthAuthorization != true || (await health.shouldRequestAuthorization()) {
+        let newDataToAsk = await health.shouldRequestAuthorization()
+        if settings.didRequestHealthAuthorization != true || newDataToAsk {
             _ = await health.requestAuthorization()
             settings.didRequestHealthAuthorization = true
         }
