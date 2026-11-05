@@ -41,7 +41,18 @@ final class HealthService {
          HKQuantityType(.bodyMass),
          HKObjectType.characteristicType(forIdentifier: .dateOfBirth)!,
          HKQuantityType(.heartRate),
-         HKQuantityType(.restingHeartRate)]
+         HKQuantityType(.restingHeartRate),
+         // Exercices autonomes de la montre, importés dans l'historique.
+         HKQuantityType(.distanceWalkingRunning),
+         HKQuantityType(.stepCount),
+         HKQuantityType(.activeEnergyBurned)]
+    }
+
+    /// Vrai si une autorisation n'a encore jamais été proposée (nouvelle donnée ajoutée).
+    func shouldRequestAuthorization() async -> Bool {
+        guard isAvailable, Self.missingUsageKeys.isEmpty else { return false }
+        let status = try? await store.statusForAuthorizationRequest(toShare: Set(Self.writeTypes.map(\.0)), read: readTypes)
+        return status == .shouldRequest
     }
 
     /// Ce qui ne sera pas enregistré (types dont l'écriture est refusée). La lecture refusée
@@ -407,6 +418,63 @@ final class HealthService {
             do { try await delete(w) } catch { refused.append(w.sourceRevision.source.name) }
         }
         return refused
+    }
+
+    // MARK: - Exercices autonomes de la montre
+
+    /// Exercices enregistrés par l'app Watch seule (course, marche… sans tapis ni iPhone) depuis
+    /// `since`, absents de l'historique (`known` : identifiants déjà connus ou supprimés).
+    /// Les séances de tapis enregistrées par la montre (identifiant de séance Foulée) sont exclues.
+    func standaloneWatchWorkouts(since: Date, known: Set<UUID>) async -> [ImportedWatchWorkout] {
+        guard isAvailable, let appID = Bundle.main.bundleIdentifier else { return [] }
+        let watchApp = appID + ".watchkitapp"
+        let samples = await query(HKObjectType.workoutType(), predicate: HKQuery.predicateForSamples(withStart: since, end: nil, options: []),
+                                  limit: HKObjectQueryNoLimit, newestFirst: false)
+        var out: [ImportedWatchWorkout] = []
+        for case let w as HKWorkout in samples {
+            guard w.sourceRevision.source.bundleIdentifier == watchApp, !known.contains(w.uuid) else { continue }
+            let meta = w.metadata ?? [:]
+            // Séance de tapis : elle porte l'identifiant de la séance Foulée de l'iPhone.
+            if meta[FouleeMetadataKey.sessionID] != nil { continue }
+            if let sync = meta[HKMetadataKeySyncIdentifier] as? String, let id = UUID(uuidString: sync), known.contains(id) { continue }
+            let indoor = (meta[HKMetadataKeyIndoorWorkout] as? NSNumber)?.boolValue ?? false
+            let title = (meta["FouleeActivity"] as? String)
+                ?? ImportedWatchWorkout.title(running: w.workoutActivityType == .running,
+                                              walking: w.workoutActivityType == .walking, indoor: indoor)
+            let range = HKQuery.predicateForSamples(withStart: w.startDate, end: w.endDate, options: [])
+            let bpm = HKUnit.count().unitDivided(by: .minute())
+            let hr = await query(HKQuantityType(.heartRate), predicate: range, limit: HKObjectQueryNoLimit, newestFirst: false)
+                .compactMap { $0 as? HKQuantitySample }
+                .map { (date: $0.startDate, bpm: Int($0.quantity.doubleValue(for: bpm).rounded())) }
+            // Distance de la montre seulement (l'iPhone compte aussi la sienne : pas de double).
+            var cumul = 0.0
+            let dist = await query(HKQuantityType(.distanceWalkingRunning), predicate: range, limit: HKObjectQueryNoLimit, newestFirst: false)
+                .compactMap { $0 as? HKQuantitySample }
+                .filter { $0.device?.model == "Watch" || $0.sourceRevision.productType?.hasPrefix("Watch") == true }
+                .map { s -> (date: Date, meters: Double) in
+                    cumul += s.quantity.doubleValue(for: .meter())
+                    return (s.endDate, cumul)
+                }
+            let distance = w.statistics(for: HKQuantityType(.distanceWalkingRunning))?.sumQuantity()?.doubleValue(for: .meter())
+            let kcal = w.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie())
+            let steps = await sum(HKQuantityType(.stepCount), unit: .count(), from: w.startDate, to: w.endDate)
+            out.append(ImportedWatchWorkout(id: w.uuid, title: title, start: w.startDate, end: w.endDate,
+                                            activeSeconds: w.duration, distanceMeters: distance ?? (cumul > 0 ? cumul : nil),
+                                            steps: steps.map { Int($0.rounded()) }, activeKcal: kcal,
+                                            heartRates: hr, distances: dist))
+        }
+        return out
+    }
+
+    /// Somme dédoublonnée par Santé (sources fusionnées) sur un intervalle.
+    private func sum(_ type: HKQuantityType, unit: HKUnit, from: Date, to: Date) async -> Double? {
+        await withCheckedContinuation { (c: CheckedContinuation<Double?, Never>) in
+            let q = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: HKQuery.predicateForSamples(withStart: from, end: to, options: []),
+                                      options: .cumulativeSum) { _, stats, _ in
+                c.resume(returning: stats?.sumQuantity()?.doubleValue(for: unit))
+            }
+            store.execute(q)
+        }
     }
 
     // MARK: - Suppression

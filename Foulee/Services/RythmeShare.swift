@@ -32,7 +32,8 @@ final class RythmeShare {
     /// Enregistrement ou mise à jour d'une séance.
     func write(_ record: SessionRecord, zones: HeartZoneSettings) {
         guard let dir = directory else { return }
-        guard !record.simulated else { return remove(id: record.id) }
+        // Séance simulée, ou sortie de la montre seule (Rythme la lit déjà dans Santé).
+        guard !record.simulated, !record.isWatchStandalone else { return remove(id: record.id) }
         queue.async { [log] in
             Self.writeFile(record.rezoned(with: zones), in: dir, log: log)
         }
@@ -61,7 +62,7 @@ final class RythmeShare {
             let fm = FileManager.default
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             let existing = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
-            let shared = records.filter { !$0.simulated }
+            let shared = records.filter { !$0.simulated && !$0.isWatchStandalone }
             var written = 0
             for r in shared where zonesChanged || !existing.contains(Self.fileName(r.id)) {
                 if Self.writeFile(r.rezoned(with: zones), in: dir, log: log) { written += 1 }

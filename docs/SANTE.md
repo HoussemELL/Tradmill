@@ -28,6 +28,14 @@ fermeture de l'app comme pour les séances de tapis. L'app Watch est **indépend
 demande l'accès à Santé sur la montre, une seule fois (l'iPhone traite aussi une demande présentée
 chez lui : `handleAuthorizationForExtension`).
 
+**Historique iPhone.** Au lancement de Foulée et à chaque retour au premier plan (au plus toutes
+les 2 min), l'iPhone lit dans Santé les exercices autonomes de l'app Watch des 60 derniers jours
+(source = app Watch, sans identifiant de séance de tapis) et les ajoute à l'historique (même
+identifiant que la séance Santé : jamais en double) : FC, zones, distance et vitesse déduites de la
+distance de la montre, pas, calories. Ils ne sont ni réécrits dans Santé ni partagés avec Rythme
+(qui les lit déjà dans Santé). Supprimer une sortie la retire de l'historique seulement, sans
+réimport.
+
 **Liaison montre ↔ iPhone.** Pendant l'exercice, le canal fiable est le miroir HealthKit
 (`startMirroringToCompanionDevice`) ; WatchConnectivity seul se perd dès que l'iPhone n'est plus
 « joignable ». Si le miroir échoue au démarrage ou se coupe (`didDisconnectFromRemoteDevice`), la

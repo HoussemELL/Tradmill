@@ -620,6 +620,14 @@ final class AppModel {
     func delete(_ record: SessionRecord) async -> String {
         // D'abord Foulée : si la base refuse, rien n'est retiré de Santé ni de Rythme.
         guard dataStore.delete(id: record.id) else { return "La séance n'a pas pu être supprimée de Foulée (voir l'alerte)." }
+        if record.isWatchStandalone {
+            // Sortie de la montre : retirée de l'historique seulement (elle reste dans Santé), et
+            // jamais réimportée.
+            var deleted = UserDefaults.standard.stringArray(forKey: Self.deletedImportsKey) ?? []
+            deleted.append(record.id.uuidString)
+            UserDefaults.standard.set(Array(deleted.suffix(200)), forKey: Self.deletedImportsKey)
+            return "Sortie retirée de l'historique Foulée (elle reste dans Apple Santé)."
+        }
         var message = "Séance supprimée de Foulée"
         switch record.healthStatus {
         case .saved, .ownedByWatch:
@@ -635,11 +643,43 @@ final class AppModel {
     func prepareHealth() async {
         migrateLegacyZonesIfNeeded()
         guard health.isAvailable, !ScenarioRunner.isActive else { return }
-        if settings.didRequestHealthAuthorization != true {
+        // Une fois, puis seulement si une donnée n'a jamais été proposée (nouvelle version).
+        if settings.didRequestHealthAuthorization != true || (await health.shouldRequestAuthorization()) {
             _ = await health.requestAuthorization()
             settings.didRequestHealthAuthorization = true
         }
         await refreshZonesFromHealth()
+        await importWatchWorkouts()
+    }
+
+    // MARK: - Exercices autonomes de la montre
+
+    private static let deletedImportsKey = "foulee.importedWatch.deleted"
+    @ObservationIgnored private var lastWatchImportAt = Date.distantPast
+
+    /// Ajoute à l'historique les exercices faits avec la montre seule (sans tapis ni iPhone),
+    /// lus dans Santé. Au lancement et au retour au premier plan (au plus toutes les 2 min).
+    /// Une sortie supprimée de l'historique n'est jamais réimportée.
+    @MainActor
+    func importWatchWorkouts() async {
+        guard health.isAvailable, !ScenarioRunner.isActive, StoreLocation.openError == nil,
+              Date().timeIntervalSince(lastWatchImportAt) > 120,
+              let existing = dataStore.sessionsForSharing() else { return }
+        lastWatchImportAt = Date()
+        var known = Set(existing.records.map(\.id)).union(existing.undecodable)
+        known.formUnion((UserDefaults.standard.stringArray(forKey: Self.deletedImportsKey) ?? []).compactMap(UUID.init))
+        let since = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
+        let found = await health.standaloneWatchWorkouts(since: since, known: known)
+        var added = 0
+        for w in found where dataStore.upsert(w.record(zones: settings.session.zones)) { added += 1 }
+        if added > 0 {
+            log.log(.health, "\(added) exercice(s) autonome(s) de la montre ajouté(s) à l'historique")
+            notice = added == 1 ? "1 sortie de la montre ajoutée à l'historique." : "\(added) sorties de la montre ajoutées à l'historique."
+        }
+    }
+
+    func appDidBecomeActive() {
+        Task { @MainActor [weak self] in await self?.importWatchWorkouts() }
     }
 
     // MARK: - Zones (comme Rythme)

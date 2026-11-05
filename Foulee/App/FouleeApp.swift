@@ -35,6 +35,7 @@ struct FouleeApp: App {
         .modelContainer(container)
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { model.appDidEnterBackground() }
+            if phase == .active { model.appDidBecomeActive() }
         }
     }
 }

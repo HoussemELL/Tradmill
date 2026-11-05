@@ -391,6 +391,10 @@ final class WorkoutManager {
                 try? await b.addWorkoutEvents(events)
                 onEvent?("past-pauses:\(past.count)")
             }
+            if let title = standaloneTitle {
+                // Nom de l'exercice, repris par l'iPhone dans son historique.
+                try? await b.addMetadata(["FouleeActivity": title, HKMetadataKeyIndoorWorkout: !outdoor])
+            }
             if outdoor {
                 let r = RouteRecorder()
                 r.start(healthStore: healthStore)

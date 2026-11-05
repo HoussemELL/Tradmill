@@ -353,6 +353,31 @@ final class WorkoutSessionTests: XCTestCase {
         XCTAssertEqual(HealthRecoveryDecision.decide(plan: plan, existing: [workout(0, 1, source: "UREVO")]), .blocked(by: "UREVO"))
     }
 
+    func testStandaloneWatchWorkoutImport() throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let hr = (0..<120).map { (date: start.addingTimeInterval(Double($0) * 5), bpm: 120 + $0 / 4) }
+        let dist = (0..<120).map { (date: start.addingTimeInterval(Double($0) * 5), meters: Double($0) * 5 * 2.5) }  // 9 km/h
+        let w = ImportedWatchWorkout(id: UUID(), title: ImportedWatchWorkout.title(running: true, walking: false, indoor: false),
+                                     start: start, end: start.addingTimeInterval(600), activeSeconds: 600,
+                                     distanceMeters: 1490, steps: 1600, activeKcal: 95, heartRates: hr, distances: dist)
+        XCTAssertEqual(w.title, "Course extérieure")
+        let r = w.record(zones: HeartZoneSettings(maxHR: 193, restingHR: 57))
+        XCTAssertEqual(r.id, w.id, "import idempotent : même identifiant que la séance Santé")
+        XCTAssertTrue(r.isWatchStandalone)
+        XCTAssertEqual(r.title, "Course extérieure")
+        XCTAssertEqual(r.distanceMeters, 1490)
+        XCTAssertEqual(r.steps, 1600)
+        XCTAssertEqual(r.distanceSource, .appleWatch)
+        XCTAssertEqual(r.heartRateReadings?.count, 120)
+        XCTAssertEqual(r.avgSpeed ?? 0, 9, accuracy: 0.3, "vitesse déduite de la distance de la montre")
+        XCTAssertEqual(r.maxHR, 149)
+        XCTAssertGreaterThan(r.zoneSeconds.reduce(0, +), 500)
+        XCTAssertNil(RythmeSessionExport(record: r).program)
+        if case .alreadyRecorded = r.healthStatus {} else { XCTFail("déjà dans Santé : jamais réécrite") }
+        let back = try SessionExport.decodeRecord(SessionExport.encodeRecord(r))
+        XCTAssertTrue(back.isWatchStandalone)
+    }
+
     func testWatchWorkoutStartAlignedOnBelt() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         func live(_ state: WatchLiveStatus.State, belt: Date?, sent: Date = now) -> WatchLiveStatus {

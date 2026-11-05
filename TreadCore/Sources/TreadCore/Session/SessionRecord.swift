@@ -230,6 +230,10 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     public var programLevel: Int?
     /// Ressenti de l'effort saisi par l'utilisateur (échelle CR10 de Borg : 0 = repos, 10 = maximal).
     public var perceivedExertion: Int?
+    /// Exercice autonome de la montre (course, marche… sans tapis), importé depuis Santé :
+    /// déjà enregistré par la montre, jamais réécrit ni partagé comme séance de tapis.
+    public var watchStandalone: Bool?
+    public var isWatchStandalone: Bool { watchStandalone ?? false }
     /// Bornes de zones (6 valeurs) visées par le pilote FC pendant la séance. Conservées telles
     /// quelles quand les zones sont recalculées après coup avec d'autres réglages.
     public var pilotZoneBounds: [Int]?

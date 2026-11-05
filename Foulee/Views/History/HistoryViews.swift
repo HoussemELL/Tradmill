@@ -323,7 +323,7 @@ struct HistoryDetailView: View {
     }
 
     private func canSaveToHealth(_ r: SessionRecord) -> Bool {
-        guard model.health.isAvailable, model.settings.health.enabled, !r.simulated else { return false }
+        guard model.health.isAvailable, model.settings.health.enabled, !r.simulated, !r.isWatchStandalone else { return false }
         switch r.healthStatus {
         case .saved, .ownedByWatch: return false
         default: return true
