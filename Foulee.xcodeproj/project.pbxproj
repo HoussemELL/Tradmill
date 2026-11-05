@@ -429,11 +429,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/FouleeWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, vos pas et votre énergie active pendant l'exercice pour les envoyer à l'iPhone.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre l'exercice de tapis de course dans Apple Santé.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, vos pas, votre distance et votre énergie active pendant l'exercice.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre vos exercices (tapis, course, marche) dans Apple Santé, avec le tracé GPS dehors.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Foulée utilise le GPS de la montre pour mesurer la distance, l'allure et le tracé de vos courses et marches dehors.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_ID_PREFIX)";
-				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -461,11 +462,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/FouleeWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Foulée";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, vos pas et votre énergie active pendant l'exercice pour les envoyer à l'iPhone.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre l'exercice de tapis de course dans Apple Santé.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Foulée lit votre fréquence cardiaque, vos pas, votre distance et votre énergie active pendant l'exercice.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Foulée enregistre vos exercices (tapis, course, marche) dans Apple Santé, avec le tracé GPS dehors.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Foulée utilise le GPS de la montre pour mesurer la distance, l'allure et le tracé de vos courses et marches dehors.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_ID_PREFIX)";
-				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

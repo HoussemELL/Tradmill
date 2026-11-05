@@ -30,6 +30,14 @@ final class WorkoutManager {
     private(set) var heartRateDate: Date?
     private(set) var steps: Double?
     private(set) var activeEnergy: Double?
+    /// Distance de l'exercice (m) : GPS dehors, accéléromètre en salle.
+    private(set) var distance: Double?
+    private(set) var averageHeartRate: Double?
+    /// Exercice autonome (course, marche… sans tapis ni iPhone) : son nom, sinon nil.
+    private(set) var standaloneActivity: String?
+    var isStandalone: Bool { standaloneActivity != nil }
+    @ObservationIgnored private var motionHistory: [(t: Date, distance: Double?, steps: Double?)] = []
+    @ObservationIgnored private var route: RouteRecorder?
     private(set) var startDate: Date?
     private(set) var mirroring = false
     private(set) var linkedTitle: String?
@@ -52,6 +60,8 @@ final class WorkoutManager {
         didSet { UserDefaults.standard.set(linkedSessionID?.uuidString, forKey: Self.linkedKey) }
     }
     private static let linkedKey = "foulee.watch.linkedSession"
+    /// Nom de l'exercice autonome en cours (reprise après fermeture de l'app).
+    private static let standaloneKey = "foulee.watch.standalone"
     /// Exercice simulé (tests dans le simulateur : pas de HealthKit, FC calculée).
     let simulated: Bool
 
@@ -111,7 +121,7 @@ final class WorkoutManager {
     /// 10 s. Le miroir est le canal fiable pendant l'exercice (FC, état, commandes) ;
     /// WatchConnectivity seul se perd dès que l'iPhone n'est plus « joignable ».
     private func ensureMirroring() {
-        guard !simulated, isActive, phase != .ending, !mirroring, let s = session,
+        guard !simulated, !isStandalone, isActive, phase != .ending, !mirroring, let s = session,
               Date().timeIntervalSince(lastMirrorAttemptAt) >= 10 else { return }
         lastMirrorAttemptAt = Date()
         Task { @MainActor [weak self] in
@@ -303,24 +313,44 @@ final class WorkoutManager {
         for key in ["NSHealthShareUsageDescription", "NSHealthUpdateUsageDescription"] {
             guard let v = Bundle.main.object(forInfoDictionaryKey: key) as? String, !v.isEmpty else { return }
         }
-        let share: Set<HKSampleType> = [HKObjectType.workoutType()]
-        let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.stepCount),
+        let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute(),
+                                        HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
+                                        HKQuantityType(.distanceWalkingRunning), HKQuantityType(.stepCount)]
+        let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.restingHeartRate), HKQuantityType(.stepCount),
                                        HKQuantityType(.activeEnergyBurned), HKQuantityType(.distanceWalkingRunning),
-                                       HKObjectType.workoutType()]
+                                       HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
+        // Une seule fois : la fenêtre ne réapparaît que si une donnée n'a jamais été proposée.
+        let status = try? await healthStore.statusForAuthorizationRequest(toShare: share, read: read)
+        guard status != .unnecessary else { return }
         try? await healthStore.requestAuthorization(toShare: share, read: read)
     }
 
     /// Démarre l'exercice (après un lancement accepté, depuis l'iPhone, ou exercice libre).
     @MainActor
-    func start(activity: HKWorkoutActivityType) async {
+    /// - Parameters:
+    ///   - outdoor: exercice en extérieur (GPS, tracé dans Santé).
+    ///   - standaloneTitle: exercice autonome, sans tapis ni iPhone (nom affiché).
+    func start(activity: HKWorkoutActivityType, outdoor: Bool = false, standaloneTitle: String? = nil) async {
         guard !isActive else { return }
         // Un exercice tourne encore (app fermée puis relancée) : on le reprend au lieu d'en
         // démarrer un second, qui couperait la séance en deux dans Santé.
         if !simulated, await recoverActiveWorkout() { return }
         phase = .starting
+        standaloneActivity = standaloneTitle
+        UserDefaults.standard.set(standaloneTitle, forKey: Self.standaloneKey)
+        if let title = standaloneTitle {
+            // Rien à voir avec une séance de l'iPhone.
+            live = nil
+            liveReceivedAt = nil
+            linkedSessionID = nil
+            linkedTitle = title
+        }
         heartRate = nil
         steps = nil
         activeEnergy = nil
+        distance = nil
+        averageHeartRate = nil
+        motionHistory = []
         localZoneSeconds = Array(repeating: 0, count: 6)
         lastZoneSampleAt = nil
         stopRequestedAt = nil
@@ -330,10 +360,10 @@ final class WorkoutManager {
             return
         }
         await requestAuthorization()
-        await refreshLiveBeforeStart()
+        if !isStandalone { await refreshLiveBeforeStart() }
         let config = HKWorkoutConfiguration()
         config.activityType = activity
-        config.locationType = .indoor
+        config.locationType = outdoor ? .outdoor : .indoor
         do {
             let s = try HKWorkoutSession(healthStore: healthStore, configuration: config)
             let b = s.associatedWorkoutBuilder()
@@ -360,6 +390,16 @@ final class WorkoutManager {
                 }
                 try? await b.addWorkoutEvents(events)
                 onEvent?("past-pauses:\(past.count)")
+            }
+            if outdoor {
+                let r = RouteRecorder()
+                r.start(healthStore: healthStore)
+                route = r
+            }
+            if isStandalone {
+                // Exercice autonome : rien n'est envoyé à l'iPhone.
+                mirroring = false
+                return
             }
             do {
                 try await s.startMirroringToCompanionDevice()
@@ -411,10 +451,23 @@ final class WorkoutManager {
         builder = b
         discardOnEnd = false
         startDate = b.startDate ?? s.startDate ?? Date()
+        phase = s.state == .paused ? .paused : .running
+        if let title = UserDefaults.standard.string(forKey: Self.standaloneKey) {
+            // Exercice autonome repris : même séance Santé ; le tracé GPS repart d'ici.
+            standaloneActivity = title
+            linkedTitle = title
+            linkedSessionID = nil
+            if s.workoutConfiguration.locationType == .outdoor {
+                let r = RouteRecorder()
+                r.start(healthStore: healthStore)
+                route = r
+            }
+            onEvent?("recovered-standalone")
+            return true
+        }
         if linkedSessionID == nil, let id = UserDefaults.standard.string(forKey: Self.linkedKey).flatMap(UUID.init) {
             linkedSessionID = id
         }
-        phase = s.state == .paused ? .paused : .running
         do {
             try await s.startMirroringToCompanionDevice()
             mirroring = true
@@ -453,6 +506,12 @@ final class WorkoutManager {
 
     func reset() {
         phase = .idle
+        standaloneActivity = nil
+        UserDefaults.standard.removeObject(forKey: Self.standaloneKey)
+        distance = nil
+        averageHeartRate = nil
+        motionHistory = []
+        route = nil
         session = nil
         builder = nil
         startDate = nil
@@ -566,7 +625,7 @@ final class WorkoutManager {
     // MARK: - Échanges avec l'iPhone
 
     func send(_ message: WatchMessage) {
-        guard let data = try? message.encoded() else { return }
+        guard !isStandalone, let data = try? message.encoded() else { return }
         if mirroring, let s = session {
             s.sendToRemoteWorkoutSession(data: data) { [weak self] ok, _ in
                 if !ok { DispatchQueue.main.async { self?.sendViaConnectivity(data, message: message) } }
@@ -719,12 +778,14 @@ final class WorkoutManager {
             if discard {
                 b.discardWorkout()
                 DispatchQueue.main.async {
+                    self?.route?.finish(with: nil)
                     self?.phase = .ended(saved: false)
                     self?.send(.workoutState(.ended, startDate: self?.startDate))
                 }
             } else {
                 b.finishWorkout { workout, _ in
                     DispatchQueue.main.async {
+                        self?.route?.finish(with: workout)
                         self?.phase = .ended(saved: workout != nil)
                         self?.send(.workoutState(.ended, startDate: self?.startDate))
                     }
@@ -738,13 +799,62 @@ final class WorkoutManager {
         send(.workoutState(.failed, startDate: startDate))
     }
 
+    // MARK: - Mesures de l'exercice autonome
+
+    /// Temps actif (pauses exclues).
+    func elapsed(at date: Date) -> TimeInterval {
+        if let b = builder { return b.elapsedTime(at: date) }
+        return startDate.map { date.timeIntervalSince($0) } ?? 0
+    }
+
+    private func recordMotion() {
+        let now = Date()
+        motionHistory.append((now, distance, steps))
+        motionHistory.removeAll { now.timeIntervalSince($0.t) > 90 }
+    }
+
+    /// Allure actuelle (s/km) sur la dernière minute environ ; nil à l'arrêt ou sans données.
+    var currentPace: Double? {
+        let pts = motionHistory.filter { $0.distance != nil }
+        guard let a = pts.first, let b = pts.last, let da = a.distance, let db = b.distance else { return nil }
+        let dt = b.t.timeIntervalSince(a.t), dd = db - da
+        guard dt >= 20, dd > 5 else { return nil }
+        return dt / (dd / 1000)
+    }
+
+    /// Cadence actuelle (pas/min) sur la dernière minute environ.
+    var cadence: Double? {
+        let pts = motionHistory.filter { $0.steps != nil }
+        guard let a = pts.first, let b = pts.last, let sa = a.steps, let sb = b.steps else { return nil }
+        let dt = b.t.timeIntervalSince(a.t)
+        guard dt >= 20, sb > sa else { return nil }
+        return (sb - sa) / dt * 60
+    }
+
+    /// Allure moyenne (s/km).
+    func averagePace(at date: Date) -> Double? {
+        guard let d = distance, d > 50 else { return nil }
+        return elapsed(at: date) / (d / 1000)
+    }
+
+    var gpsActive: Bool { route?.isAuthorized ?? false }
+    var gpsPoints: Int { route?.pointCount ?? 0 }
+
     fileprivate func collected(_ types: Set<HKSampleType>) {
         guard let b = builder else { return }
         for type in types {
             guard let qt = type as? HKQuantityType, let stats = b.statistics(for: qt) else { continue }
             let date = stats.mostRecentQuantityDateInterval()?.end ?? Date()
             switch qt {
+            case HKQuantityType(.distanceWalkingRunning):
+                if let q = stats.sumQuantity() {
+                    distance = q.doubleValue(for: .meter())
+                    recordMotion()
+                }
             case HKQuantityType(.heartRate):
+                if let avg = stats.averageQuantity() {
+                    averageHeartRate = avg.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
+                }
                 if let q = stats.mostRecentQuantity() {
                     let bpm = q.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
                     heartRate = bpm
@@ -756,6 +866,7 @@ final class WorkoutManager {
                 if let q = stats.sumQuantity() {
                     let v = q.doubleValue(for: .count())
                     steps = v
+                    recordMotion()
                     send(.steps(total: v, sampleDate: date))
                 }
             case HKQuantityType(.activeEnergyBurned):

@@ -98,6 +98,19 @@ enum WatchStyle {
     }
 
     static func speed(_ v: Double?) -> String { v.map { String(format: "%.1f", $0) } ?? "—" }
+
+    /// Allure « 5'32" » (s/km).
+    static func pace(_ secondsPerKm: Double?) -> String {
+        guard let p = secondsPerKm, p.isFinite, p > 0, p < 3600 else { return "—" }
+        let s = Int(p.rounded())
+        return String(format: "%d'%02d\"", s / 60, s % 60)
+    }
+
+    /// « 4,32 » km (2 décimales sous 10 km).
+    static func km(_ meters: Double?) -> String {
+        guard let m = meters else { return "—" }
+        return String(format: m < 10_000 ? "%.2f" : "%.1f", m / 1000).replacingOccurrences(of: ".", with: ",")
+    }
     static func incline(_ v: Double?) -> String { v.map { String(format: "%.0f", $0) } ?? "—" }
 }
 
@@ -393,16 +406,32 @@ struct FreeWorkoutView: View {
     var body: some View {
         List {
             Section {
-                Button { Task { await manager.start(activity: .walking) } } label: { Label("Marche", systemImage: "figure.walk") }
-                Button { Task { await manager.start(activity: .running) } } label: { Label("Course", systemImage: "figure.run") }
+                start("Course extérieure", "figure.run", .running, outdoor: true)
+                start("Marche extérieure", "figure.walk", .walking, outdoor: true)
+            } header: {
+                Text("Dehors (GPS)")
+            }
+            Section {
+                start("Course en salle", "figure.run.treadmill", .running, outdoor: false)
+                start("Marche en salle", "figure.walk.treadmill", .walking, outdoor: false)
+            } header: {
+                Text("En salle")
             } footer: {
-                Text("Mesure la FC sans piloter le tapis. Pour suivre un programme, choisissez-le dans Mes programmes.")
+                Text("Fonctionne sans iPhone : FC et zones, temps, distance, allure, pas, cadence, calories. Enregistré dans Santé (avec le tracé GPS dehors).")
             }
             if case let .failed(m) = manager.phase {
                 Text(m).font(.footnote).foregroundStyle(.red)
             }
         }
         .navigationTitle("Sans tapis")
+    }
+
+    private func start(_ title: String, _ icon: String, _ activity: HKWorkoutActivityType, outdoor: Bool) -> some View {
+        Button {
+            Task { await manager.start(activity: activity, outdoor: outdoor, standaloneTitle: title) }
+        } label: {
+            Label(title, systemImage: icon)
+        }
     }
 }
 
@@ -418,8 +447,13 @@ struct LiveView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             TabView(selection: $page) {
                 ControlsPage(now: context.date).tag(0)
-                MetricsPage(now: context.date).tag(1)
-                ProgramPage(now: context.date).tag(2)
+                if manager.isStandalone {
+                    SoloMetricsPage(now: context.date).tag(1)
+                    SoloDetailsPage(now: context.date).tag(2)
+                } else {
+                    MetricsPage(now: context.date).tag(1)
+                    ProgramPage(now: context.date).tag(2)
+                }
                 ZoneTimePage().tag(3)
             }
             .tabViewStyle(.page)
@@ -598,6 +632,84 @@ struct ProgramPage: View {
 }
 
 /// Temps passé dans chaque zone.
+// MARK: - Exercice autonome (sans tapis ni iPhone)
+
+/// Temps, FC et zone, distance et allure : l'essentiel d'une course ou d'une marche.
+struct SoloMetricsPage: View {
+    @Environment(WorkoutManager.self) private var manager
+    let now: Date
+
+    private var bpm: Int? {
+        guard let hr = manager.heartRate, let d = manager.heartRateDate, now.timeIntervalSince(d) < 15 else { return nil }
+        return Int(hr.rounded())
+    }
+
+    var body: some View {
+        let zone = bpm.flatMap { WatchLiveStatus.zone(for: $0, bounds: manager.zoneBounds) }
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(manager.standaloneActivity ?? "Exercice").font(.caption2.bold()).lineLimit(1)
+                Spacer(minLength: 2)
+                if manager.phase == .paused { Text("Pause").font(.caption2.bold()).foregroundStyle(.orange) }
+            }
+            Text(WatchStyle.duration(manager.elapsed(at: now)))
+                .font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit()
+                .foregroundStyle(manager.phase == .paused ? Color.orange : WatchStyle.accent)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(bpm.map(String.init) ?? "—")
+                    .font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit()
+                Image(systemName: "heart.fill").font(.footnote).foregroundStyle(WatchStyle.heart)
+                Spacer(minLength: 0)
+                ZoneBadge(zone: zone, bounds: manager.zoneBounds)
+            }
+            if let z = zone, let b = bpm {
+                ZoneGauge(bpm: b, zone: z, bounds: manager.zoneBounds)
+            }
+            HStack(alignment: .firstTextBaseline) {
+                value(WatchStyle.km(manager.distance), "km", WatchStyle.speed)
+                Spacer()
+                value(WatchStyle.pace(manager.currentPace), "/km", .primary)
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private func value(_ v: String, _ unit: String, _ color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 1) {
+            Text(v).font(.system(.title3, design: .rounded).bold()).monospacedDigit().foregroundStyle(color)
+            Text(unit).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Pas, cadence, calories, FC moyenne, allure moyenne, GPS.
+struct SoloDetailsPage: View {
+    @Environment(WorkoutManager.self) private var manager
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            row("Pas", manager.steps.map { "\(Int($0))" } ?? "—", "figure.walk")
+            row("Cadence", manager.cadence.map { "\(Int($0.rounded())) /min" } ?? "—", "metronome")
+            row("Calories", manager.activeEnergy.map { "\(Int($0.rounded())) kcal" } ?? "—", "flame.fill")
+            row("FC moyenne", manager.averageHeartRate.map { "\(Int($0.rounded()))" } ?? "—", "heart")
+            row("Allure moy.", WatchStyle.pace(manager.averagePace(at: now)) + " /km", "speedometer")
+            if manager.gpsPoints > 0 || manager.gpsActive {
+                row("GPS", manager.gpsPoints > 0 ? "actif" : "recherche…", "location.fill")
+            }
+        }
+        .font(.footnote)
+    }
+
+    private func row(_ label: String, _ value: String, _ icon: String) -> some View {
+        HStack {
+            Label(label, systemImage: icon).foregroundStyle(.secondary).lineLimit(1)
+            Spacer(minLength: 4)
+            Text(value).bold().monospacedDigit()
+        }
+    }
+}
+
 struct ZoneTimePage: View {
     @Environment(WorkoutManager.self) private var manager
 
@@ -628,6 +740,7 @@ struct ZoneTimePage: View {
 struct ControlsPage: View {
     @Environment(WorkoutManager.self) private var manager
     let now: Date
+    @State private var confirmEnd = false
 
     private var paused: Bool {
         if manager.isPhoneLinked(now: now), let l = manager.live { return l.state == .paused }
@@ -638,13 +751,15 @@ struct ControlsPage: View {
         ScrollView {
             VStack(spacing: 8) {
                 Button(role: .destructive) {
-                    manager.requestStop()
+                    // Exercice autonome : confirmation (pas d'arrêt sur un appui involontaire).
+                    if manager.isStandalone { confirmEnd = true } else { manager.requestStop() }
                 } label: {
-                    Label(manager.stopRequestedAt == nil ? "Arrêter" : "Arrêt en cours…", systemImage: "stop.fill")
+                    Label(manager.isStandalone ? "Terminer" : (manager.stopRequestedAt == nil ? "Arrêter" : "Arrêt en cours…"),
+                          systemImage: "stop.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .tint(.red)
-                .accessibilityHint("Arrête le tapis et termine la séance")
+                .accessibilityHint(manager.isStandalone ? "Termine l'exercice" : "Arrête le tapis et termine la séance")
                 if paused {
                     Button { manager.requestResume() } label: {
                         Label("Reprendre", systemImage: "play.fill").frame(maxWidth: .infinity)
@@ -661,20 +776,37 @@ struct ControlsPage: View {
                         Label("Pilotage FC", systemImage: "heart.circle").frame(maxWidth: .infinity)
                     }
                 }
-                Label(manager.isPhoneLinked(now: now) ? "Tapis piloté par l'iPhone" : "iPhone non relié : exercice seulement",
-                      systemImage: manager.isPhoneLinked(now: now) ? "iphone.radiowaves.left.and.right" : "iphone.slash")
-                    .font(.caption2).foregroundStyle(.secondary)
+                if manager.isStandalone {
+                    Label("Exercice autonome : enregistré par la montre", systemImage: "applewatch")
+                        .font(.caption2).foregroundStyle(.secondary)
+                } else {
+                    Label(manager.isPhoneLinked(now: now) ? "Tapis piloté par l'iPhone" : "iPhone non relié : exercice seulement",
+                          systemImage: manager.isPhoneLinked(now: now) ? "iphone.radiowaves.left.and.right" : "iphone.slash")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
                 if let w = manager.warning { Text(w).font(.caption2).foregroundStyle(.red) }
                 if manager.isPhoneLinked(now: now), let a = manager.live?.alert {
                     Text(a).font(.caption2).foregroundStyle(.orange)
                 }
             }
         }
+        .confirmationDialog("Terminer l'exercice ?", isPresented: $confirmEnd, titleVisibility: .visible) {
+            Button("Terminer et enregistrer") { manager.requestStop() }
+            Button("Continuer", role: .cancel) {}
+        }
     }
 }
 
 struct EndedView: View {
     @Environment(WorkoutManager.self) private var manager
+
+    private func summary(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(value).bold().monospacedDigit()
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -685,6 +817,17 @@ struct EndedView: View {
                 if case let .ended(saved) = manager.phase {
                     Text(saved ? "Enregistrée dans Santé" : (manager.simulated ? "Exercice simulé (non enregistré)" : "Non enregistrée dans Santé"))
                         .font(.caption2).multilineTextAlignment(.center)
+                }
+                if manager.isStandalone {
+                    VStack(alignment: .leading, spacing: 2) {
+                        summary("Durée", WatchStyle.duration(manager.elapsed(at: Date())))
+                        summary("Distance", WatchStyle.km(manager.distance) + " km")
+                        summary("Allure moy.", WatchStyle.pace(manager.averagePace(at: Date())) + " /km")
+                        summary("Pas", manager.steps.map { "\(Int($0))" } ?? "—")
+                        summary("Calories", manager.activeEnergy.map { "\(Int($0.rounded())) kcal" } ?? "—")
+                        summary("FC moyenne", manager.averageHeartRate.map { "\(Int($0.rounded()))" } ?? "—")
+                    }
+                    .font(.footnote)
                 }
                 if let w = manager.warning { Text(w).font(.caption2).foregroundStyle(.red).multilineTextAlignment(.center) }
                 Button("OK") { manager.reset() }

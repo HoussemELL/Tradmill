@@ -5,9 +5,13 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Foulée lit votre fréquence cardiaque, vos pas et votre énergie active pendant l'exercice pour les envoyer à l'iPhone.</string>
+	<string>Foulée lit votre fréquence cardiaque, vos pas, votre distance et votre énergie active pendant l'exercice.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Foulée enregistre l'exercice de tapis de course dans Apple Santé.</string>
+	<string>Foulée enregistre vos exercices (tapis, course, marche) dans Apple Santé, avec le tracé GPS dehors.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Foulée utilise le GPS de la montre pour mesurer la distance, l'allure et le tracé de vos courses et marches dehors.</string>
+	<key>WKRunsIndependentlyOfCompanionApp</key>
+	<true/>
 	<key>WKBackgroundModes</key>
 	<array>
 		<string>workout-processing</string>

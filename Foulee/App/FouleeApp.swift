@@ -1,9 +1,19 @@
 import SwiftUI
+import HealthKit
 import SwiftData
 import TreadCore
 
+/// L'app Watch peut demander l'accès à Santé depuis la montre ; quand iOS présente cette
+/// demande sur l'iPhone, l'app doit la traiter, sinon la montre la redemande à chaque exercice.
+final class FouleeAppDelegate: NSObject, UIApplicationDelegate {
+    func applicationShouldRequestHealthAuthorization(_ application: UIApplication) {
+        HKHealthStore().handleAuthorizationForExtension { _, _ in }
+    }
+}
+
 @main
 struct FouleeApp: App {
+    @UIApplicationDelegateAdaptor(FouleeAppDelegate.self) private var appDelegate
     let container: ModelContainer
     @State private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase

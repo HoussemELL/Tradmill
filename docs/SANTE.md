@@ -19,6 +19,15 @@ bandeau « ouvrez Foulée sur la montre ». Ouvrir l'app Watch pendant une séan
 exercice en cours démarre l'enregistrement tout seul, aligné sur le démarrage de la bande (jamais
 pour une séance dont l'exercice montre a déjà été terminé).
 
+**Exercice autonome sur la montre (sans tapis ni iPhone).** *Montre › Exercice sans tapis* :
+course ou marche, dehors (GPS, tracé `HKWorkoutRouteBuilder`) ou en salle. La montre enregistre
+seule la séance Santé (FC, énergie, distance, pas, tracé) et affiche temps, FC/zone, distance,
+allure actuelle et moyenne, pas, cadence, calories. Rien n'est envoyé à l'iPhone ; reprise après
+fermeture de l'app comme pour les séances de tapis. L'app Watch est **indépendante**
+(`WKRunsIndependentlyOfCompanionApp`) : elle s'installe avec l'iPhone mais fonctionne sans lui, et
+demande l'accès à Santé sur la montre, une seule fois (l'iPhone traite aussi une demande présentée
+chez lui : `handleAuthorizationForExtension`).
+
 **Liaison montre ↔ iPhone.** Pendant l'exercice, le canal fiable est le miroir HealthKit
 (`startMirroringToCompanionDevice`) ; WatchConnectivity seul se perd dès que l'iPhone n'est plus
 « joignable ». Si le miroir échoue au démarrage ou se coupe (`didDisconnectFromRemoteDevice`), la
