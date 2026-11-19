@@ -149,7 +149,11 @@ struct HistoryDetailView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds), detail: "pauses : \(Format.duration(r.pausedSeconds))")
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters), detail: r.distanceSource.label)
-                    MetricTile(title: "Inclinaison", value: Format.incline(r.avgIncline), unit: "%", detail: "max \(Format.incline(r.maxIncline))")
+                    MetricTile(title: "Vitesse moy.", value: Format.speed(r.avgSpeed), unit: "km/h", detail: "max \(Format.speed(r.maxSpeed))")
+                    if hasIncline(r) {
+                        // Anciennes séances sur l'UREVO (inclinaison pilotée) : valeurs conservées.
+                        MetricTile(title: "Inclinaison", value: Format.incline(r.avgIncline), unit: "%", detail: "max \(Format.incline(r.maxIncline))")
+                    }
                     MetricTile(title: "Source FC", value: r.hrSources.first?.shortLabel ?? "—", detail: hrDetail(r))
                     MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
                 }
@@ -158,7 +162,7 @@ struct HistoryDetailView: View {
                 caloriesCard(r)
                 chartCard("Fréquence cardiaque", shown, .heartRate)
                 chartCard("Vitesse (mesure / cible)", shown, .speed)
-                chartCard("Inclinaison (mesure / cible)", shown, .incline)
+                if hasIncline(r) { chartCard("Inclinaison (mesure / cible)", shown, .incline) }
                 ZoneBars(seconds: shown.zoneSeconds)
                 ZoneMethodNote(record: r, zones: model.settings.session.zones)
                 DisclosureGroup("Événements (\(r.events.count))", isExpanded: $showEvents) {
@@ -278,6 +282,11 @@ struct HistoryDetailView: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// Inclinaison affichée seulement pour les séances qui en ont eu (anciennes séances UREVO).
+    private func hasIncline(_ r: SessionRecord) -> Bool {
+        (r.maxIncline ?? 0) > 0.05 || r.samples.contains { ($0.targetIncline ?? 0) > 0.05 }
     }
 
     private func hrDetail(_ r: SessionRecord) -> String {

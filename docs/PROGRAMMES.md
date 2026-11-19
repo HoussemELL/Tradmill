@@ -1,42 +1,45 @@
 # Programmes prédéfinis, pilotage Zone 2 et Apple Watch
 
 Toutes les vitesses sont en km/h. Les programmes sont installés au premier lancement (et
-ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 6) : chaque
+ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 7) : chaque
 séance est comparée aux précédentes du même programme (*Historique › Progression*). Pour une
 variante, dupliquez-le ; *Programmes › + › Réinitialiser les programmes prédéfinis* les remet en place.
 
-## 1. La bibliothèque (révision 6)
+## 1. La bibliothèque (révision 7)
 
-Inclinaison minimale **1 %** dans toutes les phases (Incline Walk monte à 2 %). Les programmes
-déjà installés sont **mis à jour en place** (mêmes identifiants, aucun doublon) ; un programme
-prédéfini que vous aviez supprimé n'est pas réinstallé ; vos programmes personnels ne changent pas.
+Tous les programmes sont **à plat (0 %)** : le tapis (Domyos Compact RUN100) ne pilote pas son
+inclinaison. Les programmes déjà installés sont **mis à jour en place** (mêmes identifiants,
+aucun doublon) ; un programme prédéfini que vous aviez supprimé n'est pas réinstallé.
 
-Révision 6 (25/10) : seul **Zone 2 Endurance** change (20 min à 7,0 km/h au lieu de 6,0,
-protocole 3, même identifiant ; nouvelle empreinte, donc nouvelle série de comparaison dans Foulée
-et Rythme). Depuis cette révision, une mise à jour de la bibliothèque ne réécrit que les programmes
-dont la définition a changé.
+Révision 7 (19/11) : passage de l'UREVO FoldiMix au **Domyos Compact RUN100**. Chaque programme
+passe de 1 % à 0 % dans une **nouvelle version de protocole** (identifiants conservés ; nouvelle
+empreinte, donc nouvelle série de comparaison dans Foulée et Rythme : les séances UREVO à 1 % ne
+sont jamais comparées aux séances à plat). **Incline Walk devient Brisk Walk** : même structure,
+la pente de 2 % du bloc principal est remplacée par 6,0 km/h (au lieu de 5,5). Les programmes
+personnels sont mis à plat une seule fois (mêmes identifiants). L'historique UREVO garde ses
+valeurs d'inclinaison.
 
-| Programme | Durée | Étapes (durée · km/h · %) |
-|---|---|---|
-| **Zone 2 Auto** ❤️ | 35 min | 5 min 4,0 → 5,5 progressif · 1 → 25 min pilotées par la FC (départ : vitesse tenue en zone 2 la dernière fois, sinon 5,8 ; limites 4–8,5) · 1 → 5 min 4,0 → 3,5 · 1 |
-| **Cardio Baseline** | 30 min | 5 min · 4,0 · 1 → 20 min · 6,0 · 1 → 5 min · 3,8 · 1 |
-| **Zone 2 Endurance** (protocole 3) | 35 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 20 min · **7,0** · 1 (valeur de départ, à ajuster à la main selon FC et ressenti) → 5 min · 3,8 · 1 |
-| **Interval Run 9/11** | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 (tout à 1 %) |
-| **Football Endurance · Niveau 1** | 35 min | échauffement 4 min · 4,5 + 4 min · 5,5 + 2 min · 6,5 → 3 × 3 min · 8,5 avec 3 min · 5,0 **entre** les efforts → 5 min · 6,0 → 5 min · 4,0 (1 %) |
-| **Football Endurance · Niveau 2** | 41 min | même échauffement → 4 × 3 min · 8,5, 3 min · 5,0 entre → 5 min · 6,0 → 5 min · 4,0 (1 %) |
-| **Football Endurance · Niveau 3** ⚠️ | 45 min | même échauffement → 4 × 4 min · 9,0, 3 min · 5,0 entre → 5 min · 6,0 → 5 min · 4,0 (1 %) |
-| **HIIT Run 11** ⚠️ | 35 min | 4 min · 4,0 → 4 min · 5,5 → 2 min · 7,0 → 4 × (2 min · 11,0 + 3 min · 4,5) → 5 min · 3,8 (1 %) |
-| **Incline Walk** | 30 min | 5 min · 4,0 · 1 → 5 min · 5,5 · 1 → 15 min · 5,5 · 2 → 5 min · 3,8 · 1 |
-| **Post-Meal Walk** | 15 min | 2 min · 3,5 → 10 min · 4,5 → 3 min · 3,5 (1 %) |
+| Programme | Version | Durée | Étapes (durée · km/h), tout à 0 % |
+|---|---|---|---|
+| **Zone 2 Auto** ❤️ | 4 | 35 min | 5 min 4,0 → 5,5 progressif → 25 min pilotées par la FC (départ : vitesse tenue en zone 2 la dernière fois, sinon 5,8 ; limites 4–8,5) → 5 min 4,0 → 3,5 |
+| **Cardio Baseline** | 3 | 30 min | 5 min · 4,0 → 20 min · 6,0 → 5 min · 3,8 |
+| **Zone 2 Endurance** | 4 | 35 min | 5 min · 4,0 → 5 min · 5,5 → 20 min · **7,0** (valeur de départ, à ajuster à la main selon FC et ressenti) → 5 min · 3,8 |
+| **Interval Run 9/11** | 3 | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 |
+| **Football Endurance · Niveau 1** | 2 | 35 min | échauffement 4 min · 4,5 + 4 min · 5,5 + 2 min · 6,5 → 3 × 3 min · 8,5 avec 3 min · 5,0 **entre** les efforts → 5 min · 6,0 → 5 min · 4,0 |
+| **Football Endurance · Niveau 2** | 2 | 41 min | même échauffement → 4 × 3 min · 8,5, 3 min · 5,0 entre → 5 min · 6,0 → 5 min · 4,0 |
+| **Football Endurance · Niveau 3** ⚠️ | 2 | 45 min | même échauffement → 4 × 4 min · 9,0, 3 min · 5,0 entre → 5 min · 6,0 → 5 min · 4,0 |
+| **HIIT Run 11** ⚠️ | 3 | 35 min | 4 min · 4,0 → 4 min · 5,5 → 2 min · 7,0 → 4 × (2 min · 11,0 + 3 min · 4,5) → 5 min · 3,8 |
+| **Brisk Walk** (ex-Incline Walk) | 3 | 30 min | 5 min · 4,0 → 5 min · 5,5 → 15 min · **6,0** → 5 min · 3,8 |
+| **Post-Meal Walk** | 3 | 15 min | 2 min · 3,5 → 10 min · 4,5 → 3 min · 3,5 |
 
 ⚠️ **Avancé** : jamais sélectionné par défaut ni proposé comme progression automatique ; le
 départ (iPhone ou Watch) demande une confirmation explicite. Football Endurance : niveau 1 par
 défaut, niveaux 2 et 3 affichés comme progressions.
 
-- **Seul Zone 2 Auto règle la vitesse selon la FC**, jamais l'inclinaison (1 % fixe).
-- **Cardio Baseline** : verrouillé, aucun ajustement automatique. Le protocole à 1 % est la nouvelle
-  référence : son empreinte diffère de l'ancien protocole à 0 %, les anciens tests forment donc une
-  série distincte dans *Progression* et ne lui sont jamais comparés.
+- **Seul Zone 2 Auto règle la vitesse selon la FC**.
+- **Cardio Baseline** : verrouillé, aucun ajustement automatique. Le protocole 3 (RUN100, à plat)
+  est la nouvelle référence : les tests UREVO (protocole 1 à 0 %, protocole 2 à 1 %) forment des
+  séries distinctes dans *Progression* et ne lui sont jamais comparés.
 - Interval Run 9/11, HIIT Run 11 : les blocs répétés gardent une récupération après le dernier
   effort (comme demandé). Football Endurance : récupération uniquement **entre** les efforts
   (étapes explicites, donc modifiables une à une).
@@ -50,20 +53,18 @@ défaut, niveaux 2 et 3 affichés comme progressions.
 | Fractionné principal | Interval Run 9/11 |
 | Alternative au fractionné, préparation football | Football Endurance (niveau 1, puis 2, puis 3) |
 | Progression avancée | HIIT Run 11 |
-| Alternative de marche | Incline Walk |
+| Alternative de marche | Brisk Walk |
 | Activité légère complémentaire | Post-Meal Walk |
 
 Foulée ne recommande aucune séance automatiquement. Une semaine avec un match intense, trois
 séances de musculation et une cheville à ménager, privilégiez Zone 2 Auto ou une marche plutôt
 qu'un second fractionné intense.
 
-### Unités d'inclinaison
+### Inclinaison
 
-Foulée envoie et lit l'inclinaison en **%** (champ FTMS *Inclination*, résolution 0,1 %) et
-vérifie chaque valeur contre la plage et le pas annoncés par le tapis (UREVO URTM047 : 0–9 %,
-pas 1 d'après le diagnostic). Si le tapis affiche des **niveaux** plutôt que des pourcentages,
-la correspondance n'est pas garantie : voir le contrôle dans
-[VALIDATION_MATERIELLE.md](VALIDATION_MATERIELLE.md).
+Le Domyos Compact RUN100 n'a qu'une inclinaison manuelle (pieds à 0 ou 3 %), ni pilotable ni
+mesurée en FTMS : Foulée n'envoie aucune consigne d'inclinaison et ne l'affiche plus. Gardez les
+pieds à plat pour que les séances restent comparables entre elles.
 
 ## 2. Transitions et limites du tapis
 

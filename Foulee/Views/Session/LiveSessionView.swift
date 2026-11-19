@@ -62,9 +62,6 @@ struct LiveSessionView: View {
                                 tm.speed.unanswered != nil ? "sans réponse" : "acquittée", Format.speed(tm.telemetry.speedKmh))
                    + (tm.speed.machineReported.map { String(format: " · le tapis annonce %.1f", $0) } ?? ""))
         }
-        if tm.incline.status == .mismatch, let req = tm.incline.verifying {
-            Banner(text: String(format: "Écart inclinaison : consigne %.0f %%, mesure %@ %%", req, Format.incline(tm.telemetry.inclinePercent)))
-        }
         if case let .failed(m) = tm.speed.status { Banner(text: "Vitesse : \(m)", color: Theme.danger) }
         if snap.overrideActive && !snap.autoActive {
             Banner(text: "Consigne manuelle jusqu'au prochain palier", color: Theme.speed, systemImage: "hand.raised.fill")
@@ -169,9 +166,8 @@ struct LiveSessionView: View {
             MetricTile(title: "Vitesse réelle", value: Format.speed(freshSpeed), unit: "km/h",
                        detail: speedDetail, color: Theme.speed, large: true)
             heartTile
-            MetricTile(title: tm.capabilities.supportsInclinationControl || freshIncline != nil ? "Inclinaison réelle" : "Inclinaison",
-                       value: Format.incline(freshIncline ?? fixedIncline), unit: "%",
-                       detail: inclineDetail, color: Theme.incline)
+            MetricTile(title: "Allure", value: Format.pace(freshSpeed), unit: "min/km",
+                       detail: String(format: "cible %@", Format.pace(snap.targetSpeed)), color: Theme.speed)
             MetricTile(title: "Zone", value: Theme.zoneName(snap.zone), detail: zoneDetail, color: Theme.zoneColor(snap.zone))
             MetricTile(title: "Pas", value: snap.steps.map { "\($0)" } ?? "—",
                        detail: snap.steps == nil ? "aucune source" : snap.stepsSource.label)
@@ -188,10 +184,6 @@ struct LiveSessionView: View {
         tm.telemetry.isFresh(now: MonotonicClock.now()) ? tm.telemetry.speedKmh : nil
     }
 
-    private var freshIncline: Double? {
-        tm.telemetry.isFresh(now: MonotonicClock.now()) ? tm.telemetry.inclinePercent : nil
-    }
-
     private var speedDetail: String {
         var s = String(format: "Cible %.1f", snap.targetSpeed)
         if let v = freshSpeed { s += String(format: " · écart %+.1f", v - snap.targetSpeed) }
@@ -202,18 +194,6 @@ struct LiveSessionView: View {
         case .deferred: s += tm.settlingInitialSpeed ? " · envoi après stabilisation" : " · en attente"
         default: break
         }
-        return s
-    }
-
-    /// Inclinaison fixe déclarée (pieds du tapis) quand le tapis ne la pilote ni ne la mesure.
-    private var fixedIncline: Double? {
-        tm.capabilities.supportsInclinationControl ? nil : model.settings.session.fixedInclinePercent
-    }
-
-    private var inclineDetail: String {
-        guard tm.capabilities.supportsInclinationControl else { return freshIncline == nil ? "fixe, réglée sur le tapis" : "non pilotable" }
-        var s = String(format: "Cible %.0f", snap.targetIncline)
-        if let v = freshIncline { s += String(format: " · écart %+.1f", v - snap.targetIncline) }
         return s
     }
 
@@ -263,14 +243,6 @@ struct LiveSessionView: View {
                       minusSmall: { act { try service.session.adjustSpeed(by: -max(tm.capabilities.speed.incrementKmh, 0.1)).get() } },
                       plusSmall: { act { try service.session.adjustSpeed(by: max(tm.capabilities.speed.incrementKmh, 0.1)).get() } },
                       plus: { act { try service.session.adjustSpeed(by: max(tm.capabilities.speed.incrementKmh, 0.1) * 5).get() } })
-            if tm.capabilities.supportsInclinationControl {
-                let step = max(tm.capabilities.inclination?.incrementPercent ?? 1, 0.5)
-                adjustRow(title: "Consigne inclinaison", value: String(format: "%.0f %%", snap.targetIncline), color: Theme.incline,
-                          minus: nil,
-                          minusSmall: { act { try service.session.adjustIncline(by: -step).get() } },
-                          plusSmall: { act { try service.session.adjustIncline(by: step).get() } },
-                          plus: nil)
-            }
             if !snap.isFreeRun && snap.nextPhaseName != nil {
                 Button {
                     service.session.skipToNextPhase()
@@ -367,14 +339,14 @@ struct FinishedSessionView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds))
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters))
-                    // Sans podomètre : pas de case vide, l'inclinaison prend la ligne.
+                    // Sans podomètre : pas de case vide, la vitesse moyenne prend la ligne.
                     if let steps = r.steps {
                         MetricTile(title: "Pas", value: "\(steps)", detail: r.stepsSource.label)
-                        MetricTile(title: "Inclinaison moy.", value: Format.incline(r.avgIncline), unit: "%")
+                        MetricTile(title: "Vitesse moy.", value: Format.speed(r.avgSpeed), unit: "km/h")
                     }
                 }
                 if r.steps == nil {
-                    MetricTile(title: "Inclinaison moy.", value: Format.incline(r.avgIncline), unit: "%")
+                    MetricTile(title: "Vitesse moy.", value: Format.speed(r.avgSpeed), unit: "km/h")
                 }
                 SessionInsightsView(record: r)
                 ZoneBars(seconds: r.zoneSeconds)

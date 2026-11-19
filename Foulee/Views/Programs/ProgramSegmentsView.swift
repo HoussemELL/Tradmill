@@ -14,7 +14,7 @@ enum PhaseText {
     }
 
     static func summary(_ p: ProgramPhase) -> String {
-        var s = "\(speed(p)) · \(Format.incline(p.inclinePercent)) %"
+        var s = speed(p)
         if let z = p.targetZone, p.autoSpeed == nil { s += " · Z\(z)" }
         return s
     }

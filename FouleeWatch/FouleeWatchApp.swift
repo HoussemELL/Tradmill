@@ -313,7 +313,6 @@ struct ProgramDetailView: View {
                 HStack(spacing: 10) {
                     stat(WatchStyle.minutes(program.totalSeconds), "durée")
                     stat(WatchStyle.speed(program.maxSpeedKmh), "km/h max")
-                    stat("\(WatchStyle.incline(program.maxInclinePercent)) %", "incl. max")
                 }
                 StepStrip(program: program).frame(height: 6)
                 startButton
@@ -390,7 +389,7 @@ struct StepRow: View {
                     Spacer(minLength: 2)
                     Text(WatchStyle.minutes(step.seconds)).font(.caption2).monospacedDigit().foregroundStyle(.secondary)
                 }
-                Text("\(step.speedText) · \(WatchStyle.incline(step.inclinePercent)) %")
+                Text(step.speedText)
                     .font(.caption2).foregroundStyle(step.autoRange != nil ? WatchStyle.accent : .secondary)
             }
         }
@@ -496,7 +495,7 @@ struct MetricsPage: View {
                 HStack {
                     metric(WatchStyle.speed(l.speedKmh), "km/h", WatchStyle.speed)
                     Spacer()
-                    metric(WatchStyle.incline(l.inclinePercent ?? l.targetInclinePercent), "%", WatchStyle.incline)
+                    metric(WatchStyle.pace(l.speedKmh.flatMap { $0 >= 0.5 ? 3600 / $0 : nil }), "/km", WatchStyle.speed)
                     Spacer()
                     metric(WatchStyle.duration(l.activeSeconds), "", .primary)
                 }
@@ -607,7 +606,7 @@ struct ProgramPage: View {
                             Text("Programme : reste \(WatchStyle.duration(rem))").font(.caption2).foregroundStyle(.secondary)
                         }
                     }
-                    Text(String(format: "Consigne %.1f km/h · %.0f %%", l.targetSpeedKmh, l.targetInclinePercent))
+                    Text(String(format: "Consigne %.1f km/h", l.targetSpeedKmh))
                         .font(.caption2)
                     if let next = l.nextPhaseName {
                         Label(next, systemImage: "arrow.right.circle").font(.caption2).foregroundStyle(.secondary)

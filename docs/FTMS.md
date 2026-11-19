@@ -169,6 +169,9 @@ Choix du profil `domyos-run100` : séquence FTMS standard (Request Control → S
 du palier dès que la bande tourne, consignes sans réponse vérifiées par la télémétrie, un seul
 renvoi, plage de secours 1–14 km/h sans inclinaison.
 
-Tapis sans inclinaison pilotable : les programmes inclinés ne sont plus bloqués (simple
-avertissement) ; aucune consigne d'inclinaison n'est envoyée. L'inclinaison fixe déclarée dans
-Réglages › Tapis (0 ou 3 %) sert à l'estimation des calories et est notée dans le journal.
+Tapis sans inclinaison pilotable : un programme incliné n'est plus bloqué (simple
+avertissement) et aucune consigne d'inclinaison n'est envoyée. Depuis la révision 7 de la
+bibliothèque, tous les programmes sont à plat et l'inclinaison n'est plus affichée (iPhone et
+montre) ; seules les anciennes séances UREVO la montrent encore dans l'historique.
+`SessionSettings.fixedInclinePercent` (0 par défaut, sans réglage dans l'interface) reste
+disponible dans le cœur pour l'estimation des calories si les pieds du tapis sont relevés.

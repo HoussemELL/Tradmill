@@ -71,6 +71,13 @@ enum Format {
         return String(format: "%.1f", v)
     }
 
+    /// Allure « 5:32 » (min/km) depuis une vitesse en km/h ; « — » à l'arrêt.
+    static func pace(_ kmh: Double?) -> String {
+        guard let v = kmh, v >= 0.5 else { return "—" }
+        let s = Int((3600 / v).rounded())
+        return String(format: "%d:%02d", s / 60, s % 60)
+    }
+
     static func incline(_ v: Double?) -> String {
         guard let v else { return "—" }
         return abs(v - v.rounded()) < 0.05 ? String(format: "%.0f", v) : String(format: "%.1f", v)

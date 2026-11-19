@@ -126,6 +126,19 @@ final class ProgramTests: XCTestCase {
         }
     }
 
+    func testFlattenedInclineKeepsIdentifiersAndStructure() throws {
+        let p = WorkoutProgram(name: "Côtes perso", items: [
+            .phase(.init(name: "A", durationSeconds: 60, speedKmh: 5, inclinePercent: 3)),
+            .block(.init(name: "B", repeatCount: 2, phases: [.init(name: "Montée", durationSeconds: 30, speedKmh: 5, inclinePercent: 6)])),
+        ])
+        let f = try XCTUnwrap(p.flattenedIncline())
+        XCTAssertEqual(f.id, p.id)
+        XCTAssertEqual(f.schedule.map(\.phase.id), p.schedule.map(\.phase.id))
+        XCTAssertEqual(f.schedule.map(\.phase.speedKmh), p.schedule.map(\.phase.speedKmh))
+        XCTAssertTrue(f.schedule.allSatisfy { $0.phase.inclinePercent == 0 })
+        XCTAssertNil(f.flattenedIncline(), "déjà à plat : rien à réécrire")
+    }
+
     func testRUN100ProfileMatching() {
         XCTAssertEqual(TreadmillProfile.match(deviceName: "Domyos-TC-0123").id, "domyos-run100")
         XCTAssertEqual(TreadmillProfile.match(deviceName: "DOMYOS-TC-A1B2").id, "domyos-run100")

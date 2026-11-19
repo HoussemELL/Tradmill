@@ -43,6 +43,8 @@ struct AppSettings: Codable, Equatable {
     /// Réparation unique : programmes prédéfinis installés dans la base ouverte par erreur (23/10)
     /// puis considérés comme « supprimés », réinstallés dans la vraie base.
     var didRepairMissingTemplates: Bool?
+    /// Passage au Domyos RUN100 (sans inclinaison) : programmes personnels mis à plat une fois.
+    var didFlattenPersonalPrograms: Bool?
 }
 
 final class SettingsStore {

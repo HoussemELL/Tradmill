@@ -144,7 +144,7 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
     public static let domyosRun100 = TreadmillProfile(
         id: "domyos-run100",
         name: "Domyos Compact RUN100",
-        notes: "Request Control → Start → attente du mouvement → consigne du palier. Inclinaison manuelle (pieds 0 ou 3 %), non pilotable : réglez-la dans Réglages › Tapis.",
+        notes: "Request Control → Start → attente du mouvement → consigne du palier. Inclinaison manuelle (pieds 0 ou 3 %), non pilotable : programmes à plat.",
         namePrefixes: ["DOMYOS-TC"],
         startSteps: [.requestControl, .startOrResume],
         resumeSteps: [.requestControl, .startOrResume],

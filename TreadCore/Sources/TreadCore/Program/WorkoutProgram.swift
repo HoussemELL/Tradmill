@@ -206,6 +206,22 @@ public struct WorkoutProgram: Codable, Identifiable, Equatable, Hashable, Sendab
 
     public var totalDurationSeconds: Int { items.reduce(0) { $0 + $1.durationSeconds } }
 
+    /// Version à plat (toutes les inclinaisons à 0 %), mêmes identifiants ; nil si déjà à plat.
+    /// Sert au passage à un tapis sans inclinaison pilotable (Domyos RUN100).
+    public func flattenedIncline(now: Date = Date()) -> WorkoutProgram? {
+        guard schedule.contains(where: { abs($0.phase.inclinePercent) > 0.001 }) else { return nil }
+        func flat(_ p: ProgramPhase) -> ProgramPhase { var q = p; q.inclinePercent = 0; return q }
+        var out = self
+        out.items = items.map {
+            switch $0 {
+            case let .phase(p): return .phase(flat(p))
+            case var .block(b): b.phases = b.phases.map(flat); return .block(b)
+            }
+        }
+        out.updatedAt = now
+        return out
+    }
+
     /// Copie avec de nouveaux identifiants (duplication, import).
     public func duplicated(name: String? = nil, now: Date = Date()) -> WorkoutProgram {
         WorkoutProgram(name: name ?? "\(self.name) (copie)", notes: notes,

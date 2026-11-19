@@ -308,14 +308,10 @@ struct PhaseEditorView: View {
                             LabeledContent("Vitesse de fin", value: String(format: "%.1f km/h", end))
                         }
                     }
-                    Stepper(value: $phase.inclinePercent, in: -10...30, step: max(capabilities.inclination?.incrementPercent ?? 1, 0.5)) {
-                        LabeledContent("Inclinaison", value: "\(Format.incline(phase.inclinePercent)) %")
-                    }
                 } header: {
                     Text("Consignes")
                 } footer: {
-                    Text(String(format: "Tapis actuel : %.1f–%.1f km/h", capabilities.speed.minKmh, capabilities.speed.maxKmh)
-                         + (capabilities.inclination.map { String(format: ", %.0f–%.0f %%", $0.minPercent, $0.maxPercent) } ?? ", inclinaison non pilotable"))
+                    Text(String(format: "Tapis actuel : %.1f–%.1f km/h", capabilities.speed.minKmh, capabilities.speed.maxKmh))
                 }
                 if phase.autoSpeed != nil {
                     autoSection
@@ -338,7 +334,7 @@ struct PhaseEditorView: View {
                     Button("OK") {
                         if let a = phase.autoSpeed { phase.targetZone = a.targetZone }
                         phase.speedKmh = (phase.speedKmh * 100).rounded() / 100
-                        phase.inclinePercent = (phase.inclinePercent * 10).rounded() / 10
+                        phase.inclinePercent = 0
                         onSave(phase)
                         dismiss()
                     }

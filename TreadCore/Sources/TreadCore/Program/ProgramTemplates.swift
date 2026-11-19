@@ -1,7 +1,7 @@
 import Foundation
 
-/// Programmes prédéfinis. Vitesses en km/h, inclinaisons en % (unité FTMS : Inclination,
-/// résolution 0,1 %) ; **inclinaison minimale 1 %** dans toutes les phases.
+/// Programmes prédéfinis. Vitesses en km/h ; **tous à plat (0 %)** depuis la révision 7 :
+/// le tapis (Domyos Compact RUN100) ne pilote pas son inclinaison.
 /// Ils restent modifiables (sauf Cardio Baseline, verrouillé pour garder des tests comparables,
 /// déverrouillable explicitement).
 public enum ProgramTemplateID {
@@ -26,7 +26,10 @@ public extension WorkoutProgram {
     /// 5 : Zone 2 Auto v3 — plafond 8,5 km/h, pilotage centré sur la zone (paliers selon l'écart,
     ///     tendance de la FC anticipée), départ à la vitesse apprise.
     /// 6 : Zone 2 Endurance v3 — bloc de 20 min à 7 km/h (valeur de départ, ajustée à la main).
-    static let templatesRevision = 6
+    /// 7 : passage au Domyos Compact RUN100 (sans inclinaison pilotable) — tous les programmes à
+    ///     plat, chacun dans une nouvelle version (identifiants conservés, séries de comparaison
+    ///     distinctes) ; Incline Walk devient Brisk Walk (bloc principal 6 km/h à plat).
+    static let templatesRevision = 7
 
     /// Programmes installés par la toute première version (avant les identifiants de modèle),
     /// remplacés par la bibliothèque actuelle. Retirés seulement s'ils sont restés intacts.
@@ -57,8 +60,8 @@ public extension WorkoutProgram {
         ]
     }
 
-    /// Inclinaison minimale de tous les programmes prédéfinis.
-    static let minimumTemplateIncline = 1.0
+    /// Inclinaison de tous les programmes prédéfinis (à plat).
+    static let templateIncline = 0.0
 
     /// Ordre d'affichage : programme principal d'endurance d'abord, progressions ensuite.
     static var templates: [WorkoutProgram] {
@@ -71,110 +74,112 @@ public extension WorkoutProgram {
     }
 
     private static func min(_ m: Int) -> Int { m * 60 }
-    private static let i1 = 1.0
+    private static let flat = templateIncline
 
     static var cardioBaseline: WorkoutProgram {
         WorkoutProgram(name: "Cardio Baseline", notes: """
-            Test de référence (30 min, 1 %) : FC à effort identique au fil des semaines, une fois toutes les \
+            Test de référence (30 min, à plat) : FC à effort identique au fil des semaines, une fois toutes les \
             deux semaines à la place de Zone 2. Protocole strictement identique, aucun ajustement automatique ; \
-            toute modification pendant la séance la rend non comparable. Les tests faits avec l'ancien protocole \
-            à 0 % forment une série distincte.
+            toute modification pendant la séance la rend non comparable. Les tests des anciens protocoles \
+            (UREVO à 0 % puis à 1 %) forment des séries distinctes.
             """, items: [
-                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: i1)),
-                .phase(.init(name: "Allure de référence", kind: .steady, durationSeconds: min(20), speedKmh: 6.0, inclinePercent: i1)),
-                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1)),
-            ], templateID: ProgramTemplateID.cardioBaseline, locked: true, protocolVersion: 2)
+                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: flat)),
+                .phase(.init(name: "Allure de référence", kind: .steady, durationSeconds: min(20), speedKmh: 6.0, inclinePercent: flat)),
+                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: flat)),
+            ], templateID: ProgramTemplateID.cardioBaseline, locked: true, protocolVersion: 3)
     }
 
     static var zone2Endurance: WorkoutProgram {
         WorkoutProgram(name: "Zone 2 Endurance", notes: """
-            Endurance aérobie (35 min, 1 %). Les 7 km/h du bloc de 20 min sont une valeur de départ, à ajuster \
+            Endurance aérobie (35 min, à plat). Les 7 km/h du bloc de 20 min sont une valeur de départ, à ajuster \
             vous-même (boutons +/−) selon votre FC et votre ressenti. La FC ne pilote pas le tapis dans ce \
             programme (pour un pilotage automatique : Zone 2 Auto).
             """, items: [
-                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: i1, targetZone: 1)),
-                .phase(.init(name: "Montée en allure", kind: .steady, durationSeconds: min(5), speedKmh: 5.5, inclinePercent: i1, targetZone: 1)),
-                .phase(.init(name: "Zone 2", kind: .steady, durationSeconds: min(20), speedKmh: 7.0, inclinePercent: i1, targetZone: 2)),
-                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1, targetZone: 1)),
-            ], templateID: ProgramTemplateID.zone2Endurance, locked: true, protocolVersion: 3)
+                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: flat, targetZone: 1)),
+                .phase(.init(name: "Montée en allure", kind: .steady, durationSeconds: min(5), speedKmh: 5.5, inclinePercent: flat, targetZone: 1)),
+                .phase(.init(name: "Zone 2", kind: .steady, durationSeconds: min(20), speedKmh: 7.0, inclinePercent: flat, targetZone: 2)),
+                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: flat, targetZone: 1)),
+            ], templateID: ProgramTemplateID.zone2Endurance, locked: true, protocolVersion: 4)
     }
 
     static var intervalRun911: WorkoutProgram {
-        WorkoutProgram(name: "Interval Run 9/11", notes: "Fractionné principal, fondé sur vos essais réels (30 min, 1 %).", items: [
-            .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(3), speedKmh: 4.0, inclinePercent: i1)),
-            .phase(.init(name: "Marche rapide", kind: .warmup, durationSeconds: min(3), speedKmh: 5.0, inclinePercent: i1)),
-            .phase(.init(name: "Footing", kind: .steady, durationSeconds: min(2), speedKmh: 6.0, inclinePercent: i1)),
+        WorkoutProgram(name: "Interval Run 9/11", notes: "Fractionné principal, fondé sur vos essais réels (30 min, à plat).", items: [
+            .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(3), speedKmh: 4.0, inclinePercent: flat)),
+            .phase(.init(name: "Marche rapide", kind: .warmup, durationSeconds: min(3), speedKmh: 5.0, inclinePercent: flat)),
+            .phase(.init(name: "Footing", kind: .steady, durationSeconds: min(2), speedKmh: 6.0, inclinePercent: flat)),
             .block(.init(name: "Intervalles 9 km/h", repeatCount: 6, phases: [
-                .init(name: "Course 9", kind: .work, durationSeconds: min(1), speedKmh: 9.0, inclinePercent: i1, targetZone: 4),
-                .init(name: "Récupération", kind: .recovery, durationSeconds: min(1), speedKmh: 5.0, inclinePercent: i1),
+                .init(name: "Course 9", kind: .work, durationSeconds: min(1), speedKmh: 9.0, inclinePercent: flat, targetZone: 4),
+                .init(name: "Récupération", kind: .recovery, durationSeconds: min(1), speedKmh: 5.0, inclinePercent: flat),
             ])),
-            .phase(.init(name: "Course 11", kind: .work, durationSeconds: min(2), speedKmh: 11.0, inclinePercent: i1, targetZone: 5)),
-            .phase(.init(name: "Marche", kind: .recovery, durationSeconds: min(3), speedKmh: 4.0, inclinePercent: i1)),
-            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1)),
-        ], templateID: ProgramTemplateID.intervalRun911, locked: true, protocolVersion: 2)
+            .phase(.init(name: "Course 11", kind: .work, durationSeconds: min(2), speedKmh: 11.0, inclinePercent: flat, targetZone: 5)),
+            .phase(.init(name: "Marche", kind: .recovery, durationSeconds: min(3), speedKmh: 4.0, inclinePercent: flat)),
+            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: flat)),
+        ], templateID: ProgramTemplateID.intervalRun911, locked: true, protocolVersion: 3)
     }
 
     static var hiitRun11: WorkoutProgram {
         WorkoutProgram(name: "HIIT Run 11", notes: """
-            Avancé — à débloquer après validation (35 min, 1 %). Jamais proposé automatiquement comme progression ; \
+            Avancé — à débloquer après validation (35 min, à plat). Jamais proposé automatiquement comme progression ; \
             le lancement demande une confirmation.
             """, items: [
-                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(4), speedKmh: 4.0, inclinePercent: i1)),
-                .phase(.init(name: "Marche rapide", kind: .warmup, durationSeconds: min(4), speedKmh: 5.5, inclinePercent: i1)),
-                .phase(.init(name: "Footing", kind: .steady, durationSeconds: min(2), speedKmh: 7.0, inclinePercent: i1)),
+                .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(4), speedKmh: 4.0, inclinePercent: flat)),
+                .phase(.init(name: "Marche rapide", kind: .warmup, durationSeconds: min(4), speedKmh: 5.5, inclinePercent: flat)),
+                .phase(.init(name: "Footing", kind: .steady, durationSeconds: min(2), speedKmh: 7.0, inclinePercent: flat)),
                 .block(.init(name: "Intervalles 11 km/h", repeatCount: 4, phases: [
-                    .init(name: "Course 11", kind: .work, durationSeconds: min(2), speedKmh: 11.0, inclinePercent: i1, targetZone: 5),
-                    .init(name: "Récupération", kind: .recovery, durationSeconds: min(3), speedKmh: 4.5, inclinePercent: i1),
+                    .init(name: "Course 11", kind: .work, durationSeconds: min(2), speedKmh: 11.0, inclinePercent: flat, targetZone: 5),
+                    .init(name: "Récupération", kind: .recovery, durationSeconds: min(3), speedKmh: 4.5, inclinePercent: flat),
                 ])),
-                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1)),
-            ], templateID: ProgramTemplateID.hiitRun11, locked: true, protocolVersion: 2, advanced: true)
+                .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: flat)),
+            ], templateID: ProgramTemplateID.hiitRun11, locked: true, protocolVersion: 3, advanced: true)
     }
 
     static var inclineWalk: WorkoutProgram {
-        WorkoutProgram(name: "Incline Walk", notes: "Alternative de marche cardiovasculaire inclinée (30 min).", items: [
-            .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: i1)),
-            .phase(.init(name: "Marche 1 %", kind: .steady, durationSeconds: min(5), speedKmh: 5.5, inclinePercent: i1)),
-            .phase(.init(name: "Marche 2 %", kind: .work, durationSeconds: min(15), speedKmh: 5.5, inclinePercent: 2)),
-            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: i1)),
-        ], templateID: ProgramTemplateID.inclineWalk, locked: true, protocolVersion: 2)
+        WorkoutProgram(name: "Brisk Walk", notes: """
+            Marche cardiovasculaire soutenue à plat (30 min), ancienne Incline Walk : la pente est remplacée \
+            par une marche plus rapide sur le bloc principal (6 km/h au lieu de 5,5 km/h à 2 %).
+            """, items: [
+            .phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: flat)),
+            .phase(.init(name: "Marche", kind: .steady, durationSeconds: min(5), speedKmh: 5.5, inclinePercent: flat)),
+            .phase(.init(name: "Marche rapide", kind: .work, durationSeconds: min(15), speedKmh: 6.0, inclinePercent: flat)),
+            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 3.8, inclinePercent: flat)),
+        ], templateID: ProgramTemplateID.inclineWalk, locked: true, protocolVersion: 3)
     }
 
     static var postMealWalk: WorkoutProgram {
-        WorkoutProgram(name: "Post-Meal Walk", notes: "Marche douce après les repas (15 min, 1 %), activité légère complémentaire.", items: [
-            .phase(.init(name: "Mise en route", kind: .warmup, durationSeconds: min(2), speedKmh: 3.5, inclinePercent: i1)),
-            .phase(.init(name: "Marche", kind: .steady, durationSeconds: min(10), speedKmh: 4.5, inclinePercent: i1)),
-            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(3), speedKmh: 3.5, inclinePercent: i1)),
-        ], templateID: ProgramTemplateID.postMealWalk, locked: true, protocolVersion: 2)
+        WorkoutProgram(name: "Post-Meal Walk", notes: "Marche douce après les repas (15 min, à plat), activité légère complémentaire.", items: [
+            .phase(.init(name: "Mise en route", kind: .warmup, durationSeconds: min(2), speedKmh: 3.5, inclinePercent: flat)),
+            .phase(.init(name: "Marche", kind: .steady, durationSeconds: min(10), speedKmh: 4.5, inclinePercent: flat)),
+            .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(3), speedKmh: 3.5, inclinePercent: flat)),
+        ], templateID: ProgramTemplateID.postMealWalk, locked: true, protocolVersion: 3)
     }
 
     static var zone2Auto: WorkoutProgram {
         WorkoutProgram(name: "Zone 2 Auto", notes: """
-            Programme d'endurance principal (35 min, 1 % fixe). Pendant 25 min, la vitesse suit votre FC filtrée \
+            Programme d'endurance principal (35 min, à plat). Pendant 25 min, la vitesse suit votre FC filtrée \
             (≈ 18 s) pour vous amener puis vous garder dans votre zone 2 (Réglages › FC max et zones). Départ à la \
             vitesse qui vous a maintenu en zone 2 la dernière fois. Sous la zone : accélération d'autant plus nette \
             que la FC est loin (0,2 à 0,5 km/h, au plus une par minute), sauf si la FC monte déjà vers la zone. \
             Dans la zone : vitesse maintenue, léger ralentissement anticipé si la FC monte vite vers la limite haute. \
             Au-dessus : ralentissement. Limites automatiques 4–8,5 km/h. Sans FC : accélérations coupées, puis retour \
-            progressif à 4,5 km/h. Vos réglages manuels sont prioritaires. L'inclinaison ne change jamais \
-            automatiquement.
+            progressif à 4,5 km/h. Vos réglages manuels sont prioritaires.
             """, items: [
                 .phase(.init(name: "Échauffement progressif", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0,
-                             inclinePercent: i1, targetZone: 1, endSpeedKmh: 5.5)),
+                             inclinePercent: flat, targetZone: 1, endSpeedKmh: 5.5)),
                 .phase(.init(name: "Zone 2 pilotée", kind: .steady, durationSeconds: min(25), speedKmh: 5.8,
-                             inclinePercent: i1, targetZone: 2,
+                             inclinePercent: flat, targetZone: 2,
                              autoSpeed: AutoSpeedSettings(maxKmh: 8.5, adaptive: true))),
                 .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 4.0,
-                             inclinePercent: i1, targetZone: 1, endSpeedKmh: 3.5)),
-            ], templateID: ProgramTemplateID.zone2Auto, locked: true, protocolVersion: 3)
+                             inclinePercent: flat, targetZone: 1, endSpeedKmh: 3.5)),
+            ], templateID: ProgramTemplateID.zone2Auto, locked: true, protocolVersion: 4)
     }
 
     // MARK: - Football Endurance (3 niveaux)
 
     /// Échauffement commun (10 min).
     private static var footballWarmup: [ProgramItem] {
-        [.phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(4), speedKmh: 4.5, inclinePercent: i1)),
-         .phase(.init(name: "Marche rapide", kind: .warmup, durationSeconds: min(4), speedKmh: 5.5, inclinePercent: i1)),
-         .phase(.init(name: "Footing", kind: .steady, durationSeconds: min(2), speedKmh: 6.5, inclinePercent: i1))]
+        [.phase(.init(name: "Échauffement", kind: .warmup, durationSeconds: min(4), speedKmh: 4.5, inclinePercent: flat)),
+         .phase(.init(name: "Marche rapide", kind: .warmup, durationSeconds: min(4), speedKmh: 5.5, inclinePercent: flat)),
+         .phase(.init(name: "Footing", kind: .steady, durationSeconds: min(2), speedKmh: 6.5, inclinePercent: flat))]
     }
 
     /// Efforts répétés avec récupération **uniquement entre** les répétitions (pas après la dernière).
@@ -182,43 +187,43 @@ public extension WorkoutProgram {
         var out: [ProgramItem] = []
         for i in 1...count {
             out.append(.phase(.init(name: "Effort \(i)/\(count)", kind: .work, durationSeconds: min(minutes),
-                                    speedKmh: speed, inclinePercent: i1, targetZone: 4)))
+                                    speedKmh: speed, inclinePercent: flat, targetZone: 4)))
             if i < count {
                 out.append(.phase(.init(name: "Récupération \(i)/\(count - 1)", kind: .recovery, durationSeconds: min(3),
-                                        speedKmh: 5.0, inclinePercent: i1)))
+                                        speedKmh: 5.0, inclinePercent: flat)))
             }
         }
         return out
     }
 
     private static var footballCooldown: [ProgramItem] {
-        [.phase(.init(name: "Allure modérée", kind: .steady, durationSeconds: min(5), speedKmh: 6.0, inclinePercent: i1)),
-         .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: i1))]
+        [.phase(.init(name: "Allure modérée", kind: .steady, durationSeconds: min(5), speedKmh: 6.0, inclinePercent: flat)),
+         .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 4.0, inclinePercent: flat))]
     }
 
     static var footballEndurance1: WorkoutProgram {
         WorkoutProgram(name: "Football Endurance · Niveau 1", notes: """
-            Niveau par défaut (35 min, 1 %) : répéter des efforts soutenus pour tenir des matchs de 60 à 90 min. \
+            Niveau par défaut (35 min, à plat) : répéter des efforts soutenus pour tenir des matchs de 60 à 90 min. \
             Alternative au fractionné ; à éviter la même semaine qu'un match intense. 3 × 3 min à 8,5 km/h, \
             récupération 3 min à 5 km/h entre les efforts.
             """, items: footballWarmup + footballEfforts(3, minutes: 3, speed: 8.5) + footballCooldown,
-            templateID: ProgramTemplateID.footballEndurance1, locked: true, protocolVersion: 1, level: 1)
+            templateID: ProgramTemplateID.footballEndurance1, locked: true, protocolVersion: 2, level: 1)
     }
 
     static var footballEndurance2: WorkoutProgram {
         WorkoutProgram(name: "Football Endurance · Niveau 2", notes: """
-            Progression (41 min, 1 %), après plusieurs séances de niveau 1 bien tolérées (cheville comprise). \
+            Progression (41 min, à plat), après plusieurs séances de niveau 1 bien tolérées (cheville comprise). \
             4 × 3 min à 8,5 km/h, récupération 3 min à 5 km/h entre les efforts.
             """, items: footballWarmup + footballEfforts(4, minutes: 3, speed: 8.5) + footballCooldown,
-            templateID: ProgramTemplateID.footballEndurance2, locked: true, protocolVersion: 1, level: 2)
+            templateID: ProgramTemplateID.footballEndurance2, locked: true, protocolVersion: 2, level: 2)
     }
 
     static var footballEndurance3: WorkoutProgram {
         WorkoutProgram(name: "Football Endurance · Niveau 3", notes: """
-            Progression avancée (45 min, 1 %), jamais imposée : lancement après confirmation. \
+            Progression avancée (45 min, à plat), jamais imposée : lancement après confirmation. \
             4 × 4 min à 9 km/h, récupération 3 min à 5 km/h entre les efforts.
             """, items: footballWarmup + footballEfforts(4, minutes: 4, speed: 9.0) + footballCooldown,
-            templateID: ProgramTemplateID.footballEndurance3, locked: true, protocolVersion: 1, level: 3, advanced: true)
+            templateID: ProgramTemplateID.footballEndurance3, locked: true, protocolVersion: 2, level: 3, advanced: true)
     }
 }
 

@@ -20,7 +20,7 @@ enum ProgramCategory: Int, CaseIterable, Identifiable {
         switch self {
         case .endurance: return "Zone 2 et test de référence"
         case .intervals: return "Fractionné principal, football, progressions"
-        case .walking: return "Marche inclinée et récupération active"
+        case .walking: return "Marche soutenue et récupération active"
         case .personal: return "Créés, dupliqués ou importés"
         }
     }
@@ -51,7 +51,7 @@ enum ProgramStyle {
         case ProgramTemplateID.hiitRun11?: return "bolt.heart.fill"
         case ProgramTemplateID.footballEndurance1?, ProgramTemplateID.footballEndurance2?,
              ProgramTemplateID.footballEndurance3?: return "figure.soccer"
-        case ProgramTemplateID.inclineWalk?: return "mountain.2.fill"
+        case ProgramTemplateID.inclineWalk?: return "figure.walk"
         case ProgramTemplateID.postMealWalk?: return "fork.knife"
         default: return p.hasAutoSpeed ? "heart.circle.fill" : (p.maxSpeedKmh >= 8 ? "figure.run" : "figure.walk")
         }
@@ -67,17 +67,13 @@ enum ProgramStyle {
         }
     }
 
-    /// « 35 min · 4–7 km/h · 1 % »
+    /// « 35 min · 4–7 km/h »
     static func summary(_ p: WorkoutProgram) -> String {
         let speeds = p.schedule.flatMap { [$0.phase.speedBounds.min, $0.phase.speedBounds.max] }
-        let inclines = p.schedule.map(\.phase.inclinePercent)
         let minutes = Int((Double(p.totalDurationSeconds) / 60).rounded())
         var parts = ["\(minutes) min"]
         if let lo = speeds.min(), let hi = speeds.max() {
             parts.append(abs(hi - lo) < 0.05 ? "\(Format.speed(hi)) km/h" : "\(Format.speed(lo))–\(Format.speed(hi)) km/h")
-        }
-        if let lo = inclines.min(), let hi = inclines.max() {
-            parts.append(abs(hi - lo) < 0.05 ? "\(Format.incline(hi)) %" : "\(Format.incline(lo))–\(Format.incline(hi)) %")
         }
         return parts.joined(separator: " · ")
     }

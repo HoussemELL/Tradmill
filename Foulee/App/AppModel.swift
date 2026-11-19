@@ -797,6 +797,16 @@ final class AppModel {
             }
             settings.didRepairMissingTemplates = true
         }
+        // Une seule fois : le RUN100 remplace l'UREVO et ne pilote pas l'inclinaison ; les
+        // programmes personnels (et copies) passent à plat, mêmes identifiants.
+        if settings.didFlattenPersonalPrograms != true, StoreLocation.openError == nil {
+            let flattened = dataStore.allPrograms().filter { $0.templateID == nil }.compactMap { $0.flattenedIncline() }
+            flattened.forEach { dataStore.upsert($0) }
+            if !flattened.isEmpty {
+                log.log(.info, "Programmes personnels mis à plat : \(flattened.map(\.name).joined(separator: ", "))")
+            }
+            settings.didFlattenPersonalPrograms = true
+        }
     }
 
     /// Réinstalle les programmes prédéfinis absents (ou les remet à l'état d'origine).

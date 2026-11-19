@@ -81,27 +81,12 @@ struct TreadmillSettingsView: View {
                 let c = model.treadmill.capabilities
                 LabeledContent("Vitesse", value: String(format: "%.1f–%.1f km/h (pas %.2f)", c.speed.minKmh, c.speed.maxKmh, c.speed.incrementKmh))
                 LabeledContent("Source", value: c.speedRangeFromDevice ? "tapis" : "profil (non lue)")
-                if let i = c.inclination {
-                    LabeledContent("Inclinaison", value: String(format: "%.0f–%.0f %% (pas %.1f)", i.minPercent, i.maxPercent, i.incrementPercent))
-                } else {
-                    LabeledContent("Inclinaison", value: "non pilotable")
-                }
                 if let f = c.feature {
                     Text("Mesures : \(f.machineDescription)").font(.caption)
                     Text("Consignes : \(f.targetDescription)").font(.caption)
                 }
                 ForEach(model.treadmill.deviceInfo.sorted(by: { $0.key < $1.key }), id: \.key) { k, v in
                     LabeledContent(k, value: v)
-                }
-            }
-            if !model.treadmill.capabilities.supportsInclinationControl {
-                Section {
-                    Picker("Inclinaison du tapis", selection: $model.settings.session.fixedInclinePercent) {
-                        Text("À plat (0 %)").tag(0.0)
-                        Text("Pieds relevés (3 %)").tag(3.0)
-                    }
-                } header: { Text("Inclinaison manuelle") } footer: {
-                    Text("Ce tapis ne pilote pas son inclinaison : les programmes se lancent quand même, sans changer la pente. Indiquez la position de ses pieds (Domyos RUN100 : 0 ou 3 %) pour des calories justes ; elle est notée dans le journal de chaque séance.")
                 }
             }
             Section {
@@ -315,7 +300,7 @@ struct HealthSettingsView: View {
             .id(status)
             Section("Qui enregistre la séance") {
                 Text("""
-                • Un exercice Apple Watch tourne pendant la séance : la Watch enregistre la séance (FC, énergie, pas, distance). Foulée y ajoute ses métadonnées (programme, vitesses, inclinaison) ; l'iPhone n'écrit rien d'autre.
+                • Un exercice Apple Watch tourne pendant la séance : la Watch enregistre la séance (FC, énergie, pas, distance). Foulée y ajoute ses métadonnées (programme, vitesses) ; l'iPhone n'écrit rien d'autre.
                 • Sinon : l'iPhone enregistre une seule séance (marche, course ou fractionné, en intérieur), de l'arrêt au démarrage réels de la bande, pauses exclues, phases du programme en segments.
                 • Si une autre séance (Watch, Exercice, app du tapis…) couvre déjà plus de la moitié du créneau, rien n'est écrit et l'historique l'indique.
                 • Moins d'1 minute ou séance simulée : rien n'est écrit.

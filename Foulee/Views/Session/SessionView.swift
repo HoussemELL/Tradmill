@@ -290,7 +290,6 @@ struct DevicesCard: View {
         guard model.treadmill.connection.isReady else { return "Profil : \(model.treadmill.profile.name)" }
         let c = model.treadmill.capabilities
         return String(format: "%.1f–%.1f km/h", c.speed.minKmh, c.speed.maxKmh)
-            + (c.inclination.map { String(format: " · %.0f–%.0f %%", $0.minPercent, $0.maxPercent) } ?? " · inclinaison non pilotable")
     }
 
     private var watchText: String {

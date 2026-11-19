@@ -9,21 +9,23 @@ final class ProgramLibraryTests: XCTestCase {
     private func durations(_ p: WorkoutProgram) -> [Int] { p.schedule.map { $0.phase.durationSeconds / 60 } }
 
     private func inclines(_ p: WorkoutProgram) -> [Double] { p.schedule.map(\.phase.inclinePercent) }
-    private func ones(_ n: Int) -> [Double] { Array(repeating: 1.0, count: n) }
+    private func flats(_ n: Int) -> [Double] { Array(repeating: 0.0, count: n) }
 
     func testLibraryWithExactSegmentsAndMinimumIncline() {
         let t = WorkoutProgram.templates
         XCTAssertEqual(t.map(\.name), ["Zone 2 Auto", "Cardio Baseline", "Zone 2 Endurance", "Interval Run 9/11",
                                        "Football Endurance · Niveau 1", "Football Endurance · Niveau 2",
-                                       "Football Endurance · Niveau 3", "HIIT Run 11", "Incline Walk", "Post-Meal Walk"])
+                                       "Football Endurance · Niveau 3", "HIIT Run 11", "Brisk Walk", "Post-Meal Walk"])
         XCTAssertEqual(t.map { $0.totalDurationSeconds / 60 }, [35, 30, 35, 30, 35, 41, 45, 35, 30, 15])
         XCTAssertEqual(Set(t.compactMap(\.templateID)).count, t.count, "aucun doublon")
         for p in t {
             XCTAssertTrue(ProgramValidator.validate(p, against: caps).isEmpty, "\(p.name) : \(ProgramValidator.validate(p, against: caps))")
             XCTAssertNotNil(p.templateID)
             XCTAssertNotNil(p.protocolVersion)
-            XCTAssertGreaterThanOrEqual(p.schedule.map(\.phase.inclinePercent).min() ?? 0, WorkoutProgram.minimumTemplateIncline,
-                                        "\(p.name) : inclinaison minimale 1 %")
+            XCTAssertTrue(p.schedule.allSatisfy { $0.phase.inclinePercent == WorkoutProgram.templateIncline },
+                          "\(p.name) : à plat (RUN100 sans inclinaison pilotable)")
+            XCTAssertTrue(ProgramValidator.validate(p, against: TreadmillProfile.domyosRun100.fallbackCapabilities).isEmpty,
+                          "\(p.name) : aucun avertissement sur le RUN100")
         }
         XCTAssertEqual(Set(t.map(\.protocolSignature)).count, t.count)
 
@@ -38,40 +40,42 @@ final class ProgramLibraryTests: XCTestCase {
         XCTAssertFalse(base.hasAutoSpeed, "aucun ajustement automatique pendant le test")
         XCTAssertEqual(durations(base), [5, 20, 5])
         XCTAssertEqual(speeds(base), [4.0, 6.0, 3.8])
-        XCTAssertEqual(inclines(base), ones(3))
+        XCTAssertEqual(inclines(base), flats(3))
 
         let z2 = WorkoutProgram.zone2Endurance
         XCTAssertEqual(durations(z2), [5, 5, 20, 5])
         XCTAssertEqual(speeds(z2), [4.0, 5.5, 7.0, 3.8])
-        XCTAssertEqual(z2.protocolVersion, 3)
-        XCTAssertEqual(inclines(z2), ones(4))
+        XCTAssertEqual(z2.protocolVersion, 4)
+        XCTAssertEqual(inclines(z2), flats(4))
         XCTAssertFalse(z2.hasAutoSpeed, "aucune accélération automatique selon la FC")
 
         let run = WorkoutProgram.intervalRun911
         XCTAssertEqual(durations(run), [3, 3, 2] + Array(repeating: 1, count: 12) + [2, 3, 5])
         XCTAssertEqual(speeds(run), [4, 5, 6] + Array([9.0, 5.0].repeated(6)) + [11, 4, 3.8])
-        XCTAssertEqual(inclines(run), ones(18))
+        XCTAssertEqual(inclines(run), flats(18))
 
         let hiit = WorkoutProgram.hiitRun11
         XCTAssertTrue(hiit.isAdvanced, "avancé : confirmation explicite, jamais proposé automatiquement")
         XCTAssertEqual(durations(hiit), [4, 4, 2] + Array([2, 3].repeated(4)) + [5])
         XCTAssertEqual(speeds(hiit), [4, 5.5, 7] + Array([11.0, 4.5].repeated(4)) + [3.8])
-        XCTAssertEqual(inclines(hiit), ones(12))
+        XCTAssertEqual(inclines(hiit), flats(12))
 
         let incline = WorkoutProgram.inclineWalk
         XCTAssertEqual(durations(incline), [5, 5, 15, 5])
-        XCTAssertEqual(speeds(incline), [4, 5.5, 5.5, 3.8])
-        XCTAssertEqual(inclines(incline), [1, 1, 2, 1])
+        XCTAssertEqual(speeds(incline), [4, 5.5, 6.0, 3.8], "pente remplacée par 6 km/h sur le bloc principal")
+        XCTAssertEqual(inclines(incline), flats(4))
+        XCTAssertEqual(incline.name, "Brisk Walk")
+        XCTAssertEqual(incline.templateID, ProgramTemplateID.inclineWalk, "identifiant conservé")
 
         let meal = WorkoutProgram.postMealWalk
         XCTAssertEqual(durations(meal), [2, 10, 3])
         XCTAssertEqual(speeds(meal), [3.5, 4.5, 3.5])
-        XCTAssertEqual(inclines(meal), ones(3))
+        XCTAssertEqual(inclines(meal), flats(3))
 
         let auto = WorkoutProgram.zone2Auto
         XCTAssertEqual(durations(auto), [5, 25, 5])
         XCTAssertTrue(auto.hasAutoSpeed)
-        XCTAssertEqual(inclines(auto), ones(3), "1 % fixe, même pendant la phase pilotée")
+        XCTAssertEqual(inclines(auto), flats(3), "à plat, même pendant la phase pilotée")
         XCTAssertEqual(auto.schedule[0].phase.endSpeedKmh, 5.5)
         XCTAssertEqual(auto.schedule[2].phase.speedKmh, 4.0)
         XCTAssertEqual(auto.schedule[2].phase.endSpeedKmh, 3.5)
@@ -100,16 +104,17 @@ final class ProgramLibraryTests: XCTestCase {
                        "pas de récupération après le dernier effort")
         XCTAssertEqual([f1.level, f2.level, f3.level], [1, 2, 3])
         XCTAssertEqual([f1.isAdvanced, f2.isAdvanced, f3.isAdvanced], [false, false, true])
-        for f in [f1, f2, f3] { XCTAssertEqual(inclines(f), ones(f.schedule.count)) }
+        for f in [f1, f2, f3] { XCTAssertEqual(inclines(f), flats(f.schedule.count)) }
     }
 
     func testLibraryUpdateKeepsIdentifiersAndNeverDuplicates() {
-        // Bibliothèque installée en révision 1 (anciens protocoles à 0 %), un programme personnel,
+        // Bibliothèque installée avec un ancien protocole (UREVO à 1 %), un programme personnel,
         // et Post-Meal Walk supprimé par l'utilisateur.
         var oldBaseline = WorkoutProgram.cardioBaseline
+        oldBaseline.protocolVersion = 2
         oldBaseline.items = oldBaseline.items.map {
             guard case var .phase(p) = $0 else { return $0 }
-            p.inclinePercent = 0
+            p.inclinePercent = 1
             return .phase(p)
         }
         let oldZ2 = WorkoutProgram.zone2Auto
@@ -119,9 +124,9 @@ final class ProgramLibraryTests: XCTestCase {
         let updatedBaseline = plan.upserts.first { $0.templateID == ProgramTemplateID.cardioBaseline }
         XCTAssertEqual(updatedBaseline?.id, oldBaseline.id, "identifiant conservé")
         XCTAssertEqual(updatedBaseline?.createdAt, oldBaseline.createdAt)
-        XCTAssertEqual(updatedBaseline.map(inclines), ones(3))
+        XCTAssertEqual(updatedBaseline.map(inclines), flats(3))
         XCTAssertNotEqual(updatedBaseline?.protocolSignature, oldBaseline.protocolSignature,
-                          "nouveau protocole à 1 % : série de comparaison distincte des anciens tests à 0 %")
+                          "nouveau protocole à plat : série de comparaison distincte des anciens tests à 1 %")
         XCTAssertNil(plan.upserts.first { $0.templateID == ProgramTemplateID.zone2Auto },
                      "définition inchangée : programme laissé intact")
         XCTAssertFalse(plan.upserts.contains { $0.templateID == ProgramTemplateID.postMealWalk }, "supprimé : pas réinstallé")
@@ -159,10 +164,10 @@ final class ProgramLibraryTests: XCTestCase {
         r.perceivedExertion = 4
         let x = RythmeSessionExport(record: r)
         XCTAssertEqual(x.program?.templateID, ProgramTemplateID.cardioBaseline)
-        XCTAssertEqual(x.program?.protocolVersion, 2)
+        XCTAssertEqual(x.program?.protocolVersion, 3)
         XCTAssertEqual(x.program?.protocolSignature, WorkoutProgram.cardioBaseline.protocolSignature)
         XCTAssertEqual(x.plannedSegments.map(\.durationSeconds), [300, 1200, 300])
-        XCTAssertEqual(x.plannedSegments.map(\.targetInclinePercent), [1, 1, 1])
+        XCTAssertEqual(x.plannedSegments.map(\.targetInclinePercent), [0, 0, 0])
         XCTAssertEqual(x.executedSegments.count, 2)
         XCTAssertEqual(x.interruptions.manualChanges, 1)
         XCTAssertEqual(x.perceivedExertion, 4)
@@ -209,10 +214,39 @@ final class ProgramLibraryTests: XCTestCase {
         XCTAssertEqual(plan.upserts.map(\.templateID), [ProgramTemplateID.zone2Endurance], "seul Zone 2 Endurance est réécrit")
         let updated = try XCTUnwrap(plan.upserts.first)
         XCTAssertEqual(updated.id, old.id, "identifiant conservé")
-        XCTAssertEqual(updated.protocolVersion, 3)
+        XCTAssertEqual(updated.protocolVersion, 4)
         XCTAssertNotEqual(updated.protocolSignature, old.protocolSignature, "nouvelle série de comparaison")
         XCTAssertTrue(plan.removals.isEmpty)
-        XCTAssertEqual(plan.revision, 6)
+        XCTAssertEqual(plan.revision, WorkoutProgram.templatesRevision)
+    }
+
+    func testRevision7MovesEveryTemplateToFlatNewVersion() throws {
+        // Installation en révision 6 (UREVO) : tout à 1 %, Incline Walk à 2 % sur son bloc principal.
+        let current = WorkoutProgram.templates
+        let installed: [WorkoutProgram] = current.map { t in
+            var o = t
+            o.protocolVersion = (t.protocolVersion ?? 1) - 1
+            o.items = o.items.map { item in
+                func up(_ p: ProgramPhase) -> ProgramPhase { var q = p; q.inclinePercent = 1; return q }
+                switch item {
+                case let .phase(p): return .phase(up(p))
+                case var .block(b): b.phases = b.phases.map(up); return .block(b)
+                }
+            }
+            if t.templateID == ProgramTemplateID.inclineWalk { o.name = "Incline Walk" }
+            return o
+        }
+        let plan = TemplateLibrary.plan(installed: installed, seededIDs: installed.compactMap(\.templateID), installedRevision: 6)
+        XCTAssertEqual(Set(plan.upserts.compactMap(\.templateID)), Set(current.compactMap(\.templateID)), "tous réécrits")
+        for u in plan.upserts {
+            let old = try XCTUnwrap(installed.first { $0.templateID == u.templateID })
+            XCTAssertEqual(u.id, old.id, "\(u.name) : identifiant conservé")
+            XCTAssertEqual(u.protocolVersion, (old.protocolVersion ?? 0) + 1, "\(u.name) : nouvelle version")
+            XCTAssertNotEqual(u.protocolSignature, old.protocolSignature, "\(u.name) : nouvelle série de comparaison")
+            XCTAssertTrue(u.schedule.allSatisfy { $0.phase.inclinePercent == 0 }, u.name)
+        }
+        XCTAssertEqual(plan.upserts.first { $0.templateID == ProgramTemplateID.inclineWalk }?.name, "Brisk Walk")
+        XCTAssertEqual(plan.revision, 7)
     }
 
     func testProgramsRoundTripAndOldFormatStillDecodes() throws {
@@ -376,7 +410,7 @@ final class ProgramLibraryTests: XCTestCase {
         let a = try XCTUnwrap(p.schedule.first { $0.phase.isAuto }?.phase.autoSpeed)
         XCTAssertEqual(a.maxKmh, 8.5)
         XCTAssertTrue(a.isAdaptive)
-        XCTAssertEqual(p.protocolVersion, 3)
+        XCTAssertEqual(p.protocolVersion, 4)
         XCTAssertNotEqual(a.signature, AutoSpeedSettings().signature, "nouveau protocole : nouvelle série de comparaison")
     }
 
