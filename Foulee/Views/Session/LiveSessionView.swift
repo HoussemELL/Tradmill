@@ -169,7 +169,8 @@ struct LiveSessionView: View {
             MetricTile(title: "Vitesse réelle", value: Format.speed(freshSpeed), unit: "km/h",
                        detail: speedDetail, color: Theme.speed, large: true)
             heartTile
-            MetricTile(title: "Inclinaison réelle", value: Format.incline(freshIncline), unit: "%",
+            MetricTile(title: tm.capabilities.supportsInclinationControl || freshIncline != nil ? "Inclinaison réelle" : "Inclinaison",
+                       value: Format.incline(freshIncline ?? fixedIncline), unit: "%",
                        detail: inclineDetail, color: Theme.incline)
             MetricTile(title: "Zone", value: Theme.zoneName(snap.zone), detail: zoneDetail, color: Theme.zoneColor(snap.zone))
             MetricTile(title: "Pas", value: snap.steps.map { "\($0)" } ?? "—",
@@ -204,8 +205,13 @@ struct LiveSessionView: View {
         return s
     }
 
+    /// Inclinaison fixe déclarée (pieds du tapis) quand le tapis ne la pilote ni ne la mesure.
+    private var fixedIncline: Double? {
+        tm.capabilities.supportsInclinationControl ? nil : model.settings.session.fixedInclinePercent
+    }
+
     private var inclineDetail: String {
-        guard tm.capabilities.supportsInclinationControl else { return "non pilotable" }
+        guard tm.capabilities.supportsInclinationControl else { return freshIncline == nil ? "fixe, réglée sur le tapis" : "non pilotable" }
         var s = String(format: "Cible %.0f", snap.targetIncline)
         if let v = freshIncline { s += String(format: " · écart %+.1f", v - snap.targetIncline) }
         return s

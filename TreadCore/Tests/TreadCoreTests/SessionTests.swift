@@ -8,8 +8,9 @@ final class SessionHarness {
     var finished: SessionRecord?
     var finalized: SessionRecord?
 
-    init(program: WorkoutProgram?, quirks: SimulatedTreadmill.Quirks = .urtm047Like, settings: SessionSettings = SessionSettings()) {
-        h = ControllerHarness(profile: .urtm047, quirks: quirks)
+    init(program: WorkoutProgram?, quirks: SimulatedTreadmill.Quirks = .urtm047Like, settings: SessionSettings = SessionSettings(),
+         profile: TreadmillProfile = .urtm047, treadmill: SimulatedTreadmill? = nil) {
+        h = ControllerHarness(profile: profile, quirks: quirks, treadmill: treadmill)
         session = WorkoutSession(program: program, controller: h.controller, heartRate: hr, settings: settings,
                                  treadmillName: "URTM047", simulated: true, log: h.log,
                                  clock: { [unowned h] in h.now }, wallClock: { Date(timeIntervalSince1970: 1_700_000_000) })
@@ -35,6 +36,48 @@ final class SessionHarness {
 }
 
 final class WorkoutSessionTests: XCTestCase {
+    /// Tapis type Domyos Compact RUN100 : 1–14 km/h, inclinaison non pilotable (pieds 0/3 %).
+    private func run100Session(fixedIncline: Double) -> SessionHarness {
+        var settings = SessionSettings()
+        settings.weightKg = 70
+        settings.fixedInclinePercent = fixedIncline
+        let p = WorkoutProgram(name: "Côtes", items: [
+            .phase(.init(name: "Montée", durationSeconds: 60, speedKmh: 5, inclinePercent: 4)),
+            .phase(.init(name: "Rapide", durationSeconds: 60, speedKmh: 13, inclinePercent: 1)),
+        ])
+        let t = SimulatedTreadmill(quirks: SimulatedTreadmill.Quirks(),
+                                   speedRange: SpeedRange(minKmh: 1, maxKmh: 14, incrementKmh: 0.1), inclinationRange: nil)
+        return SessionHarness(program: p, settings: settings, profile: .domyosRun100, treadmill: t)
+    }
+
+    func testInclinedProgramRunsOnTreadmillWithoutInclination() throws {
+        let s = run100Session(fixedIncline: 3)
+        XCTAssertFalse(s.h.controller.capabilities.supportsInclinationControl)
+        XCTAssertNoThrow(try s.session.start().get(), "un programme incliné ne doit pas être bloqué")
+        s.run(80, hrBPM: 130)
+        XCTAssertEqual(s.session.currentPhase?.phase.name, "Rapide")
+        s.run(40, hrBPM: 160)
+        XCTAssertEqual(s.h.controller.telemetry.speedKmh ?? 0, 13, accuracy: 0.01, "au-delà des 12 km/h de l'URTM047")
+        s.run(30, hrBPM: 120)
+        XCTAssertEqual(s.session.status, .finished)
+        XCTAssertFalse(s.h.sentCommands.contains { if case .setTargetInclination = $0 { return true }; return false },
+                       "aucune consigne d'inclinaison envoyée")
+        let r = try XCTUnwrap(s.finished)
+        XCTAssertTrue(r.events.contains { $0.kind == .info && $0.detail.contains("inclinaison fixe du tapis 3 %") })
+    }
+
+    func testFixedInclineRaisesEnergyEstimate() {
+        func kcal(_ incline: Double) -> Double {
+            let s = run100Session(fixedIncline: incline)
+            _ = s.session.start()
+            s.run(100, hrBPM: 130)
+            return s.session.estimatedKcalValue ?? 0
+        }
+        let flat = kcal(0), raised = kcal(3)
+        XCTAssertGreaterThan(flat, 0)
+        XCTAssertGreaterThan(raised, flat * 1.1, "pieds à 3 % : plus de calories qu'à plat")
+    }
+
     func program() -> WorkoutProgram {
         WorkoutProgram(name: "Mini", items: [
             .phase(.init(name: "A", durationSeconds: 60, speedKmh: 4, inclinePercent: 0, targetZone: 2)),

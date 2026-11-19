@@ -50,6 +50,12 @@ struct DevicePickerView: View {
                     }
                 }
                 if role == .treadmill {
+                    Section("Tapis introuvable ?") {
+                        Text("Un tapis FTMS n'accepte qu'une connexion à la fois : fermez Kinomap, Zwift, Domyos E-Connected ou toute autre app connectée au tapis.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Text("Domyos : si le tapis n'apparaît pas, activez le mode FTMS dans l'app Domyos E-Connected s'il y est proposé, puis éteignez et rallumez le tapis.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     Section {
                         Button {
                             model.settings.simulatorMode = true

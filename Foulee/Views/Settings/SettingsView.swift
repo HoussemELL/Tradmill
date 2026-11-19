@@ -94,6 +94,16 @@ struct TreadmillSettingsView: View {
                     LabeledContent(k, value: v)
                 }
             }
+            if !model.treadmill.capabilities.supportsInclinationControl {
+                Section {
+                    Picker("Inclinaison du tapis", selection: $model.settings.session.fixedInclinePercent) {
+                        Text("À plat (0 %)").tag(0.0)
+                        Text("Pieds relevés (3 %)").tag(3.0)
+                    }
+                } header: { Text("Inclinaison manuelle") } footer: {
+                    Text("Ce tapis ne pilote pas son inclinaison : les programmes se lancent quand même, sans changer la pente. Indiquez la position de ses pieds (Domyos RUN100 : 0 ou 3 %) pour des calories justes ; elle est notée dans le journal de chaque séance.")
+                }
+            }
             Section {
                 Toggle("Mode simulateur", isOn: $model.settings.simulatorMode)
             } footer: {
@@ -406,7 +416,7 @@ struct AboutView: View {
             Section("Limites connues") {
                 Text("iOS peut suspendre l'app écran verrouillé ; seule l'activité Bluetooth la réveille.")
                 Text("Le comptage des pas par le tapis dépend d'un champ non standard (bit 13) ; il est absent sur beaucoup de modèles.")
-                Text("Le profil URTM047 repose sur des observations à confirmer sur votre tapis.")
+                Text("Les profils URTM047 et Domyos RUN100 reposent sur des observations ou des fiches à confirmer sur votre tapis.")
             }
         }
         .navigationTitle("Sécurité et limites")

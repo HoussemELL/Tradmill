@@ -130,7 +130,47 @@ public struct TreadmillProfile: Equatable, Sendable, Codable, Identifiable {
             speedRangeFromDevice: false, inclinationRangeFromDevice: false)
     )
 
-    public static let all: [TreadmillProfile] = [.urtm047, .genericFTMS]
+    /// Domyos (Decathlon) Compact RUN100, réf. 8800625 (nom BLE « Domyos-TC-… »).
+    ///
+    /// Sources publiques, à confirmer à la première connexion (journal Foulée) :
+    /// - Decathlon (dépôt GitHub domyos-developers) le liste parmi ses tapis compatibles FTMS ;
+    /// - fiche : 1–14 km/h, inclinaison **manuelle** 0 ou 3 % (pieds du tapis), non pilotable ;
+    /// - qdomyos-zwift reconnaît ces tapis au préfixe « DOMYOS-TC » lorsqu'ils annoncent le
+    ///   service 0x1826 ; certains Domyos (RUN100E) exigent d'activer le FTMS dans l'app
+    ///   Domyos E-Connected puis de redémarrer le tapis avant d'être visibles.
+    /// Séquence FTMS standard (Request Control → Start). Choix prudents repris de l'URTM047 :
+    /// une consigne restée sans réponse est vérifiée par la télémétrie, un seul renvoi, et la
+    /// consigne du palier part dès que la bande tourne (pas d'attente à vitesse minimale).
+    public static let domyosRun100 = TreadmillProfile(
+        id: "domyos-run100",
+        name: "Domyos Compact RUN100",
+        notes: "Request Control → Start → attente du mouvement → consigne du palier. Inclinaison manuelle (pieds 0 ou 3 %), non pilotable : réglez-la dans Réglages › Tapis.",
+        namePrefixes: ["DOMYOS-TC"],
+        startSteps: [.requestControl, .startOrResume],
+        resumeSteps: [.requestControl, .startOrResume],
+        initialSpeedKmh: 1.0,
+        // Compte à rebours possible au démarrage (non documenté) : délai large.
+        beltStartTimeout: 15,
+        speedToleranceKmh: 0.2,
+        inclineTolerancePercent: 0.6,
+        speedRampKmhPerSecond: 0.3,
+        speedSettleBase: 5,
+        inclineRampPercentPerSecond: 0.3,
+        inclineSettleBase: 8,
+        maxTargetResends: 1,
+        tolerateUnansweredSetpoints: true,
+        waitForInitialSpeedBeforeTarget: true,
+        initialSpeedSettleTimeout: 8,
+        initialSpeedSettleDwell: 0,
+        responseTimeout: 4,
+        commandSpacing: 0.3,
+        fallbackCapabilities: TreadmillCapabilities(
+            speed: SpeedRange(minKmh: 1.0, maxKmh: 14.0, incrementKmh: 0.1),
+            inclination: nil, feature: nil,
+            speedRangeFromDevice: false, inclinationRangeFromDevice: false)
+    )
+
+    public static let all: [TreadmillProfile] = [.urtm047, .domyosRun100, .genericFTMS]
 
     public static func profile(id: String) -> TreadmillProfile? {
         all.first { $0.id == id }

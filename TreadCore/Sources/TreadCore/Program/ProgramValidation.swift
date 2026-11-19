@@ -1,7 +1,8 @@
 import Foundation
 
 /// Problème détecté dans un programme. Rien n'est corrigé silencieusement :
-/// toute erreur bloque le lancement jusqu'à correction par l'utilisateur.
+/// toute erreur bloque le lancement jusqu'à correction par l'utilisateur ; un avertissement
+/// (ex. inclinaison non pilotable sur ce tapis) est affiché sans bloquer.
 public struct ProgramIssue: Equatable, Sendable, Identifiable {
     public enum Severity: String, Sendable { case error, warning }
 
@@ -128,10 +129,14 @@ public enum ProgramValidator {
                     issues.append(.init(severity: .error, phaseID: p.id, phaseName: p.name,
                                         message: String(format: "Inclinaison %.1f %% hors incrément du tapis (pas %.1f)", p.inclinePercent, r.incrementPercent)))
                 }
-            } else if abs(p.inclinePercent) > 0.001 {
-                issues.append(.init(severity: .error, phaseID: p.id, phaseName: p.name,
-                                    message: "Ce tapis ne permet pas de régler l'inclinaison"))
             }
+        }
+        // Tapis sans inclinaison pilotable (ex. Domyos RUN100, inclinaison fixe par ses pieds) :
+        // le programme reste lançable, les inclinaisons ne sont simplement pas envoyées.
+        if !(caps.inclination != nil && caps.supportsInclinationControl),
+           let maxIncline = program.schedule.map(\.phase.inclinePercent).max(), maxIncline > 0.001 {
+            issues.append(.init(severity: .warning, phaseID: nil, phaseName: nil,
+                                message: String(format: "Inclinaison non pilotable sur ce tapis : les phases inclinées (jusqu'à %.0f %%) se feront à son inclinaison fixe", maxIncline)))
         }
         return issues
     }

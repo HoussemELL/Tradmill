@@ -151,3 +151,24 @@ Paramètres du profil (dans `TreadmillProfile.urtm047`) : vitesse initiale
 (max 8 s, quelle que soit la valeur atteinte), tolérance
 0,15 km/h, accélération supposée 0,25 km/h/s pour le délai d'atteinte,
 1 renvoi maximum, espacement des commandes 0,4 s, délai de réponse 4 s.
+
+## Profil Domyos Compact RUN100 (réf. 8800625) : sources et hypothèses
+
+Sources publiques, **à confirmer à la première connexion** (journal Foulée) :
+
+- Decathlon liste le « Compact Run100 » parmi ses tapis compatibles FTMS (dépôt GitHub
+  `Decathlon/domyos-developers`).
+- Fiche produit : 1–14 km/h, inclinaison **manuelle** 0 ou 3 % (pieds du tapis), donc ni
+  pilotable ni mesurée en FTMS.
+- qdomyos-zwift reconnaît les tapis Domyos FTMS au nom BLE `DOMYOS-TC…` annonçant le service
+  0x1826 ; un Domyos sans FTMS actif expose un service propriétaire
+  (`49535343-fe7d-4ae5-8fa9-9fafd205e455`) et n'apparaît pas dans la recherche de Foulée.
+  Sur le RUN100E, le FTMS doit être activé dans l'app Domyos E-Connected, puis le tapis redémarré.
+
+Choix du profil `domyos-run100` : séquence FTMS standard (Request Control → Start), consigne
+du palier dès que la bande tourne, consignes sans réponse vérifiées par la télémétrie, un seul
+renvoi, plage de secours 1–14 km/h sans inclinaison.
+
+Tapis sans inclinaison pilotable : les programmes inclinés ne sont plus bloqués (simple
+avertissement) ; aucune consigne d'inclinaison n'est envoyée. L'inclinaison fixe déclarée dans
+Réglages › Tapis (0 ou 3 %) sert à l'estimation des calories et est notée dans le journal.

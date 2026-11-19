@@ -295,6 +295,7 @@ final class AppModel {
         sessionService?.session.settings.zoneAlertsEnabled = settings.session.zoneAlertsEnabled
         sessionService?.session.settings.smoothTransitions = settings.session.smoothTransitions
         sessionService?.session.settings.maxSpeedStepKmh = settings.session.maxSpeedStepKmh
+        sessionService?.session.settings.fixedInclinePercent = settings.session.fixedInclinePercent
         updateIdleTimer()
     }
 

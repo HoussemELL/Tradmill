@@ -166,7 +166,7 @@ struct ProgramListView: View {
                 let imported = try ProgramExchange.importPrograms(from: data)
                 imported.forEach { model.dataStore.upsert($0) }
                 let incompatible = imported.filter {
-                    !ProgramValidator.validate($0, against: model.treadmill.capabilities).isEmpty
+                    ProgramValidator.validate($0, against: model.treadmill.capabilities).contains { $0.severity == .error }
                 }.count
                 alert = "\(imported.count) programme(s) importé(s)."
                     + (incompatible > 0 ? " \(incompatible) incompatible(s) avec le tapis actuel : à corriger avant lancement." : "")

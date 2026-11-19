@@ -110,7 +110,32 @@ final class ProgramTests: XCTestCase {
     func testInclineOnTreadmillWithoutInclination() {
         let caps = TreadmillProfile.genericFTMS.fallbackCapabilities
         let p = WorkoutProgram(name: "x", items: [.phase(.init(name: "Pente", durationSeconds: 60, speedKmh: 5, inclinePercent: 3))])
-        XCTAssertEqual(ProgramValidator.validate(p, against: caps).first?.message, "Ce tapis ne permet pas de régler l'inclinaison")
+        let issues = ProgramValidator.validate(p, against: caps)
+        XCTAssertEqual(issues.count, 1)
+        XCTAssertEqual(issues.first?.severity, .warning, "un tapis sans inclinaison ne doit pas bloquer le programme")
+        XCTAssertEqual(issues.first?.message,
+                       "Inclinaison non pilotable sur ce tapis : les phases inclinées (jusqu'à 3 %) se feront à son inclinaison fixe")
+    }
+
+    /// Domyos Compact RUN100 : tous les programmes prédéfinis restent lançables (aucune erreur).
+    func testTemplatesAreStartableOnRUN100() {
+        let caps = TreadmillProfile.domyosRun100.fallbackCapabilities
+        for t in WorkoutProgram.templates {
+            let errors = ProgramValidator.validate(t, against: caps).filter { $0.severity == .error }
+            XCTAssertTrue(errors.isEmpty, "\(t.name) : \(errors)")
+        }
+    }
+
+    func testRUN100ProfileMatching() {
+        XCTAssertEqual(TreadmillProfile.match(deviceName: "Domyos-TC-0123").id, "domyos-run100")
+        XCTAssertEqual(TreadmillProfile.match(deviceName: "DOMYOS-TC-A1B2").id, "domyos-run100")
+        XCTAssertEqual(TreadmillProfile.match(deviceName: "Domyos-Bike-1").id, "generic-ftms")
+        XCTAssertEqual(TreadmillProfile.match(deviceName: "URTM047").id, "urevo-urtm047")
+        let c = TreadmillProfile.domyosRun100.fallbackCapabilities
+        XCTAssertEqual(c.speed.minKmh, 1)
+        XCTAssertEqual(c.speed.maxKmh, 14)
+        XCTAssertNil(c.inclination)
+        XCTAssertEqual(TreadmillProfile.domyosRun100.initialSpeedSettleDwell, 0)
     }
 
     func testStructureValidation() {

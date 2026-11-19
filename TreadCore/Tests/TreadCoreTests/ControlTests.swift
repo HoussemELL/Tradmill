@@ -147,10 +147,10 @@ final class ControllerHarness {
     var link: SimulatedFTMSLink!
     var events: [ControllerEvent] = []
 
-    init(profile: TreadmillProfile, quirks: SimulatedTreadmill.Quirks) {
+    init(profile: TreadmillProfile, quirks: SimulatedTreadmill.Quirks, treadmill: SimulatedTreadmill? = nil) {
         controller = TreadmillController(profile: profile, log: log, clock: { [unowned self] in self.now })
         controller.onEvent = { [unowned self] in self.events.append($0) }
-        link = SimulatedFTMSLink(treadmill: SimulatedTreadmill(quirks: quirks), clock: { [unowned self] in self.now })
+        link = SimulatedFTMSLink(treadmill: treadmill ?? SimulatedTreadmill(quirks: quirks), clock: { [unowned self] in self.now })
         link.connect(to: controller)
     }
 

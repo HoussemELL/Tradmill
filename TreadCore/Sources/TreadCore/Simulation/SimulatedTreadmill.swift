@@ -58,7 +58,8 @@ public final class SimulatedTreadmill {
 
     public var quirks: Quirks
     public let speedRange: SpeedRange
-    public let inclinationRange: InclinationRange
+    /// nil : tapis sans inclinaison pilotable (ex. Domyos RUN100, pieds 0/3 %).
+    public let inclinationRange: InclinationRange?
     public let feature: FitnessMachineFeature
 
     public private(set) var runState: RunState = .idle
@@ -83,13 +84,14 @@ public final class SimulatedTreadmill {
 
     public init(quirks: Quirks = Quirks(),
                 speedRange: SpeedRange = SpeedRange(minKmh: 1, maxKmh: 12, incrementKmh: 0.1),
-                inclinationRange: InclinationRange = InclinationRange(minPercent: 0, maxPercent: 9, incrementPercent: 1)) {
+                inclinationRange: InclinationRange? = InclinationRange(minPercent: 0, maxPercent: 9, incrementPercent: 1)) {
         self.quirks = quirks
         self.speedRange = speedRange
         self.inclinationRange = inclinationRange
-        self.feature = FitnessMachineFeature(
-            machine: [.totalDistance, .inclination, .expendedEnergy, .elapsedTime],
-            targetSettings: [.speed, .inclination])
+        self.feature = inclinationRange == nil
+            ? FitnessMachineFeature(machine: [.totalDistance, .expendedEnergy, .elapsedTime], targetSettings: [.speed])
+            : FitnessMachineFeature(machine: [.totalDistance, .inclination, .expendedEnergy, .elapsedTime],
+                                    targetSettings: [.speed, .inclination])
     }
 
     /// Écriture reçue sur le Control Point.
@@ -135,6 +137,7 @@ public final class SimulatedTreadmill {
                 if quirks.reportsSpeedStatus { status(.targetSpeedChanged(kmh: kmh), now: now) }
             }
         case let .setTargetInclination(p):
+            guard let inclinationRange else { respond(op, .opCodeNotSupported, now: now); return }
             guard p >= inclinationRange.minPercent - 0.001, p <= inclinationRange.maxPercent + 0.001 else {
                 respond(op, .invalidParameter, now: now); return
             }
@@ -207,7 +210,7 @@ public final class SimulatedTreadmill {
             var d = TreadmillData()
             d.instantaneousSpeedKmh = (currentSpeed * 100).rounded() / 100
             d.totalDistanceMeters = quirks.frozenDistance ? 0 : UInt32(distanceMeters)
-            d.inclinationPercent = (currentIncline * 10).rounded() / 10
+            d.inclinationPercent = inclinationRange == nil ? nil : (currentIncline * 10).rounded() / 10
             d.rampAngleDegrees = nil
             d.totalEnergyKcal = UInt16(energyKcal)
             d.energyPerHourKcal = nil
@@ -280,7 +283,7 @@ public final class SimulatedFTMSLink: ControlPointWriter {
         // Les capacités passent par les mêmes décodeurs que le BLE réel.
         let caps = TreadmillCapabilities(
             speed: (try? SpeedRange.decode(treadmill.speedRange.encode())) ?? treadmill.speedRange,
-            inclination: try? InclinationRange.decode(treadmill.inclinationRange.encode()),
+            inclination: treadmill.inclinationRange.flatMap { try? InclinationRange.decode($0.encode()) },
             feature: try? FitnessMachineFeature.decode(treadmill.feature.encode()),
             speedRangeFromDevice: true, inclinationRangeFromDevice: true)
         controller.setCapabilities(caps)

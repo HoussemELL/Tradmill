@@ -18,12 +18,17 @@ public struct SessionSettings: Codable, Equatable, Sendable {
     /// d'au plus `maxSpeedStepKmh`, le palier suivant étant envoyé quand le tapis a rejoint le précédent.
     public var smoothTransitions = true
     public var maxSpeedStepKmh = 1.0
+    /// Inclinaison fixe réglée à la main sur un tapis dont l'inclinaison n'est pas pilotable
+    /// (Domyos RUN100 : pieds à 0 ou 3 %). Sert à l'estimation des calories et est notée
+    /// dans le journal ; ignorée si le tapis pilote ou mesure son inclinaison.
+    public var fixedInclinePercent = 0.0
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case zones, stepEstimationEnabled, strideLengthMeters, weightKg, zoneAlertsEnabled, zoneAlertDwell
         case zoneAlertCooldown, freeRunStartSpeed, stopTreadmillAtProgramEnd, smoothTransitions, maxSpeedStepKmh
+        case fixedInclinePercent
     }
 
     /// Décodage tolérant : les réglages d'une version antérieure restent lisibles.
@@ -40,6 +45,7 @@ public struct SessionSettings: Codable, Equatable, Sendable {
         stopTreadmillAtProgramEnd = try c.decodeIfPresent(Bool.self, forKey: .stopTreadmillAtProgramEnd) ?? stopTreadmillAtProgramEnd
         smoothTransitions = try c.decodeIfPresent(Bool.self, forKey: .smoothTransitions) ?? smoothTransitions
         maxSpeedStepKmh = try c.decodeIfPresent(Double.self, forKey: .maxSpeedStepKmh) ?? maxSpeedStepKmh
+        fixedInclinePercent = try c.decodeIfPresent(Double.self, forKey: .fixedInclinePercent) ?? fixedInclinePercent
     }
 }
 
@@ -200,6 +206,13 @@ public final class WorkoutSession {
 
     public var isFreeRun: Bool { engine.isFreeRun }
 
+    /// Pente utilisée pour les calories : mesure du tapis, sinon son inclinaison fixe déclarée
+    /// s'il ne la pilote pas (sinon 0).
+    public var currentGradePercent: Double {
+        if let i = controller.telemetry.inclinePercent { return i }
+        return controller.capabilities.supportsInclinationControl ? 0 : settings.fixedInclinePercent
+    }
+
     // MARK: - Actions explicites
 
     public func start() -> Result<Void, ControllerError> {
@@ -215,6 +228,9 @@ public final class WorkoutSession {
         if case .success = result {
             status = .starting
             event(.start, "Démarrage demandé" + (program.map { " — \($0.name)" } ?? " — séance libre"))
+            if !controller.capabilities.supportsInclinationControl {
+                event(.info, String(format: "Inclinaison non pilotable : inclinaison fixe du tapis %.0f %%", settings.fixedInclinePercent))
+            }
         }
         changed()
         return result
@@ -441,7 +457,7 @@ public final class WorkoutSession {
         }
         if status == .running, let w = settings.weightKg, let last = lastTickAt, let v = controller.telemetry.speedKmh,
            controller.telemetry.isFresh(now: now) {
-            estimatedKcal += EnergyEstimator.kcalPerMinute(speedKmh: v, gradePercent: controller.telemetry.inclinePercent ?? 0, weightKg: w)
+            estimatedKcal += EnergyEstimator.kcalPerMinute(speedKmh: v, gradePercent: currentGradePercent, weightKg: w)
                 * max(0, min(now - last, 5)) / 60
         }
         lastTickAt = now
