@@ -149,7 +149,7 @@ struct HistoryDetailView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds), detail: "pauses : \(Format.duration(r.pausedSeconds))")
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters), detail: r.distanceSource.label)
-                    MetricTile(title: "Vitesse moy.", value: Format.speed(r.avgSpeed), unit: "km/h", detail: "max \(Format.speed(r.maxSpeed))")
+                    MetricTile(title: "Allure moy.", value: Format.pace(r.avgSpeed), unit: "min/km", detail: "meilleure \(Format.pace(r.maxSpeed))")
                     if hasIncline(r) {
                         // Anciennes séances sur l'UREVO (inclinaison pilotée) : valeurs conservées.
                         MetricTile(title: "Inclinaison", value: Format.incline(r.avgIncline), unit: "%", detail: "max \(Format.incline(r.maxIncline))")

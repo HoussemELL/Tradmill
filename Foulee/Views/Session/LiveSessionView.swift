@@ -339,14 +339,14 @@ struct FinishedSessionView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Temps actif", value: Format.duration(r.activeSeconds))
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters))
-                    // Sans podomètre : pas de case vide, la vitesse moyenne prend la ligne.
+                    // Sans podomètre : pas de case vide, l'allure moyenne prend la ligne.
                     if let steps = r.steps {
                         MetricTile(title: "Pas", value: "\(steps)", detail: r.stepsSource.label)
-                        MetricTile(title: "Vitesse moy.", value: Format.speed(r.avgSpeed), unit: "km/h")
+                        MetricTile(title: "Allure moy.", value: Format.pace(r.avgSpeed), unit: "min/km")
                     }
                 }
                 if r.steps == nil {
-                    MetricTile(title: "Vitesse moy.", value: Format.speed(r.avgSpeed), unit: "km/h")
+                    MetricTile(title: "Allure moy.", value: Format.pace(r.avgSpeed), unit: "min/km")
                 }
                 SessionInsightsView(record: r)
                 ZoneBars(seconds: r.zoneSeconds)
