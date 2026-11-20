@@ -357,3 +357,22 @@ final class HeartAndMetricsTests: XCTestCase {
         XCTAssertEqual(EnergyEstimator.kcalPerMinute(speedKmh: 5, gradePercent: 0, weightKg: 0), 0)
     }
 }
+
+final class TreadmillDiscoveryTests: XCTestCase {
+    func testClassification() {
+        XCTAssertEqual(TreadmillDiscovery.classify(name: "Domyos-TC-1234", advertisedServices: ["1826"]), .ftms)
+        XCTAssertEqual(TreadmillDiscovery.classify(name: nil, advertisedServices: ["00001826-0000-1000-8000-00805f9b34fb"]), .ftms)
+        XCTAssertEqual(TreadmillDiscovery.classify(name: "Domyos-TC-1234", advertisedServices: []), .knownNameWithoutFTMS,
+                       "Domyos repassé en mode Decathlon : visible, avec explication")
+        XCTAssertEqual(TreadmillDiscovery.classify(name: "URTM047", advertisedServices: ["180A"]), .knownNameWithoutFTMS)
+        XCTAssertNil(TreadmillDiscovery.classify(name: "AirPods", advertisedServices: []))
+        XCTAssertNil(TreadmillDiscovery.classify(name: nil, advertisedServices: ["180D"]))
+    }
+
+    func testMissingFTMSMessage() {
+        XCTAssertNil(TreadmillDiscovery.missingFTMSMessage(services: ["180A", "1826"], name: "Domyos-TC-1"))
+        let domyos = TreadmillDiscovery.missingFTMSMessage(services: [GATTID.domyosProprietaryService], name: "Domyos-TC-1")
+        XCTAssertTrue(domyos?.contains("mode Decathlon") == true)
+        XCTAssertTrue(TreadmillDiscovery.missingFTMSMessage(services: ["180A"], name: "Autre")?.contains("0x1826") == true)
+    }
+}

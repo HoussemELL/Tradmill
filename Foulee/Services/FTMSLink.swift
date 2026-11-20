@@ -27,6 +27,8 @@ final class FTMSLink: NSObject, CBPeripheralDelegate, ControlPointWriter {
 
     private(set) var deviceInfo: [String: String] = [:]
     var onReadyChange: ((Bool) -> Void)?
+    /// Tapis connecté mais inutilisable (pas de FTMS) : le lien doit être libéré.
+    var onUnusable: ((String) -> Void)?
     var onInfoChange: (() -> Void)?
     /// Appelé à chaque paquet de télémétrie (pour faire avancer la séance même en arrière-plan).
     var onTelemetryPacket: (() -> Void)?
@@ -43,7 +45,8 @@ final class FTMSLink: NSObject, CBPeripheralDelegate, ControlPointWriter {
     func start() {
         log.log(.ble, "Découverte des services FTMS…")
         peripheral.discoverServices([CBUUID(string: GATTID.fitnessMachineService),
-                                     CBUUID(string: GATTID.deviceInformationService)])
+                                     CBUUID(string: GATTID.deviceInformationService),
+                                     CBUUID(string: GATTID.domyosProprietaryService)])
     }
 
     /// Diagnostic explicite : liste tous les services/caractéristiques et lit celles qui sont lisibles.
@@ -69,6 +72,7 @@ final class FTMSLink: NSObject, CBPeripheralDelegate, ControlPointWriter {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error {
             log.log(.error, "Découverte des services : \(error.localizedDescription)")
+            if !exploring { onUnusable?("Services du tapis illisibles (\(error.localizedDescription)). Éteignez et rallumez le tapis.") }
             return
         }
         for s in peripheral.services ?? [] {
@@ -87,8 +91,10 @@ final class FTMSLink: NSObject, CBPeripheralDelegate, ControlPointWriter {
                 break
             }
         }
-        if !exploring && !(peripheral.services ?? []).contains(where: { $0.uuid.uuidString.uppercased() == GATTID.fitnessMachineService }) {
-            log.log(.error, "Ce périphérique n'expose pas le service FTMS 0x1826")
+        if !exploring, let message = TreadmillDiscovery.missingFTMSMessage(
+            services: (peripheral.services ?? []).map(\.uuid.uuidString), name: peripheral.name) {
+            log.log(.error, "Service FTMS 0x1826 absent : \(message)")
+            onUnusable?(message)
         }
     }
 

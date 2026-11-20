@@ -52,6 +52,9 @@ final class TreadmillService {
     @ObservationIgnored private var link: FTMSLink?
     @ObservationIgnored private var simLink: SimulatedFTMSLink?
     @ObservationIgnored private var wantConnected = false
+    /// Jeton du délai de préparation (lien GATT non prêt à temps).
+    @ObservationIgnored private var readyDeadlineToken = 0
+    static let readyTimeout: TimeInterval = 20
     @ObservationIgnored var profileOverrideID: String?
 
     /// Abonnés supplémentaires (séance en cours).
@@ -80,6 +83,7 @@ final class TreadmillService {
         hub.onFailToConnect[.treadmill] = { [weak self] p, e in
             self?.connection = .failed("Échec de connexion : \(e?.localizedDescription ?? "inconnu")")
             self?.wantConnected = false
+            self?.readyDeadlineToken += 1
         }
     }
 
@@ -161,8 +165,17 @@ final class TreadmillService {
         applyProfile(for: name)
         controller.linkDidConnect()
         let l = FTMSLink(peripheral: p, controller: controller, profile: profile, log: log)
+        l.onUnusable = { [weak self] message in self?.releaseUnusable(p, message: message) }
+        readyDeadlineToken += 1
+        let token = readyDeadlineToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.readyTimeout) { [weak self] in
+            guard let self, token == self.readyDeadlineToken, self.link?.peripheral === p,
+                  case .discovering = self.connection else { return }
+            self.releaseUnusable(p, message: "Le tapis est connecté mais ne répond pas en FTMS (capacités non lues en \(Int(Self.readyTimeout)) s). Éteignez-le et rallumez-le, puis relancez la recherche.")
+        }
         l.onReadyChange = { [weak self] ready in
             guard let self, ready else { return }
+            self.readyDeadlineToken += 1
             self.connection = .ready(name)
             self.onDeviceRemembered?(p.identifier, name)
             self.refresh()
@@ -175,6 +188,19 @@ final class TreadmillService {
         link = l
         connection = .discovering(name)
         l.start()
+        refresh()
+    }
+
+    /// Tapis connecté mais inutilisable : on libère le lien (sinon il reste pris par Foulée,
+    /// ne s'annonce plus et n'apparaît plus dans aucune recherche) et on n'y revient pas tout seul.
+    private func releaseUnusable(_ p: CBPeripheral, message: String) {
+        log.log(.error, "Tapis libéré : \(message)")
+        wantConnected = false
+        readyDeadlineToken += 1
+        link = nil
+        controller.linkDidDisconnect()
+        hub.cancelConnection(id: p.identifier)
+        connection = .failed(message)
         refresh()
     }
 

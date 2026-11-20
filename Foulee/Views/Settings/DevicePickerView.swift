@@ -41,10 +41,20 @@ struct DevicePickerView: View {
                                     if role == .treadmill {
                                         Text("Profil : \(TreadmillProfile.match(deviceName: d.name).name)")
                                             .font(.caption).foregroundStyle(.secondary)
+                                        if d.alreadyConnected {
+                                            Text("Déjà connecté à l'iPhone (Foulée ou une autre app)")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        if d.kind == .knownNameWithoutFTMS {
+                                            Text("FTMS non annoncé : le tapis est peut-être en mode Decathlon (voir ci-dessous)")
+                                                .font(.caption).foregroundStyle(.orange)
+                                        }
                                     }
                                 }
                                 Spacer()
-                                Text("\(d.rssi) dBm").font(.caption).foregroundStyle(.secondary)
+                                if !d.alreadyConnected {
+                                    Text("\(d.rssi) dBm").font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -53,7 +63,9 @@ struct DevicePickerView: View {
                     Section("Tapis introuvable ?") {
                         Text("Un tapis FTMS n'accepte qu'une connexion à la fois : fermez Kinomap, Zwift, Domyos E-Connected ou toute autre app connectée au tapis.")
                             .font(.footnote).foregroundStyle(.secondary)
-                        Text("Domyos : si le tapis n'apparaît pas, activez le mode FTMS dans l'app Domyos E-Connected s'il y est proposé, puis éteignez et rallumez le tapis.")
+                        Text("Domyos : si le tapis n'apparaît pas ou est signalé « FTMS non annoncé », activez le mode FTMS dans l'app Domyos E-Connected s'il y est proposé, fermez-la, puis éteignez et rallumez le tapis.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Text("Toujours rien : Réglages iPhone › Bluetooth, touchez ⓘ à côté du tapis s'il y figure › « Oublier cet appareil », puis relancez la recherche.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                     Section {

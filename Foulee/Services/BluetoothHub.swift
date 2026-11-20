@@ -15,6 +15,10 @@ final class BluetoothHub {
         var rssi: Int
         var role: Role
         var lastSeen: Date
+        /// Tapis uniquement : FTMS annoncé, ou seulement un nom de tapis connu.
+        var kind: TreadmillDiscovery.Kind? = nil
+        /// Déjà connecté à l'iPhone (par Foulée ou une autre app) : il ne s'annonce plus.
+        var alreadyConnected = false
     }
 
     private(set) var state: CBManagerState = .unknown
@@ -68,9 +72,25 @@ final class BluetoothHub {
             guard let self, let central = self.central else { return }
             self.discovered.removeAll { $0.role == role }
             self.scanningRole = role
-            let service = CBUUID(string: role == .treadmill ? GATTID.fitnessMachineService : GATTID.heartRateService)
-            central.scanForPeripherals(withServices: [service], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
-            self.log.log(.ble, "Recherche \(role == .treadmill ? "tapis FTMS (0x1826)" : "capteurs cardio (0x180D)")…")
+            if role == .treadmill {
+                // Un tapis déjà connecté à l'iPhone (Foulée elle-même, ou une autre app) ne s'annonce
+                // plus : on le liste quand même, sinon il « disparaît ».
+                let ftms = CBUUID(string: GATTID.fitnessMachineService)
+                for p in central.retrieveConnectedPeripherals(withServices: [ftms]) {
+                    self.peripherals[p.identifier] = p
+                    self.discovered.append(Discovered(id: p.identifier, name: p.name ?? "Tapis FTMS", rssi: 0, role: .treadmill,
+                                                      lastSeen: Date(), kind: .ftms, alreadyConnected: true))
+                    self.log.log(.ble, "Déjà connecté à l'iPhone : \(p.name ?? p.identifier.uuidString)")
+                }
+                // Recherche sans filtre de service : un tapis connu par son nom qui n'annonce pas le
+                // FTMS (Domyos en mode Decathlon) reste visible, avec une explication.
+                central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+                self.log.log(.ble, "Recherche tapis (FTMS 0x1826 ou nom connu)…")
+            } else {
+                central.scanForPeripherals(withServices: [CBUUID(string: GATTID.heartRateService)],
+                                           options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+                self.log.log(.ble, "Recherche capteurs cardio (0x180D)…")
+            }
         }
     }
 
@@ -117,16 +137,24 @@ final class BluetoothHub {
 
     fileprivate func didDiscover(_ p: CBPeripheral, advertisement: [String: Any], rssi: NSNumber) {
         guard let role = scanningRole else { return }
-        peripherals[p.identifier] = p
         let advName = advertisement[CBAdvertisementDataLocalNameKey] as? String
+        var kind: TreadmillDiscovery.Kind?
+        if role == .treadmill {
+            let uuids = ((advertisement[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? [])
+                + ((advertisement[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID]) ?? [])
+            kind = TreadmillDiscovery.classify(name: p.name ?? advName, advertisedServices: uuids.map(\.uuidString))
+            guard kind != nil else { return }   // appareil sans rapport (recherche sans filtre)
+        }
+        peripherals[p.identifier] = p
         let name = p.name ?? advName ?? "Appareil sans nom"
         if let i = discovered.firstIndex(where: { $0.id == p.identifier }) {
             discovered[i].rssi = rssi.intValue
             discovered[i].lastSeen = Date()
             discovered[i].name = name
+            if kind == .ftms { discovered[i].kind = .ftms }
         } else {
-            discovered.append(Discovered(id: p.identifier, name: name, rssi: rssi.intValue, role: role, lastSeen: Date()))
-            log.log(.ble, "Trouvé : \(name) (RSSI \(rssi))")
+            discovered.append(Discovered(id: p.identifier, name: name, rssi: rssi.intValue, role: role, lastSeen: Date(), kind: kind))
+            log.log(.ble, "Trouvé : \(name) (RSSI \(rssi))" + (kind == .knownNameWithoutFTMS ? " — FTMS non annoncé" : ""))
         }
     }
 

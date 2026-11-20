@@ -26,6 +26,9 @@ public enum GATTID {
     public static let firmwareRevision = "2A26"
     public static let softwareRevision = "2A28"
 
+    /// Service propriétaire des tapis Domyos hors mode FTMS (« mode Decathlon », vu par qdomyos-zwift).
+    public static let domyosProprietaryService = "49535343-FE7D-4AE5-8FA9-9FAFD205E455"
+
     public static func name(for uuid: String) -> String {
         switch uuid.uppercased() {
         case fitnessMachineService: return "Fitness Machine Service"
