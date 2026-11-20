@@ -1,11 +1,11 @@
 # Programmes prédéfinis, pilotage Zone 2 et Apple Watch
 
 Toutes les vitesses sont en km/h. Les programmes sont installés au premier lancement (et
-ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 7) : chaque
+ajoutés à une installation existante). Ils sont tous **verrouillés** (révision 8) : chaque
 séance est comparée aux précédentes du même programme (*Historique › Progression*). Pour une
 variante, dupliquez-le ; *Programmes › + › Réinitialiser les programmes prédéfinis* les remet en place.
 
-## 1. La bibliothèque (révision 7)
+## 1. La bibliothèque (révision 8)
 
 Tous les programmes sont **à plat (0 %)** : le tapis (Domyos Compact RUN100) ne pilote pas son
 inclinaison. Les programmes déjà installés sont **mis à jour en place** (mêmes identifiants,
@@ -19,9 +19,14 @@ la pente de 2 % du bloc principal est remplacée par 6,0 km/h (au lieu de 5,5). 
 personnels sont mis à plat une seule fois (mêmes identifiants). L'historique UREVO garde ses
 valeurs d'inclinaison.
 
+Révision 8 (20/11) : **Zone 2 Auto** passe en version 5, plafond de sécurité **9 km/h** (au lieu
+de 8,5) : sur le RUN100 à plat, la zone 2 est tenue vers 8,5 km/h, il faut de la marge pour
+progresser. Même identifiant ; nouvelle série de comparaison. Le plafond reste une sécurité (FC
+mal mesurée → accélérations bornées).
+
 | Programme | Version | Durée | Étapes (durée · km/h), tout à 0 % |
 |---|---|---|---|
-| **Zone 2 Auto** ❤️ | 4 | 35 min | 5 min 4,0 → 5,5 progressif → 25 min pilotées par la FC (départ : vitesse tenue en zone 2 la dernière fois, sinon 5,8 ; limites 4–8,5) → 5 min 4,0 → 3,5 |
+| **Zone 2 Auto** ❤️ | 5 | 35 min | 5 min 4,0 → 5,5 progressif → 25 min pilotées par la FC (départ : vitesse tenue en zone 2 la dernière fois, sinon 5,8 ; limites 4–9) → 5 min 4,0 → 3,5 |
 | **Cardio Baseline** | 3 | 30 min | 5 min · 4,0 → 20 min · 6,0 → 5 min · 3,8 |
 | **Zone 2 Endurance** | 4 | 35 min | 5 min · 4,0 → 5 min · 5,5 → 20 min · **7,0** (valeur de départ, à ajuster à la main selon FC et ressenti) → 5 min · 3,8 |
 | **Interval Run 9/11** | 3 | 30 min | 3 min · 4,0 → 3 min · 5,0 → 2 min · 6,0 → 6 × (1 min · 9,0 + 1 min · 5,0) → 2 min · 11,0 → 3 min · 4,0 → 5 min · 3,8 |
@@ -86,7 +91,7 @@ de séance. Désormais :
 
 | Paramètre | Zone 2 Auto (protocole 3) |
 |---|---|
-| Limites automatiques | **4,0–8,5 km/h** (plus celles du tapis) |
+| Limites automatiques | **4,0–9,0 km/h** (plus celles du tapis) |
 | Départ | **vitesse mesurée pendant que la FC était en zone 2 lors de la dernière séance Zone 2 Auto** (≥ 2 min en zone), sinon 5,8 km/h |
 | Sous la zone | palier selon l'écart : **+0,5** si ≥ 15 bpm sous la zone, **+0,3** si ≥ 8, sinon +0,2 ; au plus une accélération par minute ; **aucune** si la FC monte déjà assez vite pour entrer dans la zone dans la minute (tendance sur 60 s) |
 | Dans la zone | vitesse maintenue ; **−0,2 anticipé** si la FC monte vite vers la limite haute ; +0,2 vers le milieu si elle reste dans le bas de la zone sans monter |

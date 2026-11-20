@@ -82,11 +82,11 @@ final class ProgramLibraryTests: XCTestCase {
         let a = try! XCTUnwrap(auto.schedule[1].phase.autoSpeed)
         XCTAssertEqual(a.targetZone, 2)
         XCTAssertEqual(a.minKmh, 4)
-        XCTAssertEqual(a.maxKmh, 8.5)
+        XCTAssertEqual(a.maxKmh, 9.0)
         XCTAssertEqual(a.stepKmh, 0.2)
         XCTAssertEqual(a.increaseInterval, 60)
         XCTAssertEqual(auto.schedule[1].phase.speedKmh, 5.8)
-        XCTAssertEqual(auto.maxSpeedKmh, 8.5)
+        XCTAssertEqual(auto.maxSpeedKmh, 9.0)
         XCTAssertFalse(auto.suggestsRunning, "plafond automatique ≠ allure prévue : exercice de marche")
 
         // Football Endurance : récupération uniquement ENTRE les efforts.
@@ -220,6 +220,28 @@ final class ProgramLibraryTests: XCTestCase {
         XCTAssertEqual(plan.revision, WorkoutProgram.templatesRevision)
     }
 
+    func testRevision8OnlyRaisesZone2AutoCeiling() throws {
+        // Installation en révision 7 : Zone 2 Auto v4, plafond 8,5 km/h.
+        var installed = WorkoutProgram.templates
+        let i = try XCTUnwrap(installed.firstIndex { $0.templateID == ProgramTemplateID.zone2Auto })
+        var old = installed[i]
+        old.items = old.items.map {
+            guard case var .phase(p) = $0, p.autoSpeed != nil else { return $0 }
+            p.autoSpeed = AutoSpeedSettings(maxKmh: 8.5, adaptive: true)
+            return .phase(p)
+        }
+        old.protocolVersion = 4
+        installed[i] = old
+        let plan = TemplateLibrary.plan(installed: installed, seededIDs: installed.compactMap(\.templateID), installedRevision: 7)
+        XCTAssertEqual(plan.upserts.map(\.templateID), [ProgramTemplateID.zone2Auto], "seul Zone 2 Auto est réécrit")
+        let updated = try XCTUnwrap(plan.upserts.first)
+        XCTAssertEqual(updated.id, old.id, "identifiant conservé")
+        XCTAssertEqual(updated.protocolVersion, 5)
+        XCTAssertNotEqual(updated.protocolSignature, old.protocolSignature, "nouvelle série de comparaison")
+        XCTAssertEqual(updated.schedule[1].phase.autoSpeed?.maxKmh, 9.0)
+        XCTAssertEqual(plan.revision, 8)
+    }
+
     func testRevision7MovesEveryTemplateToFlatNewVersion() throws {
         // Installation en révision 6 (UREVO) : tout à 1 %, Incline Walk à 2 % sur son bloc principal.
         let current = WorkoutProgram.templates
@@ -246,14 +268,14 @@ final class ProgramLibraryTests: XCTestCase {
             XCTAssertTrue(u.schedule.allSatisfy { $0.phase.inclinePercent == 0 }, u.name)
         }
         XCTAssertEqual(plan.upserts.first { $0.templateID == ProgramTemplateID.inclineWalk }?.name, "Brisk Walk")
-        XCTAssertEqual(plan.revision, 7)
+        XCTAssertEqual(plan.revision, WorkoutProgram.templatesRevision)
     }
 
     func testProgramsRoundTripAndOldFormatStillDecodes() throws {
         let data = try ProgramExchange.export(WorkoutProgram.templates)
         let back = try ProgramExchange.importPrograms(from: data)
         XCTAssertEqual(back.map(\.protocolSignature), WorkoutProgram.templates.map(\.protocolSignature))
-        XCTAssertEqual(back.first { $0.name == "Zone 2 Auto" }?.schedule[1].phase.autoSpeed, AutoSpeedSettings(maxKmh: 8.5, adaptive: true))
+        XCTAssertEqual(back.first { $0.name == "Zone 2 Auto" }?.schedule[1].phase.autoSpeed, AutoSpeedSettings(maxKmh: 9.0, adaptive: true))
         let old = #"{"id":"6F1C2B1E-0000-0000-0000-000000000001","name":"A","durationSeconds":60,"speedKmh":4,"inclinePercent":0,"kind":"steady"}"#
         let p = try CoreJSON.decode(ProgramPhase.self, from: Data(old.utf8))
         XCTAssertNil(p.autoSpeed)
@@ -263,7 +285,7 @@ final class ProgramLibraryTests: XCTestCase {
     func testValidationOfRampsAndAutoPhases() {
         var p = WorkoutProgram.zone2Auto
         if case var .phase(ph) = p.items[1] {
-            ph.speedKmh = 9.0
+            ph.speedKmh = 9.5
             p.items[1] = .phase(ph)
         }
         XCTAssertTrue(ProgramValidator.validateStructure(p).contains { $0.message.contains("hors des limites automatiques") })
@@ -405,12 +427,12 @@ final class ProgramLibraryTests: XCTestCase {
         return out
     }
 
-    func testZone2AutoTemplateUsesZoneCenteredPilotUpTo8_5() throws {
+    func testZone2AutoTemplateUsesZoneCenteredPilotUpTo9() throws {
         let p = WorkoutProgram.zone2Auto
         let a = try XCTUnwrap(p.schedule.first { $0.phase.isAuto }?.phase.autoSpeed)
-        XCTAssertEqual(a.maxKmh, 8.5)
+        XCTAssertEqual(a.maxKmh, 9.0)
         XCTAssertTrue(a.isAdaptive)
-        XCTAssertEqual(p.protocolVersion, 4)
+        XCTAssertEqual(p.protocolVersion, 5)
         XCTAssertNotEqual(a.signature, AutoSpeedSettings().signature, "nouveau protocole : nouvelle série de comparaison")
     }
 

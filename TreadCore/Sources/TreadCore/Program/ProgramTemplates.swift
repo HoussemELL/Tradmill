@@ -29,7 +29,9 @@ public extension WorkoutProgram {
     /// 7 : passage au Domyos Compact RUN100 (sans inclinaison pilotable) — tous les programmes à
     ///     plat, chacun dans une nouvelle version (identifiants conservés, séries de comparaison
     ///     distinctes) ; Incline Walk devient Brisk Walk (bloc principal 6 km/h à plat).
-    static let templatesRevision = 7
+    /// 8 : Zone 2 Auto v5 — plafond de sécurité 9 km/h (au lieu de 8,5) : à plat sur le RUN100, la
+    ///     zone 2 est tenue vers 8,5 km/h (séance du 20/11), il faut de la marge pour progresser.
+    static let templatesRevision = 8
 
     /// Programmes installés par la toute première version (avant les identifiants de modèle),
     /// remplacés par la bibliothèque actuelle. Retirés seulement s'ils sont restés intacts.
@@ -160,17 +162,17 @@ public extension WorkoutProgram {
             vitesse qui vous a maintenu en zone 2 la dernière fois. Sous la zone : accélération d'autant plus nette \
             que la FC est loin (0,2 à 0,5 km/h, au plus une par minute), sauf si la FC monte déjà vers la zone. \
             Dans la zone : vitesse maintenue, léger ralentissement anticipé si la FC monte vite vers la limite haute. \
-            Au-dessus : ralentissement. Limites automatiques 4–8,5 km/h. Sans FC : accélérations coupées, puis retour \
+            Au-dessus : ralentissement. Limites automatiques 4–9 km/h. Sans FC : accélérations coupées, puis retour \
             progressif à 4,5 km/h. Vos réglages manuels sont prioritaires.
             """, items: [
                 .phase(.init(name: "Échauffement progressif", kind: .warmup, durationSeconds: min(5), speedKmh: 4.0,
                              inclinePercent: flat, targetZone: 1, endSpeedKmh: 5.5)),
                 .phase(.init(name: "Zone 2 pilotée", kind: .steady, durationSeconds: min(25), speedKmh: 5.8,
                              inclinePercent: flat, targetZone: 2,
-                             autoSpeed: AutoSpeedSettings(maxKmh: 8.5, adaptive: true))),
+                             autoSpeed: AutoSpeedSettings(maxKmh: 9.0, adaptive: true))),
                 .phase(.init(name: "Retour au calme", kind: .cooldown, durationSeconds: min(5), speedKmh: 4.0,
                              inclinePercent: flat, targetZone: 1, endSpeedKmh: 3.5)),
-            ], templateID: ProgramTemplateID.zone2Auto, locked: true, protocolVersion: 4)
+            ], templateID: ProgramTemplateID.zone2Auto, locked: true, protocolVersion: 5)
     }
 
     // MARK: - Football Endurance (3 niveaux)
