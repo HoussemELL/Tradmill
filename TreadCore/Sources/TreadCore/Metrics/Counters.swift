@@ -12,6 +12,7 @@ public struct CumulativeCounter: Codable, Equatable, Sendable {
         case wrapped(from: UInt64, to: UInt64)
         case reset(from: UInt64, to: UInt64)
         case implausibleJump(from: UInt64, to: UInt64)
+        case corrected(from: UInt64, to: UInt64)
     }
 
     /// Valeur maximale représentable + 1 (ex. 1 << 24). nil = pas de débordement attendu.
@@ -20,15 +21,22 @@ public struct CumulativeCounter: Codable, Equatable, Sendable {
     public var maxRatePerSecond: Double
     /// Si vrai, le premier échantillon sert de référence ; sinon le compteur est supposé partir de 0.
     public var baselineFromFirstSample: Bool
+    /// Total recalculé par sa source (statistique Santé de l'Apple Watch, dédoublonnée quand des
+    /// pas d'un autre appareil arrivent) : une baisse modérée est une correction, pas une remise à
+    /// zéro. Sans cela, 5 209 → 4 753 était compté comme « repart de 0 » et ajoutait 4 753 pas
+    /// (séance du 20/11). Optionnel pour relire les points de reprise d'une version antérieure.
+    public var allowsDownwardCorrection: Bool?
 
     public private(set) var sessionTotal: Double = 0
     private var lastRaw: UInt64?
     private var lastTime: TimeInterval?
 
-    public init(modulus: UInt64?, maxRatePerSecond: Double, baselineFromFirstSample: Bool = true) {
+    public init(modulus: UInt64?, maxRatePerSecond: Double, baselineFromFirstSample: Bool = true,
+                allowsDownwardCorrection: Bool = false) {
         self.modulus = modulus
         self.maxRatePerSecond = maxRatePerSecond
         self.baselineFromFirstSample = baselineFromFirstSample
+        self.allowsDownwardCorrection = allowsDownwardCorrection ? true : nil
     }
 
     /// Après une perte de lien : la prochaine valeur est comparée sans supposer de continuité temporelle.
@@ -60,6 +68,11 @@ public struct CumulativeCounter: Codable, Equatable, Sendable {
             sessionTotal += Double(m - prev + raw)
             return .wrapped(from: prev, to: raw)
         }
+        // Correction de la source (total recalculé à la baisse, pas une vraie remise à zéro).
+        if allowsDownwardCorrection == true, raw >= prev / 2 {
+            sessionTotal = max(0, sessionTotal - Double(prev - raw))
+            return .corrected(from: prev, to: raw)
+        }
         // Remise à zéro : l'appareil recompte depuis 0.
         sessionTotal += Double(raw)
         return .reset(from: prev, to: raw)
@@ -89,7 +102,8 @@ public enum MetricSource: String, Codable, Sendable, CaseIterable {
 public struct StepTracker: Codable, Equatable, Sendable {
     public private(set) var source: MetricSource = .none
     private var treadmillCounter = CumulativeCounter(modulus: 1 << 24, maxRatePerSecond: 6)
-    private var watchCounter = CumulativeCounter(modulus: nil, maxRatePerSecond: 6, baselineFromFirstSample: false)
+    private var watchCounter = CumulativeCounter(modulus: nil, maxRatePerSecond: 6, baselineFromFirstSample: false,
+                                                 allowsDownwardCorrection: true)
     private var estimated: Double = 0
     public var estimationEnabled: Bool
     /// Longueur de pas pour l'estimation (m).
@@ -124,7 +138,10 @@ public struct StepTracker: Codable, Equatable, Sendable {
     public mutating func ingestWatch(total: Double, at t: TimeInterval) {
         if source == .none || source == .estimated && estimated < 1 { source = .appleWatch }
         guard source == .appleWatch, total >= 0 else { return }
-        if watchCounter.ingest(UInt64(total.rounded()), at: t) != nil { anomalies += 1 }
+        switch watchCounter.ingest(UInt64(total.rounded()), at: t) {
+        case nil, .corrected?: break
+        default: anomalies += 1
+        }
     }
 
     /// Distance parcourue depuis le dernier appel (m), pour l'estimation.

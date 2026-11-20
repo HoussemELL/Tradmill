@@ -368,7 +368,10 @@ final class WorkoutManager {
             let s = try HKWorkoutSession(healthStore: healthStore, configuration: config)
             let b = s.associatedWorkoutBuilder()
             let source = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
-            source.enableCollection(for: HKQuantityType(.stepCount), predicate: nil)
+            // Pas de la montre seulement : sans ce filtre, les pas de l'iPhone arrivés en bloc
+            // faisaient recalculer le total (5 209 → 4 753 le 20/11).
+            source.enableCollection(for: HKQuantityType(.stepCount),
+                                    predicate: HKQuery.predicateForObjects(from: [HKDevice.local()]))
             b.dataSource = source
             s.delegate = proxy
             b.delegate = proxy

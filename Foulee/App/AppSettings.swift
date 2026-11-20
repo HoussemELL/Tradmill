@@ -45,6 +45,8 @@ struct AppSettings: Codable, Equatable {
     var didRepairMissingTemplates: Bool?
     /// Passage au Domyos RUN100 (sans inclinaison) : programmes personnels mis à plat une fois.
     var didFlattenPersonalPrograms: Bool?
+    /// Réparation unique des pas gonflés par un total montre recalculé (séance du 20/11).
+    var didRepairStepJumps: Bool?
 }
 
 final class SettingsStore {

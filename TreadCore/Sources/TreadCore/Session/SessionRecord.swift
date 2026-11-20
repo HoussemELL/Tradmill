@@ -180,6 +180,26 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     public var distanceSource: MetricSource = .none
     public var steps: Int?
     public var stepsSource: MetricSource = .none
+
+    /// Réparation des pas : retire les sauts impossibles de la série (plus de 6 pas/s, ex. pas de
+    /// l'iPhone ajoutés en bloc au total de la montre) et recale le total. nil si rien à corriger.
+    public func repairedStepJumps() -> SessionRecord? {
+        var r = self
+        var removed = 0
+        var lastRaw: Int?, lastT: Double?
+        for i in r.samples.indices {
+            guard let raw = samples[i].steps else { continue }
+            if let p = lastRaw, let lt = lastT {
+                let delta = raw - p
+                if Double(delta) > 6 * max(samples[i].t - lt, 1) + 5 { removed += delta }
+            }
+            lastRaw = raw; lastT = samples[i].t
+            r.samples[i].steps = raw - removed
+        }
+        guard removed > 0 else { return nil }
+        r.steps = steps.map { max(0, $0 - removed) }
+        return r
+    }
     public var avgSpeed: Double?
     public var maxSpeed: Double?
     public var avgIncline: Double?

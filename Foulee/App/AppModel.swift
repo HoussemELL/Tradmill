@@ -91,6 +91,7 @@ final class AppModel {
             Task { @MainActor [log] in await SigningExpiry.scheduleReminder(log: log) }
         }
         migrateLegacyZonesIfNeeded()
+        repairStepJumpsIfNeeded()
         syncRythmeShare()
         startLoop()
         // Aussi utile quand iOS lance l'app en arrière-plan (demande de la montre).
@@ -696,6 +697,22 @@ final class AppModel {
             log.log(.heart, "Zones : anciens réglages par défaut (% de FC max) remplacés par la méthode Rythme")
         }
         settings.didMigrateLegacyZones = true
+    }
+
+    /// Une seule fois : retire des séances les sauts de pas impossibles (total de la montre
+    /// recalculé par Santé, compté à tort comme une remise à zéro), puis les re-partage avec Rythme.
+    func repairStepJumpsIfNeeded() {
+        guard settings.didRepairStepJumps != true, StoreLocation.openError == nil,
+              let all = dataStore.sessionsForSharing() else { return }
+        var fixedNames: [String] = []
+        for r in all.records {
+            guard let fixed = r.repairedStepJumps() else { continue }
+            if dataStore.upsert(fixed) {
+                fixedNames.append("\(r.programName ?? "Séance libre") (\(r.steps ?? 0) → \(fixed.steps ?? 0) pas)")
+            }
+        }
+        if !fixedNames.isEmpty { log.log(.info, "Pas corrigés : " + fixedNames.joined(separator: ", ")) }
+        settings.didRepairStepJumps = true
     }
 
     /// Recalcule FC max et FC de repos depuis Santé (sauf valeurs saisies dans Foulée).

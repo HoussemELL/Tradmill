@@ -376,3 +376,42 @@ final class TreadmillDiscoveryTests: XCTestCase {
         XCTAssertTrue(TreadmillDiscovery.missingFTMSMessage(services: ["180A"], name: "Autre")?.contains("0x1826") == true)
     }
 }
+
+final class WatchStepsCorrectionTests: XCTestCase {
+    /// Séance du 20/11 : le total de la montre redescend (5 209 → 4 753, pas de l'iPhone
+    /// dédoublonnés par Santé) ; ce n'est pas une remise à zéro, rien ne doit s'ajouter.
+    func testWatchTotalCorrectedDownwardIsNotAReset() {
+        var s = StepTracker(estimationEnabled: false)
+        var t = 0.0
+        for v in stride(from: 0.0, through: 5209, by: 4) { s.ingestWatch(total: v, at: t); t += 2 }
+        s.ingestWatch(total: 5209, at: t); t += 2
+        s.ingestWatch(total: 4753, at: t); t += 2
+        s.ingestWatch(total: 4757, at: t)
+        XCTAssertEqual(s.value, 4757)
+        XCTAssertEqual(s.anomalies, 0)
+    }
+
+    /// Nouvel exercice montre (total reparti de 0) : vraie remise à zéro, cumul conservé.
+    func testWatchRestartStillAccumulates() {
+        var s = StepTracker(estimationEnabled: false)
+        s.ingestWatch(total: 1000, at: 0)
+        s.ingestWatch(total: 1004, at: 2)
+        s.ingestWatch(total: 3, at: 4)
+        XCTAssertEqual(s.value, 1007)
+    }
+
+    func testRepairRemovesImpossibleStepJump() throws {
+        var r = SessionRecord(startDate: Date(timeIntervalSince1970: 0), program: nil, treadmillName: nil, profileID: nil, simulated: false)
+        func sample(_ t: Double, _ steps: Int) -> SessionSample {
+            SessionSample(t: t, active: t, speed: 3.6, incline: nil, targetSpeed: 3.6, targetIncline: nil, hr: 100, hrSource: nil,
+                          zone: 1, distance: 0, steps: steps, phase: 2, paused: false)
+        }
+        r.samples = [sample(2013, 5203), sample(2016, 5209), sample(2018.5, 9962), sample(2021.8, 9966), sample(2100, 10100)]
+        r.steps = 10100
+        r.stepsSource = .appleWatch
+        let fixed = try XCTUnwrap(r.repairedStepJumps())
+        XCTAssertEqual(fixed.steps, 10100 - 4753)
+        XCTAssertEqual(fixed.samples.map(\.steps), [5203, 5209, 5209, 5213, 5347])
+        XCTAssertNil(fixed.repairedStepJumps(), "déjà réparé : rien à refaire")
+    }
+}

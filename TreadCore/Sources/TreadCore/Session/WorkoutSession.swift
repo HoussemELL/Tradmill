@@ -777,6 +777,7 @@ public final class WorkoutSession {
         case let .wrapped(f, t): log.log(.info, "Compteur \(what) : débordement \(f) → \(t)")
         case let .reset(f, t): log.log(.info, "Compteur \(what) remis à zéro par le tapis (\(f) → \(t)), cumul conservé")
         case let .implausibleJump(f, t): log.log(.warning, "Compteur \(what) : saut ignoré \(f) → \(t)")
+        case let .corrected(f, t): log.log(.info, "Compteur \(what) : total corrigé par sa source (\(f) → \(t))")
         }
     }
 
