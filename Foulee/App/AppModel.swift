@@ -829,13 +829,22 @@ final class AppModel {
     @MainActor
     func refreshZonesFromHealth() async {
         guard health.isAvailable else { return }
+        // iPhone verrouillé (app lancée en arrière-plan par la montre) : Santé est chiffrée et ne
+        // renvoie rien ; on garde les zones actuelles.
+        guard UIApplication.shared.isProtectedDataAvailable else {
+            log.log(.heart, "Zones : iPhone verrouillé, Santé illisible : zones actuelles conservées")
+            return
+        }
         let z = settings.session.zones
         let inputs = await health.zoneInputs()
-        let res = ZoneProfileResolver.resolve(userMax: z.maxHRIsUserValue ? z.maxHR : nil,
-                                              userResting: z.restingHRIsUserValue ? z.restingHR : nil,
-                                              birthDate: inputs.birthDate, now: Date(),
-                                              highHR: inputs.highHR, restingHR: inputs.restingHR,
-                                              fallbackMax: z.maxHR)
+        let resolved = ZoneProfileResolver.resolve(userMax: z.maxHRIsUserValue ? z.maxHR : nil,
+                                                   userResting: z.restingHRIsUserValue ? z.restingHR : nil,
+                                                   birthDate: inputs.birthDate, now: Date(),
+                                                   highHR: inputs.highHR, restingHR: inputs.restingHR,
+                                                   fallbackMax: z.maxHR)
+        let res = ZoneProfileResolver.keepingPrevious(resolved, previous: z,
+                                                      readMax: inputs.birthDate != nil || !inputs.highHR.isEmpty,
+                                                      readResting: !inputs.restingHR.isEmpty)
         var nz = settings.session.zones
         nz.maxHR = res.maxHR
         nz.maxHRSource = res.maxSource

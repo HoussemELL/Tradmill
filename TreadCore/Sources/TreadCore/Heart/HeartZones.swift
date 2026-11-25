@@ -255,6 +255,29 @@ public enum ZoneProfileResolver {
         return best
     }
 
+    static let staleSuffix = " — dernière lecture gardée, Santé n'a rien renvoyé"
+
+    /// Santé n'a rien renvoyé pour une donnée (iPhone verrouillé : données Santé chiffrées, lecture
+    /// refusée…) : on garde la dernière valeur lue au lieu de l'effacer. Le 25/11, l'app lancée en
+    /// arrière-plan par la montre, iPhone verrouillé, avait effacé la FC de repos : zone 2 dès
+    /// 116 bpm au lieu de 138 pendant toute la séance.
+    /// - Parameters:
+    ///   - readMax: date de naissance ou mesures ≥ 165 bpm renvoyées par Santé.
+    ///   - readResting: au moins une FC de repos renvoyée par Santé.
+    public static func keepingPrevious(_ new: Result, previous p: HeartZoneSettings, readMax: Bool, readResting: Bool) -> Result {
+        var r = new
+        if !readMax, !p.maxHRIsUserValue, !p.maxHRSource.hasPrefix("valeur par défaut") {
+            r.maxHR = p.maxHR
+            r.maxSource = p.maxHRSource.replacingOccurrences(of: staleSuffix, with: "") + staleSuffix
+        }
+        if !readResting, !p.restingHRIsUserValue, let rest = p.restingHR {
+            r.restingHR = rest
+            r.restingHRExact = p.restingHRExact
+            r.restingSource = p.restingHRSource.replacingOccurrences(of: staleSuffix, with: "") + staleSuffix
+        }
+        return r
+    }
+
     public static func age(birthDate: Date, now: Date) -> Int? {
         let cal = Calendar(identifier: .gregorian)
         let years = cal.dateComponents([.year], from: birthDate, to: now).year

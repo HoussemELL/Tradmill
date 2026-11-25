@@ -72,3 +72,10 @@ l'affichage, l'historique, la progression et le fichier partagé.
    l'une des deux apps s'alignera, et la règle commune passera en `foulee.zones.v2`.
 
 Merci !
+
+## Lecture de Santé impossible
+
+Si Santé ne renvoie rien (iPhone verrouillé : données Santé chiffrées, par exemple quand la montre
+lance Foulée en arrière-plan), les zones ne sont pas recalculées : la FC max et la FC de repos
+gardent leur dernière valeur lue, avec la mention « dernière lecture gardée ». Le 25/11, la FC
+de repos avait été effacée ainsi : zone 2 dès 116 bpm au lieu de 138 pendant toute la séance.

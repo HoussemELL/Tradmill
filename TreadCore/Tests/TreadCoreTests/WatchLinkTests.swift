@@ -107,3 +107,43 @@ final class WatchLinkPolicyTests: XCTestCase {
         XCTAssertNil(old.watchHeartRateAge)
     }
 }
+
+/// 25/11 : Santé n'a rien renvoyé (iPhone verrouillé) ; la FC de repos ne doit pas être effacée.
+final class ZoneRefreshTests: XCTestCase {
+    private func goodZones() -> HeartZoneSettings {
+        var z = HeartZoneSettings(maxHR: 193, restingHR: 53, maxHRSource: "FC tenue la plus haute sur 12 mois",
+                                  restingHRSource: "moyenne Santé sur 30 j (31 valeurs)")
+        z.restingHRExact = 53.03
+        return z
+    }
+
+    func testEmptyHealthReadKeepsPreviousValues() {
+        let z = goodZones()
+        let empty = ZoneProfileResolver.resolve(userMax: nil, userResting: nil, birthDate: nil, now: Date(),
+                                                highHR: [], restingHR: [], fallbackMax: z.maxHR)
+        XCTAssertNil(empty.restingHR, "sans garde-fou : FC de repos effacée")
+        let kept = ZoneProfileResolver.keepingPrevious(empty, previous: z, readMax: false, readResting: false)
+        XCTAssertEqual(kept.restingHR, 53)
+        XCTAssertEqual(kept.restingHRExact, 53.03)
+        XCTAssertEqual(kept.maxHR, 193)
+        XCTAssertTrue(kept.restingSource.hasPrefix("moyenne Santé sur 30 j"))
+        // Zones utilisées : zone 2 dès 138 bpm (et non 116).
+        var nz = z
+        nz.restingHR = kept.restingHR
+        nz.restingHRExact = kept.restingHRExact
+        XCTAssertEqual(nz.bounds[1], 138)
+        // Deuxième lecture vide : pas d'accumulation de mentions.
+        var again = z
+        again.restingHRSource = kept.restingSource
+        let twice = ZoneProfileResolver.keepingPrevious(empty, previous: again, readMax: false, readResting: false)
+        XCTAssertEqual(twice.restingSource, kept.restingSource)
+    }
+
+    func testFreshReadReplacesPrevious() {
+        let z = goodZones()
+        let fresh = ZoneProfileResolver.resolve(userMax: nil, userResting: nil, birthDate: nil, now: Date(),
+                                                highHR: [], restingHR: [55, 56], fallbackMax: z.maxHR)
+        let r = ZoneProfileResolver.keepingPrevious(fresh, previous: z, readMax: false, readResting: true)
+        XCTAssertEqual(r.restingHR, 56)
+    }
+}
