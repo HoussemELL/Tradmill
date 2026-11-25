@@ -92,6 +92,7 @@ final class AppModel {
         }
         migrateLegacyZonesIfNeeded()
         repairStepJumpsIfNeeded()
+        relearnStepCalibrationIfNeeded()
         reconcileRecentSteps()
         syncRythmeShare()
         startLoop()
@@ -516,7 +517,19 @@ final class AppModel {
 
     // MARK: - Pas : choix final, Santé, longueur de pas apprise
 
-    var stepCalibration: StepCalibration { settings.stepCalibration ?? StepCalibration() }
+    var stepCalibration: StepCalibration {
+        guard let c = settings.stepCalibration, c.version == StepCalibration.currentVersion else { return StepCalibration() }
+        return c
+    }
+
+    /// Calibration absente ou d'une version antérieure : réapprise sur tout l'historique.
+    private func relearnStepCalibrationIfNeeded() {
+        guard settings.stepCalibration?.version != StepCalibration.currentVersion,
+              let all = dataStore.sessionsForSharing()?.records else { return }
+        let c = StepCalibration.learned(from: all)
+        settings.stepCalibration = c
+        log.log(.info, "Longueur de pas réapprise sur l'historique : " + Self.stepCalibrationSummary(c))
+    }
 
     /// Choix final des pas avec ce qu'on sait déjà (sans Santé) ; conserve ce que Santé a déjà apporté.
     private func finalizeSteps(_ record: SessionRecord) -> SessionRecord {

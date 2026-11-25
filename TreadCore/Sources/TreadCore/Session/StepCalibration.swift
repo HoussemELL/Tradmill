@@ -24,6 +24,10 @@ public struct StepCalibration: Codable, Equatable, Sendable {
 
     public var walk: Band?
     public var run: Band?
+    /// Version du calcul. 2 : pas comptés aussi entre deux paliers de distance du tapis (une
+    /// calibration de version antérieure est ignorée et réapprise sur l'historique).
+    public var version: Int? = StepCalibration.currentVersion
+    public static let currentVersion = 2
     /// Séances déjà apprises (les 100 dernières) : une séance n'est jamais comptée deux fois.
     public var learnedSessionIDs: [UUID] = []
 
@@ -37,6 +41,17 @@ public struct StepCalibration: Codable, Equatable, Sendable {
     public static let acceptedRatio = 0.8...1.25
 
     public init() {}
+
+    /// Calibration réapprise sur un historique (séances dans l'ordre chronologique) : pas de la
+    /// montre (ou du tapis) non remplacés par une estimation.
+    public static func learned(from records: [SessionRecord]) -> StepCalibration {
+        var c = StepCalibration()
+        for r in records.sorted(by: { $0.startDate < $1.startDate }) where !r.simulated && r.stepsReplacedUndercount != true {
+            let measured = r.stepsSource == .treadmill ? r.steps : (r.watchSteps ?? (r.stepsSource == .appleWatch ? r.steps : nil))
+            if let m = measured { c.learn(from: r, measuredSteps: m) }
+        }
+        return c
+    }
 
     public var isEmpty: Bool { walk == nil && run == nil }
 
@@ -124,13 +139,19 @@ extension SessionRecord {
         for s in samples {
             defer { prev = s }
             guard let p = prev, !s.paused, !p.paused else { continue }
-            let dd = s.distance - p.distance, dt = s.t - p.t
-            guard dd > 0, dt > 0 else { continue }
+            let dd = max(0, s.distance - p.distance), dt = s.t - p.t
+            guard dt > 0 else { continue }
             let speeds = [s.speed, p.speed].compactMap { $0 }.filter { $0 > 0.5 }
+            guard !speeds.isEmpty || dd > 0 else { continue }
             let v = speeds.isEmpty ? dd / dt * 3.6 : speeds.reduce(0, +) / Double(speeds.count)
             let running = v >= StepCalibration.runThresholdKmh
-            let e = dd / stepLength(v)
-            if running { out.run.meters += dd; out.run.expected += e } else { out.walk.meters += dd; out.walk.expected += e }
+            if dd > 0 {
+                let e = dd / stepLength(v)
+                if running { out.run.meters += dd; out.run.expected += e } else { out.walk.meters += dd; out.walk.expected += e }
+            }
+            // Pas comptés sur chaque intervalle, même quand la distance n'a pas bougé : le RUN100
+            // n'annonce sa distance que par paliers de 10 m (séance du 25/11 : sans cela, 80 % des
+            // pas tombaient entre deux paliers et la répartition marche / course était fausse).
             if let a = p.steps, let b = s.steps, b >= a {
                 measuredMeters += dd
                 if running { out.runMeasured = (out.runMeasured ?? 0) + Double(b - a) }

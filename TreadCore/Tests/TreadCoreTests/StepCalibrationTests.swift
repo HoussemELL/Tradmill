@@ -146,3 +146,38 @@ final class StepCalibrationTests: XCTestCase {
         XCTAssertEqual(r.stepCheck(walkingStepLength: 0.7, calibration: c)?.verdict, .plausible)
     }
 }
+
+/// Séance du 25/11 (RUN100) : distance par paliers de 10 m, pas de la montre à chaque échantillon.
+final class StepCalibrationQuantizedDistanceTests: XCTestCase {
+    func testPerBandLearningWithTenMeterDistanceSteps() throws {
+        var r = SessionRecord(startDate: Date(timeIntervalSince1970: 1_800_000_000), program: nil, treadmillName: nil,
+                              profileID: nil, simulated: false)
+        var d = 0.0, steps = 0.0
+        // 10 min de marche à 5 km/h (0,74 m/pas), puis 10 min à 9 km/h (0,90 m/pas).
+        for i in 0...1200 {
+            let speed: Double = i < 600 ? 5 : 9
+            r.samples.append(SessionSample(t: Double(i), active: Double(i), speed: speed, incline: nil, targetSpeed: speed,
+                                           targetIncline: nil, hr: nil, hrSource: nil, zone: nil, distance: (d / 10).rounded(.down) * 10,
+                                           steps: Int(steps), phase: nil, paused: false))
+            d += speed / 3.6
+            steps += speed / 3.6 / (speed < 7 ? 0.74 : 0.90)
+        }
+        r.distanceMeters = r.samples.last!.distance
+        r.steps = r.samples.last!.steps
+        r.stepsSource = .appleWatch
+        var c = StepCalibration()
+        XCTAssertTrue(c.learn(from: r, measuredSteps: r.steps!))
+        XCTAssertEqual(c.learnedStepLength(speedKmh: 5) ?? 0, 0.74, accuracy: 0.02)
+        XCTAssertEqual(c.learnedStepLength(speedKmh: 9) ?? 0, 0.90, accuracy: 0.02)
+    }
+}
+
+extension StepCalibrationQuantizedDistanceTests {
+    /// Une calibration enregistrée avant le champ `version` est lue comme ancienne (réapprise).
+    func testOldCalibrationHasNoVersion() throws {
+        let old = #"{"walk":{"factor":1.4,"meters":800,"sessions":1},"learnedSessionIDs":[]}"#
+        let c = try JSONDecoder().decode(StepCalibration.self, from: Data(old.utf8))
+        XCTAssertNil(c.version)
+        XCTAssertEqual(StepCalibration().version, StepCalibration.currentVersion)
+    }
+}
