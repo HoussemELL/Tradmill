@@ -124,7 +124,9 @@ final class AppModel {
             self?.sessionService?.tick()
         }
         watch.onHeartRate = { [weak self] bpm, age in self?.heartRate.ingestWatch(bpm: bpm, sampleAge: age) }
-        watch.onSteps = { [weak self] total in self?.sessionService?.session.ingestWatchSteps(total: total) }
+        watch.onSteps = { [weak self] total, age in
+            self?.sessionService?.session.ingestWatchSteps(total: total, sampleAge: age)
+        }
         watch.onActiveEnergy = { [weak self] kcal in self?.sessionService?.session.ingestWatchActiveEnergy(kcal: kcal) }
         watch.onRemoteCommand = { [weak self] c in self?.handleWatchCommand(c) }
         watch.onControl = { [weak self] c in self?.handleWatchControl(c) }

@@ -46,7 +46,8 @@ final class WatchBridge {
     @ObservationIgnored private var pendingMetadata: WatchMessage?
 
     @ObservationIgnored var onHeartRate: ((Double, TimeInterval) -> Void)?
-    @ObservationIgnored var onSteps: ((Double) -> Void)?
+    /// Total de pas de l'exercice Watch et ancienneté de la mesure (s).
+    @ObservationIgnored var onSteps: ((Double, TimeInterval) -> Void)?
     @ObservationIgnored var onActiveEnergy: ((Double) -> Void)?
     /// Commande du tapis demandée depuis la montre.
     @ObservationIgnored var onRemoteCommand: ((WatchRemoteCommand) -> Void)?
@@ -291,8 +292,8 @@ final class WatchBridge {
         case let .heartRate(bpm, sampleDate):
             usedDuringSession = pendingLink != nil || usedDuringSession
             onHeartRate?(bpm, Date().timeIntervalSince(sampleDate))
-        case let .steps(total, _):
-            onSteps?(total)
+        case let .steps(total, sampleDate):
+            onSteps?(total, Date().timeIntervalSince(sampleDate))
         case let .activeEnergy(kcal, _):
             onActiveEnergy?(kcal)
         case let .workoutState(state, _):

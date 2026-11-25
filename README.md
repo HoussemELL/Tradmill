@@ -232,10 +232,18 @@ stats par intervalle, progression, export Rythme), depuis la FC enregistrée ;
 l'enregistrement d'origine reste intact.
 
 **Pas** : priorité au tapis (champ d'extension, s'il existe), puis Apple Watch,
-puis estimation facultative marquée « estimée », sinon « — ». Pas de la séance
-uniquement, jamais additionnés entre sources ; compteurs cumulatifs gérés
-(référence initiale, remise à zéro par le tapis, débordement, reconnexion,
-sauts aberrants ignorés). Même mécanisme pour la distance et l'énergie du tapis.
+puis estimation facultative marquée « estimée », sinon « — ». Le Domyos RUN100
+n'envoie pas de pas : la montre compte. Pas de la séance uniquement, jamais
+additionnés entre sources ; une source n'est retenue qu'une fois qu'elle a compté
+un pas (un champ figé à 0 ne masque pas la montre), et une source prioritaire
+arrivée dans les 2 premières minutes remplace la précédente. Les totaux de la
+montre sont datés à leur mesure (pas à leur réception). L'estimation adapte la
+longueur de pas à la vitesse (réglage : longueur en marche à 5 km/h). En fin de
+séance, un bandeau signale des pas incohérents avec la distance (plus de 30 % en
+moins ou 40 % en plus), par exemple quand la montre sous-compte mains sur les
+poignées. Compteurs cumulatifs gérés (référence initiale, remise à zéro par le
+tapis, débordement, reconnexion, sauts aberrants ignorés). Même mécanisme pour
+la distance et l'énergie du tapis.
 
 **Énergie** : calories du tapis, énergie active de la Watch et estimation ACSM
 (si poids renseigné) conservées séparément.

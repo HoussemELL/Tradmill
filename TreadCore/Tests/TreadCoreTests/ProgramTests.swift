@@ -328,7 +328,7 @@ final class HeartAndMetricsTests: XCTestCase {
         s.ingestTreadmill(raw: 100, at: 0)
         s.ingestTreadmill(raw: 110, at: 2)
         s.ingestWatch(total: 500, at: 3)
-        s.ingestDistance(deltaMeters: 70, sessionElapsed: 60)
+        s.ingestDistance(deltaMeters: 70, at: 60)
         XCTAssertEqual(s.source, .treadmill)
         XCTAssertEqual(s.value, 10)
 
@@ -339,14 +339,14 @@ final class HeartAndMetricsTests: XCTestCase {
         XCTAssertEqual(w.value, 13)
 
         var e = StepTracker(estimationEnabled: true, strideLengthMeters: 0.7)
-        e.ingestDistance(deltaMeters: 7, sessionElapsed: 5)   // délai de grâce
+        e.ingestDistance(deltaMeters: 7, at: 5)   // délai de grâce
         XCTAssertEqual(e.source, .none)
-        e.ingestDistance(deltaMeters: 7, sessionElapsed: 30)
+        e.ingestDistance(deltaMeters: 7, at: 30)
         XCTAssertEqual(e.source, .estimated)
         XCTAssertEqual(e.value, 20)
 
         var none = StepTracker(estimationEnabled: false)
-        none.ingestDistance(deltaMeters: 100, sessionElapsed: 100)
+        none.ingestDistance(deltaMeters: 100, at: 100)
         XCTAssertNil(none.value)
     }
 

@@ -348,6 +348,9 @@ struct FinishedSessionView: View {
                 if r.steps == nil {
                     MetricTile(title: "Allure moy.", value: Format.pace(r.avgSpeed), unit: "min/km")
                 }
+                if let warning = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters)?.warning {
+                    Banner(text: warning)
+                }
                 SessionInsightsView(record: r)
                 ZoneBars(seconds: r.zoneSeconds)
                 ZoneMethodNote(record: stored, zones: model.settings.session.zones)

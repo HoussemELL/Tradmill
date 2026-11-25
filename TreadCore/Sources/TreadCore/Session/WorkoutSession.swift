@@ -359,7 +359,7 @@ public final class WorkoutSession {
             integratedDistance += integratedDelta ?? 0
         }
         if let delta = usesTreadmillDistance ? counterDelta : integratedDelta, delta > 0 {
-            steps.ingestDistance(deltaMeters: delta, sessionElapsed: now - startMonotonic)
+            steps.ingestDistance(deltaMeters: delta, speedKmh: d.instantaneousSpeedKmh, at: now - startMonotonic)
         }
         if d.instantaneousSpeedKmh != nil { lastSpeedSampleAt = now }
         if let raw = d.totalEnergyKcal {
@@ -367,15 +367,18 @@ public final class WorkoutSession {
             if let a = energyCounter.ingest(UInt64(raw), at: now) { logAnomaly("énergie", a) }
         }
         if let raw = d.stepCountExtension {
-            steps.ingestTreadmill(raw: raw, at: now)
+            steps.ingestTreadmill(raw: raw, at: now - startMonotonic)
         }
         if let hr = d.heartRateBpm {
             heartRate.ingest(HeartRateReading(bpm: Int(hr), receivedAt: now, source: .treadmill))
         }
     }
 
-    public func ingestWatchSteps(total: Double) {
-        steps.ingestWatch(total: total, at: clock())
+    /// Total de pas de l'exercice Watch. `sampleAge` : ancienneté de la mesure à la réception (s),
+    /// pour dater le total à l'heure où la montre l'a mesuré (bornée à 0…120 s).
+    public func ingestWatchSteps(total: Double, sampleAge: TimeInterval = 0) {
+        let now = clock() - startMonotonic
+        steps.ingestWatch(total: total, at: now - min(max(sampleAge, 0), 120), receivedAt: now)
     }
 
     public func ingestWatchActiveEnergy(kcal: Double) {

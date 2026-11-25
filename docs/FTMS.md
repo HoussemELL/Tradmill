@@ -33,7 +33,10 @@ format est couvert par `FTMSDecodingTests`.
 réservés). Certaines implémentations (dont pyftms) décodent un `Step Count`
 uint24 au bit 13. Foulée le décode **uniquement si le bit est présent** et le
 signale dans le journal comme extension. S'il est absent, les pas viennent de
-l'Apple Watch ou d'une estimation facultative marquée « estimée ».
+l'Apple Watch ou d'une estimation facultative marquée « estimée ». Le Domyos
+RUN100 ne l'envoie pas (séance du 20/11 comptée par la montre). Le tapis n'est
+retenu comme source que si son compteur avance : un champ présent mais figé à 0
+laisse la montre compter.
 
 Paquets tronqués : les champs complets lus avant la troncature sont conservés,
 l'erreur (nom du champ, octets attendus/disponibles) est journalisée. Octets en

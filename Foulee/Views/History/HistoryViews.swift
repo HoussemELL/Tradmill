@@ -155,7 +155,10 @@ struct HistoryDetailView: View {
                         MetricTile(title: "Inclinaison", value: Format.incline(r.avgIncline), unit: "%", detail: "max \(Format.incline(r.maxIncline))")
                     }
                     MetricTile(title: "Source FC", value: r.hrSources.first?.shortLabel ?? "—", detail: hrDetail(r))
-                    MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: r.stepsSource.label)
+                    MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: stepsDetail(r))
+                }
+                if let warning = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters)?.warning {
+                    Banner(text: warning)
                 }
                 PerceivedExertionCard(recordID: r.id, initial: r.perceivedExertion)
                 SessionInsightsView(record: shown)
@@ -293,6 +296,14 @@ struct HistoryDetailView: View {
         let maxText = r.maxHR.map { String($0) } ?? "—"
         let sources = r.hrSources.map { $0.shortLabel }.joined(separator: ", ")
         return "max \(maxText) · \(sources)"
+    }
+
+    /// Source des pas et longueur de pas moyenne (distance / pas) quand les pas sont mesurés.
+    private func stepsDetail(_ r: SessionRecord) -> String {
+        guard let check = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters) else {
+            return r.stepsSource.label
+        }
+        return r.stepsSource.label + String(format: " · %.2f m/pas", check.stepLengthMeters).replacingOccurrences(of: ".", with: ",")
     }
 
     private func caloriesCard(_ r: SessionRecord) -> some View {
