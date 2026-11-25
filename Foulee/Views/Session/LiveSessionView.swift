@@ -341,14 +341,15 @@ struct FinishedSessionView: View {
                     MetricTile(title: "Distance", value: Format.distance(r.distanceMeters))
                     // Sans podomètre : pas de case vide, l'allure moyenne prend la ligne.
                     if let steps = r.steps {
-                        MetricTile(title: "Pas", value: "\(steps)", detail: r.stepsSource.label)
+                        MetricTile(title: "Pas", value: "\(steps)", detail: r.stepsSourceLabel)
                         MetricTile(title: "Allure moy.", value: Format.pace(r.avgSpeed), unit: "min/km")
                     }
                 }
                 if r.steps == nil {
                     MetricTile(title: "Allure moy.", value: Format.pace(r.avgSpeed), unit: "min/km")
                 }
-                if let warning = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters)?.warning {
+                if let warning = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters,
+                                             calibration: model.stepCalibration)?.warning {
                     Banner(text: warning)
                 }
                 SessionInsightsView(record: r)

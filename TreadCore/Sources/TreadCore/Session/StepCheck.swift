@@ -49,7 +49,7 @@ public struct StepCheck: Equatable, Sendable {
                                          : "Le tapis a pu sous-compter.")
         case .tooMany:
             return "Beaucoup de pas pour la distance : \(measured) m par pas, environ \(expected) m attendus. "
-                + "Vérifiez la distance du tapis, ou la longueur de pas réglée (Réglages › Pas) si \(who) compte juste."
+                + "Vérifiez la distance du tapis, ou la longueur de pas (Réglages › Séance, pas et énergie) si \(who) compte juste."
         }
     }
 }
@@ -57,7 +57,7 @@ public struct StepCheck: Equatable, Sendable {
 public extension SessionRecord {
     /// Contrôle pas / distance ; nil si les pas ne sont pas mesurés (estimés ou absents) ou si la
     /// distance est trop courte. `walkingStepLength` : longueur de pas réglée en marche à 5 km/h.
-    func stepCheck(walkingStepLength: Double) -> StepCheck? {
+    func stepCheck(walkingStepLength: Double, calibration: StepCalibration = StepCalibration()) -> StepCheck? {
         guard let measured = steps, measured > 0, stepsSource == .appleWatch || stepsSource == .treadmill,
               distanceMeters >= StepCheck.minDistanceMeters, walkingStepLength > 0.2 else { return nil }
         var expected = 0.0
@@ -71,7 +71,7 @@ public extension SessionRecord {
             guard dd > 0, dt > 0 else { continue }
             let speed = [s.speed, p.speed].compactMap { $0 }.filter { $0 > 0.5 }
             let v = speed.isEmpty ? dd / dt * 3.6 : speed.reduce(0, +) / Double(speed.count)
-            expected += dd / StepModel.stepLength(speedKmh: v, walkingStepLength: walkingStepLength)
+            expected += dd / calibration.stepLength(speedKmh: v, walkingStepLength: walkingStepLength)
             covered += dd
         }
         // Séries trop incomplètes (anciens enregistrements) : pas de verdict.

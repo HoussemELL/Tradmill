@@ -157,7 +157,8 @@ struct HistoryDetailView: View {
                     MetricTile(title: "Source FC", value: r.hrSources.first?.shortLabel ?? "—", detail: hrDetail(r))
                     MetricTile(title: "Pas", value: r.steps.map { "\($0)" } ?? "—", detail: stepsDetail(r))
                 }
-                if let warning = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters)?.warning {
+                if let warning = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters,
+                                             calibration: model.stepCalibration)?.warning {
                     Banner(text: warning)
                 }
                 PerceivedExertionCard(recordID: r.id, initial: r.perceivedExertion)
@@ -300,10 +301,11 @@ struct HistoryDetailView: View {
 
     /// Source des pas et longueur de pas moyenne (distance / pas) quand les pas sont mesurés.
     private func stepsDetail(_ r: SessionRecord) -> String {
-        guard let check = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters) else {
-            return r.stepsSource.label
+        guard let check = r.stepCheck(walkingStepLength: model.settings.session.strideLengthMeters,
+                                      calibration: model.stepCalibration) else {
+            return r.stepsSourceLabel
         }
-        return r.stepsSource.label + String(format: " · %.2f m/pas", check.stepLengthMeters).replacingOccurrences(of: ".", with: ",")
+        return r.stepsSourceLabel + String(format: " · %.2f m/pas", check.stepLengthMeters).replacingOccurrences(of: ".", with: ",")
     }
 
     private func caloriesCard(_ r: SessionRecord) -> some View {

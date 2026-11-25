@@ -47,6 +47,8 @@ struct AppSettings: Codable, Equatable {
     var didFlattenPersonalPrograms: Bool?
     /// Réparation unique des pas gonflés par un total montre recalculé (séance du 20/11).
     var didRepairStepJumps: Bool?
+    /// Longueur de pas personnelle apprise sur les séances où les pas mesurés sont cohérents.
+    var stepCalibration: StepCalibration?
 }
 
 final class SettingsStore {

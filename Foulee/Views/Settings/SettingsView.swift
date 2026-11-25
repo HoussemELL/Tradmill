@@ -349,8 +349,12 @@ struct SessionPreferencesView: View {
                 Toggle("Estimer les pas sans autre source", isOn: $model.settings.session.stepEstimationEnabled)
                 Stepper(String(format: "Longueur de pas en marche : %.0f cm", model.settings.session.strideLengthMeters * 100),
                         value: $model.settings.session.strideLengthMeters, in: 0.4...1.4, step: 0.01)
+                LabeledContent("Longueur apprise", value: AppModel.stepCalibrationSummary(model.stepCalibration))
+                if !model.stepCalibration.isEmpty {
+                    Button("Réinitialiser la longueur apprise", role: .destructive) { model.settings.stepCalibration = nil }
+                }
             } header: { Text("Pas") } footer: {
-                Text("Priorité : pas fournis par le tapis, puis Apple Watch, puis estimation (affichée « estimée »). Les sources ne sont jamais additionnées. Sans source ni estimation : « — ». Longueur de pas en marche à 5 km/h : l'estimation l'allonge avec la vitesse (70 cm donnent environ 98 cm à 9 km/h). Elle sert aussi à vérifier en fin de séance que les pas mesurés sont cohérents avec la distance.")
+                Text("Priorité : pas fournis par le tapis, puis Apple Watch, puis estimation (affichée « estimée »). Les sources ne sont jamais additionnées. Sans source ni estimation : « — ». Longueur de pas en marche à 5 km/h : l'estimation l'allonge avec la vitesse (70 cm donnent environ 98 cm à 9 km/h). Elle sert aussi à vérifier en fin de séance que les pas mesurés sont cohérents avec la distance. Longueur apprise : calculée sur les séances où les pas de la montre sont cohérents avec la distance du tapis ; elle remplace le réglage ci-dessus. En fin de séance, les pas de la montre sont relus dans Santé ; si elle a compté moins de 70 % des pas attendus (mains sur les poignées), les pas deviennent distance ÷ longueur de pas, affichés « estimée ».")
             }
             Section {
                 Toggle("Estimer l'énergie", isOn: Binding(

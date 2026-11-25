@@ -241,7 +241,15 @@ montre sont datés à leur mesure (pas à leur réception). L'estimation adapte 
 longueur de pas à la vitesse (réglage : longueur en marche à 5 km/h). En fin de
 séance, un bandeau signale des pas incohérents avec la distance (plus de 30 % en
 moins ou 40 % en plus), par exemple quand la montre sous-compte mains sur les
-poignées. Compteurs cumulatifs gérés (référence initiale, remise à zéro par le
+poignées. Après la séance, les pas de l'Apple Watch (qui compte toute la journée,
+exercice lancé ou non) sont relus dans Santé pendant la bande en marche, hors pauses
+(essais à 30 s, 2 min et 6 min, puis au lancement suivant) : le total ne dépend plus
+de la liaison en direct. Si la montre a compté moins de 70 % des pas attendus pour la
+distance du tapis (bras immobiles), les pas deviennent distance ÷ longueur de pas,
+affichés « estimée (montre : N, sous-comptait) ». La longueur de pas est apprise
+(marche et course séparément) sur les séances où les pas mesurés sont à ±20–25 % du
+modèle ; elle remplace le réglage et se réinitialise dans Réglages. Seuls les pas du
+tapis sont écrits dans Santé (ceux de la montre y sont déjà). Compteurs cumulatifs gérés (référence initiale, remise à zéro par le
 tapis, débordement, reconnexion, sauts aberrants ignorés). Même mécanisme pour
 la distance et l'énergie du tapis.
 

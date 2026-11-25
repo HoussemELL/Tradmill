@@ -466,6 +466,17 @@ final class HealthService {
         return out
     }
 
+    /// Pas comptés par l'Apple Watch (pas ceux de l'iPhone) entre deux dates ; nil si Santé est
+    /// indisponible. La montre enregistre ses pas toute la journée, exercice lancé ou non.
+    func watchStepSamples(from: Date, to: Date) async -> [StepReconciliation.HealthStepSample]? {
+        guard isAvailable else { return nil }
+        let range = HKQuery.predicateForSamples(withStart: from, end: to, options: [])
+        return await query(HKQuantityType(.stepCount), predicate: range, limit: HKObjectQueryNoLimit, newestFirst: false)
+            .compactMap { $0 as? HKQuantitySample }
+            .filter { $0.device?.model == "Watch" || $0.sourceRevision.productType?.hasPrefix("Watch") == true }
+            .map { .init(start: $0.startDate, end: $0.endDate, count: $0.quantity.doubleValue(for: .count())) }
+    }
+
     /// Somme dédoublonnée par Santé (sources fusionnées) sur un intervalle.
     private func sum(_ type: HKQuantityType, unit: HKUnit, from: Date, to: Date) async -> Double? {
         await withCheckedContinuation { (c: CheckedContinuation<Double?, Never>) in

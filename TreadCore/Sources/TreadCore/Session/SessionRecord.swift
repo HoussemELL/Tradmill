@@ -180,6 +180,22 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     public var distanceSource: MetricSource = .none
     public var steps: Int?
     public var stepsSource: MetricSource = .none
+    /// Pas comptés par la montre (en direct ou relus dans Santé), conservés quand `steps` les
+    /// remplace par une estimation (montre qui sous-comptait).
+    public var watchSteps: Int?
+    /// `watchSteps` vient de Santé (relu après la séance).
+    public var watchStepsFromHealth: Bool?
+    /// La montre comptait moins de 70 % des pas attendus pour la distance : `steps` est estimé.
+    public var stepsReplacedUndercount: Bool?
+    /// Pas de la montre relus dans Santé (plus de nouvel essai).
+    public var stepsReconciled: Bool?
+
+    /// Libellé de la provenance des pas.
+    public var stepsSourceLabel: String {
+        if stepsReplacedUndercount == true, let w = watchSteps { return "estimée (montre : \(w), sous-comptait)" }
+        if stepsSource == .appleWatch, watchStepsFromHealth == true { return "Apple Watch (Santé)" }
+        return stepsSource.label
+    }
 
     /// Réparation des pas : retire les sauts impossibles de la série (plus de 6 pas/s, ex. pas de
     /// l'iPhone ajoutés en bloc au total de la montre) et recale le total. nil si rien à corriger.

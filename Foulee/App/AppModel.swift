@@ -92,6 +92,7 @@ final class AppModel {
         }
         migrateLegacyZonesIfNeeded()
         repairStepJumpsIfNeeded()
+        reconcileRecentSteps()
         syncRythmeShare()
         startLoop()
         // Aussi utile quand iOS lance l'app en arrière-plan (demande de la montre).
@@ -368,8 +369,13 @@ final class AppModel {
 
     func prepareSession(program: WorkoutProgram?) {
         guard !hasActiveSession else { return }
+        // Estimation en direct : longueur de pas apprise (en marche à 5 km/h) si elle existe.
+        var sessionSettings = settings.session
+        if let f = stepCalibration.factor(speedKmh: StepModel.referenceSpeedKmh) {
+            sessionSettings.strideLengthMeters = StepCalibration.baseWalkingStepLength * f
+        }
         let s = WorkoutSession(program: program, controller: treadmill.controller, heartRate: heartRate.monitor,
-                               settings: settings.session, treadmillName: treadmill.deviceName,
+                               settings: sessionSettings, treadmillName: treadmill.deviceName,
                                simulated: treadmill.isSimulated, log: log,
                                clock: MonotonicClock.now, wallClock: Date.init)
         if let p = program, p.hasAutoSpeed, let records = dataStore.sessionsForSharing()?.records {
@@ -461,7 +467,7 @@ final class AppModel {
     /// propriétaire de l'enregistrement Santé : on lui transmet les métadonnées Foulée avant de
     /// la terminer (ou de l'annuler si la séance fait moins d'1 minute).
     private func sessionFinished(_ record: SessionRecord) {
-        var r = record
+        var r = finalizeSteps(record)
         let usedWatch = watch.usedDuringSession
         if usedWatch {
             r.healthStatus = .ownedByWatch
@@ -485,7 +491,7 @@ final class AppModel {
 
     /// Séance définitive (arrêt réel de la bande + 2 min de FC de récupération) : écriture Santé.
     private func sessionFinalized(_ record: SessionRecord) {
-        var r = record
+        var r = finalizeSteps(record)
         // Le ressenti a pu être saisi pendant les 2 min de FC de récupération.
         r.perceivedExertion = dataStore.record(id: r.id)?.perceivedExertion ?? r.perceivedExertion
         let usedWatch = watchOwnedSessions.removeValue(forKey: r.id) ?? false
@@ -494,6 +500,7 @@ final class AppModel {
             r.healthReport = dataStore.record(id: r.id)?.healthReport
         }
         dataStore.upsert(r)
+        reconcileWatchSteps(id: r.id)
         finishingServices.removeAll { $0.session.isFinalized }
         guard !usedWatch else {
             verifyWatchHealthSession(id: r.id)
@@ -504,6 +511,94 @@ final class AppModel {
             var updated = await self.writeToHealth(r)
             updated.perceivedExertion = self.dataStore.record(id: r.id)?.perceivedExertion ?? updated.perceivedExertion
             self.dataStore.upsert(updated)
+        }
+    }
+
+    // MARK: - Pas : choix final, Santé, longueur de pas apprise
+
+    var stepCalibration: StepCalibration { settings.stepCalibration ?? StepCalibration() }
+
+    /// Choix final des pas avec ce qu'on sait déjà (sans Santé) ; conserve ce que Santé a déjà apporté.
+    private func finalizeSteps(_ record: SessionRecord) -> SessionRecord {
+        var r = record
+        if let stored = dataStore.record(id: r.id) {
+            r.watchSteps = r.watchSteps ?? stored.watchSteps
+            r.watchStepsFromHealth = stored.watchStepsFromHealth
+            r.stepsReconciled = stored.stepsReconciled
+        }
+        return StepReconciliation.finalize(r, healthWatchSteps: nil, calibration: stepCalibration,
+                                           walkingStepLength: settings.session.strideLengthMeters)
+    }
+
+    /// Relit dans Santé les pas de la montre pendant la séance (la synchronisation montre → iPhone
+    /// peut prendre quelques minutes : essais à 30 s, 2 min et 6 min), choisit les pas définitifs,
+    /// puis apprend la longueur de pas si les pas sont cohérents avec la distance.
+    private func reconcileWatchSteps(id: UUID, delays: [UInt64] = [30, 90, 240]) {
+        Task { @MainActor [weak self] in
+            for (i, delay) in delays.enumerated() {
+                if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
+                guard let self, let r = self.dataStore.record(id: id), !r.simulated, r.stepsReconciled != true else { return }
+                if await self.reconcileWatchStepsOnce(r, last: i == delays.count - 1) { return }
+            }
+        }
+    }
+
+    /// Un essai ; renvoie vrai quand c'est terminé (Santé a fourni au moins le total reçu en direct,
+    /// ou dernier essai).
+    @MainActor
+    private func reconcileWatchStepsOnce(_ r: SessionRecord, last: Bool) async -> Bool {
+        let intervals = r.activeIntervals()
+        var healthSteps: Int?
+        if settings.health.enabled, let first = intervals.first, let end = intervals.last?.end,
+           let samples = await health.watchStepSamples(from: first.start, to: end) {
+            let total = StepReconciliation.watchSteps(samples, during: intervals)
+            if total >= 1 { healthSteps = Int(total.rounded()) }
+        }
+        let live = r.watchSteps ?? (r.stepsSource == .appleWatch ? r.steps : nil)
+        let complete = healthSteps.map { $0 >= (live ?? 0) } ?? false
+        guard complete || last || !settings.health.enabled else { return false }
+        var f = StepReconciliation.finalize(r, healthWatchSteps: healthSteps, calibration: stepCalibration,
+                                            walkingStepLength: settings.session.strideLengthMeters)
+        f.stepsReconciled = true
+        f.perceivedExertion = dataStore.record(id: r.id)?.perceivedExertion ?? f.perceivedExertion
+        if f.steps != r.steps || f.stepsSource != r.stepsSource || f.watchSteps != r.watchSteps {
+            var parts: [String] = []
+            if let h = healthSteps { parts.append("\(h) pas de la montre relus dans Santé (direct : \(live.map(String.init) ?? "aucun"))") }
+            if f.stepsReplacedUndercount == true, let w = f.watchSteps {
+                parts.append("la montre n'a compté que \(w) pas pour \(Int(f.distanceMeters)) m : pas estimés à \(f.steps ?? 0) avec la longueur de pas")
+            }
+            log.log(.info, "Pas : " + (parts.isEmpty ? "\(r.steps ?? 0) → \(f.steps ?? 0)" : parts.joined(separator: " ; ")))
+        }
+        dataStore.upsert(f)
+        learnStepLength(from: f)
+        return true
+    }
+
+    /// Apprend la longueur de pas sur une séance dont les pas de la montre (ou du tapis) sont cohérents.
+    private func learnStepLength(from r: SessionRecord) {
+        let measured = r.stepsSource == .treadmill ? r.steps : r.watchSteps
+        guard let m = measured, r.stepsReplacedUndercount != true else { return }
+        var c = stepCalibration
+        guard c.learn(from: r, measuredSteps: m) else { return }
+        settings.stepCalibration = c
+        log.log(.info, "Longueur de pas apprise : " + Self.stepCalibrationSummary(c))
+    }
+
+    static func stepCalibrationSummary(_ c: StepCalibration) -> String {
+        func cm(_ v: Double?) -> String { v.map { "\(Int(($0 * 100).rounded())) cm" } ?? "—" }
+        var parts: [String] = []
+        if let w = c.walk { parts.append("marche \(cm(c.learnedStepLength(speedKmh: 5))) à 5 km/h (\(w.sessions) séance\(w.sessions > 1 ? "s" : ""))") }
+        if let r = c.run { parts.append("course \(cm(c.learnedStepLength(speedKmh: 9))) à 9 km/h (\(r.sessions) séance\(r.sessions > 1 ? "s" : ""))") }
+        return parts.isEmpty ? "pas encore apprise" : parts.joined(separator: ", ")
+    }
+
+    /// Au lancement : séances des dernières 48 h dont les pas n'ont pas encore été relus dans Santé
+    /// (app fermée avant la fin des essais).
+    private func reconcileRecentSteps() {
+        guard let all = dataStore.sessionsForSharing()?.records else { return }
+        let since = Date().addingTimeInterval(-48 * 3600)
+        for r in all where !r.simulated && r.stepsReconciled != true && (r.endDate ?? .distantPast) > since {
+            reconcileWatchSteps(id: r.id, delays: [5, 60, 240])
         }
     }
 
