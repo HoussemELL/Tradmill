@@ -32,6 +32,9 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case startResult(WatchStartResult)
     /// Watch → iPhone : pause, reprise, arrêt liés à une séance et horodatés.
     case control(WatchControl)
+    /// Watch → iPhone : événement de liaison de la montre (miroir établi, perdu, exercice repris…),
+    /// écrit dans le journal de l'iPhone.
+    case watchLog(String)
 
     public func encoded() throws -> Data {
         let e = JSONEncoder()
@@ -106,6 +109,10 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
     /// Pauses terminées de la séance [début, fin] : un exercice Watch démarré en cours de séance
     /// les reprend, pour que sa durée dans Santé soit celle de la séance.
     public var pauses: [[Date]]?
+    /// Ancienneté (s) de la dernière FC de la montre reçue par l'iPhone pendant cette séance ;
+    /// nil si aucune. La montre s'en sert pour doubler ses envois par WatchConnectivity quand
+    /// le miroir ne livre rien.
+    public var watchHeartRateAge: Double?
 
     public init(state: State, stateLabel: String, programName: String?, activeSeconds: Double, speedKmh: Double?,
                 inclinePercent: Double?, targetSpeedKmh: Double, targetInclinePercent: Double, phaseName: String?,
@@ -113,7 +120,7 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
                 nextPhaseName: String?, zoneBounds: [Int], zoneSeconds: [Double], targetZone: Int?,
                 phoneHeartRate: Int?, phoneHeartRateSource: String?, phoneZone: Int?, autopilotStatus: String?,
                 autopilotManual: Bool, sentAt: Date, sessionID: UUID? = nil, treadmillLinkLost: Bool? = nil, alert: String? = nil,
-                beltStartDate: Date? = nil, pauses: [[Date]]? = nil) {
+                beltStartDate: Date? = nil, pauses: [[Date]]? = nil, watchHeartRateAge: Double? = nil) {
         self.state = state
         self.stateLabel = stateLabel
         self.programName = programName
@@ -142,6 +149,7 @@ public struct WatchLiveStatus: Codable, Equatable, Sendable {
         self.alert = alert
         self.beltStartDate = beltStartDate
         self.pauses = pauses
+        self.watchHeartRateAge = watchHeartRateAge
     }
 
     /// Zone (1…5) d'une FC avec les bornes reçues (même règle que `HeartZoneSettings.zone(for:)` :
@@ -214,6 +222,14 @@ public extension WatchLiveStatus {
             phoneHeartRate: hr.liveBPM, phoneHeartRateSource: hr.liveBPM != nil ? s.heartRate.activeSource?.shortLabel : nil,
             phoneZone: s.currentZone, autopilotStatus: a?.status, autopilotManual: a?.mode == .manual, sentAt: date,
             sessionID: s.record.id, treadmillLinkLost: s.controller.state == .linkLost || s.status == .paused(.connectionLost),
-            alert: s.lastAlert, beltStartDate: s.record.beltStartDate, pauses: closedPauses(s.record))
+            alert: s.lastAlert, beltStartDate: s.record.beltStartDate, pauses: closedPauses(s.record),
+            watchHeartRateAge: watchHeartRateAge(s, now: now))
+    }
+
+    /// Ancienneté de la dernière FC de la montre reçue depuis le début de la séance.
+    static func watchHeartRateAge(_ s: WorkoutSession, now: TimeInterval) -> Double? {
+        guard let r = s.heartRate.latest[.appleWatch] else { return nil }
+        let age = max(0, now - r.receivedAt)
+        return age <= s.sessionTime ? age : nil
     }
 }

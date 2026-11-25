@@ -305,3 +305,36 @@ public struct SimulatedHeartModel: Equatable, Sendable {
         return Int(bpm.rounded())
     }
 }
+
+/// Règles de la liaison montre ↔ iPhone.
+public enum WatchLinkPolicy {
+    /// Un exercice reçu en miroir est considéré comme vivant s'il vient d'arriver ou si la montre
+    /// a envoyé un message récemment. Sinon c'est un reste (exercice d'une séance précédente,
+    /// réinstallation) : le 25/11, un miroir reçu à l'ouverture de Foulée, sans aucun message
+    /// ensuite, a fait croire à chaque séance que la montre était déjà reliée ; l'exercice Watch
+    /// n'était plus lancé et sa FC n'arrivait jamais.
+    public static let mirrorSilenceLimit: TimeInterval = 20
+    /// Délai laissé à un miroir qui vient d'arriver pour que ses premiers messages arrivent.
+    public static let mirrorAttachGrace: TimeInterval = 5
+
+    /// - Parameter lastWorkoutMessageAt: dernier message d'exercice de la montre (FC, pas, énergie,
+    ///   état) ; les demandes de contexte, envoyées même sans exercice, ne comptent pas.
+    public static func isMirrorLive(attachedAt: Date, lastWorkoutMessageAt: Date?, now: Date) -> Bool {
+        if now.timeIntervalSince(attachedAt) <= mirrorAttachGrace { return true }
+        guard let last = lastWorkoutMessageAt, last >= attachedAt.addingTimeInterval(-1) else { return false }
+        return now.timeIntervalSince(last) <= mirrorSilenceLimit
+    }
+
+    /// La montre double ses envois de données par WatchConnectivity quand l'iPhone ne reçoit pas
+    /// sa FC : exercice lancé depuis au moins `grace` s, FC mesurée sur la montre, et l'iPhone
+    /// (état en direct récent) n'a aucune FC de la montre depuis plus de `limit` s.
+    public static let backupGrace: TimeInterval = 20
+    public static let backupLimit: TimeInterval = 15
+
+    public static func needsConnectivityBackup(workoutElapsed: TimeInterval, watchHasHeartRate: Bool,
+                                               phoneWatchHeartRateAge: Double?) -> Bool {
+        guard workoutElapsed >= backupGrace, watchHasHeartRate else { return false }
+        guard let age = phoneWatchHeartRateAge else { return true }
+        return age > backupLimit
+    }
+}

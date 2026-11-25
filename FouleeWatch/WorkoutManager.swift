@@ -40,6 +40,10 @@ final class WorkoutManager {
     @ObservationIgnored private var route: RouteRecorder?
     private(set) var startDate: Date?
     private(set) var mirroring = false
+    /// Données (FC, pas, énergie, état) envoyées aussi par WatchConnectivity : activé quand l'iPhone
+    /// signale qu'il ne reçoit pas la FC alors que le miroir semble établi.
+    private(set) var connectivityBackup = false
+    @ObservationIgnored private var lastMirrorError: String?
     private(set) var linkedTitle: String?
     /// Programmes, tapis et séance publiés par l'iPhone (mémorisés pour l'affichage hors connexion).
     private(set) var context: WatchPhoneContext?
@@ -113,6 +117,7 @@ final class WorkoutManager {
     fileprivate func mirroringLost(_ error: Error?) {
         mirroring = false
         onEvent?("mirror-lost:\(error?.localizedDescription ?? "-")")
+        diag("miroir perdu (\(error?.localizedDescription ?? "sans erreur"))")
         lastMirrorAttemptAt = .distantPast
         ensureMirroring()
     }
@@ -129,18 +134,22 @@ final class WorkoutManager {
                 try await s.startMirroringToCompanionDevice()
                 guard let self, self.session === s else { return }
                 self.mirroring = true
+                self.lastMirrorError = nil
                 self.onEvent?("mirror-restored")
+                self.diag("miroir rétabli")
                 // L'iPhone rattache la séance : on lui renvoie l'état et le lien de séance.
                 self.send(.workoutState(self.phase == .paused ? .paused : .running, startDate: self.startDate))
                 self.requestContext()
             } catch {
                 self?.onEvent?("mirror-retry-failed:\(error.localizedDescription)")
+                self?.diagMirrorError("nouvel essai de miroir échoué", error)
             }
         }
     }
 
     private func poll() {
         ensureMirroring()
+        checkConnectivityBackup()
         let now = Date()
         var urgent = context == nil || !hasFreshContext
         if case .requesting = launch { urgent = true }
@@ -411,9 +420,11 @@ final class WorkoutManager {
             do {
                 try await s.startMirroringToCompanionDevice()
                 mirroring = true
+                diag("exercice démarré, miroir établi")
             } catch {
                 // Repli : WatchConnectivity si l'iPhone est joignable.
                 mirroring = false
+                diagMirrorError("exercice démarré, miroir impossible", error)
             }
             send(.workoutState(.running, startDate: date))
             if let id = linkedSessionID { addLinkMetadata(id) }
@@ -475,11 +486,14 @@ final class WorkoutManager {
         if linkedSessionID == nil, let id = UserDefaults.standard.string(forKey: Self.linkedKey).flatMap(UUID.init) {
             linkedSessionID = id
         }
+        let age = startDate.map { Int(Date().timeIntervalSince($0)) } ?? -1
         do {
             try await s.startMirroringToCompanionDevice()
             mirroring = true
+            diag("exercice en cours repris (commencé il y a \(age) s), miroir établi")
         } catch {
             mirroring = false
+            diagMirrorError("exercice en cours repris (commencé il y a \(age) s), miroir impossible", error)
         }
         send(.workoutState(phase == .paused ? .paused : .running, startDate: startDate))
         onEvent?("recovered")
@@ -513,6 +527,8 @@ final class WorkoutManager {
 
     func reset() {
         phase = .idle
+        connectivityBackup = false
+        lastMirrorError = nil
         standaloneActivity = nil
         UserDefaults.standard.removeObject(forKey: Self.standaloneKey)
         distance = nil
@@ -637,9 +653,53 @@ final class WorkoutManager {
             s.sendToRemoteWorkoutSession(data: data) { [weak self] ok, _ in
                 if !ok { DispatchQueue.main.async { self?.sendViaConnectivity(data, message: message) } }
             }
+            if connectivityBackup, Self.isWorkoutData(message) { sendViaConnectivity(data, message: message) }
         } else {
             sendViaConnectivity(data, message: message)
         }
+    }
+
+    private static func isWorkoutData(_ m: WatchMessage) -> Bool {
+        switch m {
+        case .heartRate, .steps, .activeEnergy, .workoutState: return true
+        default: return false
+        }
+    }
+
+    /// L'iPhone (état en direct récent) ne reçoit pas la FC de la montre alors qu'elle en mesure :
+    /// les données partent aussi par WatchConnectivity jusqu'à la fin de l'exercice.
+    private func checkConnectivityBackup(now: Date = Date()) {
+        guard !simulated, !isStandalone, phase == .running, !connectivityBackup, isPhoneLinked(now: now),
+              let l = live else { return }
+        let hasHR = heartRateDate.map { now.timeIntervalSince($0) < 10 } ?? false
+        guard WatchLinkPolicy.needsConnectivityBackup(workoutElapsed: elapsed(at: now), watchHasHeartRate: hasHR,
+                                                      phoneWatchHeartRateAge: l.watchHeartRateAge) else { return }
+        connectivityBackup = true
+        onEvent?("connectivity-backup")
+        diag("l'iPhone ne reçoit pas la FC (miroir \(mirroring ? "établi" : "absent"), dernière FC reçue "
+             + (l.watchHeartRateAge.map { "il y a \(Int($0)) s" } ?? "jamais") + ") : envoi doublé par WatchConnectivity")
+    }
+
+    /// Événement de liaison écrit dans le journal de l'iPhone (file d'attente si l'iPhone est injoignable).
+    func diag(_ text: String) {
+        onEvent?("diag:\(text)")
+        guard !simulated, WCSession.isSupported(), WCSession.default.activationState == .activated,
+              let data = try? WatchMessage.watchLog(text).encoded() else { return }
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage([WatchMessage.wcKey: data], replyHandler: nil) { _ in
+                _ = WCSession.default.transferUserInfo([WatchMessage.wcKey: data])
+            }
+        } else {
+            _ = WCSession.default.transferUserInfo([WatchMessage.wcKey: data])
+        }
+    }
+
+    /// Même erreur de miroir répétée (nouvel essai toutes les 10 s) : journalisée une seule fois.
+    private func diagMirrorError(_ context: String, _ error: Error) {
+        let text = error.localizedDescription
+        guard text != lastMirrorError else { return }
+        lastMirrorError = text
+        diag("\(context) : \(text)")
     }
 
     private func sendViaConnectivity(_ data: Data, message: WatchMessage) {

@@ -30,6 +30,11 @@ public struct CumulativeCounter: Codable, Equatable, Sendable {
     public private(set) var sessionTotal: Double = 0
     private var lastRaw: UInt64?
     private var lastTime: TimeInterval?
+    /// Heure du dernier changement de valeur. Le rythme se juge depuis ce changement, pas depuis
+    /// le dernier paquet : le Domyos RUN100 annonce sa distance par paliers de 10 m (toutes les
+    /// 7 à 12 s) dans des paquets envoyés 4 fois par seconde ; comparé à 0,25 s, chaque palier
+    /// passait pour un saut impossible et la distance du tapis n'était jamais retenue (25/11).
+    private var lastChangeTime: TimeInterval?
 
     public init(modulus: UInt64?, maxRatePerSecond: Double, baselineFromFirstSample: Bool = true,
                 allowsDownwardCorrection: Bool = false) {
@@ -42,18 +47,22 @@ public struct CumulativeCounter: Codable, Equatable, Sendable {
     /// Après une perte de lien : la prochaine valeur est comparée sans supposer de continuité temporelle.
     public mutating func markDiscontinuity() {
         lastTime = nil
+        lastChangeTime = nil
     }
 
     @discardableResult
     public mutating func ingest(_ raw: UInt64, at t: TimeInterval) -> Anomaly? {
-        defer { lastRaw = raw; lastTime = t }
+        defer {
+            if lastRaw != raw || lastChangeTime == nil { lastChangeTime = t }
+            lastRaw = raw; lastTime = t
+        }
         guard let prev = lastRaw else {
             if !baselineFromFirstSample { sessionTotal += Double(raw) }
             return nil
         }
         if raw >= prev {
             let delta = Double(raw - prev)
-            if let lt = lastTime {
+            if let lt = lastChangeTime ?? lastTime {
                 let allowed = maxRatePerSecond * max(t - lt, 1) + 5
                 if delta > allowed { return .implausibleJump(from: prev, to: raw) }
             } else if delta > maxRatePerSecond * 120 + 5 {

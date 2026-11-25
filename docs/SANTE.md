@@ -19,6 +19,17 @@ bandeau « ouvrez Foulée sur la montre ». Ouvrir l'app Watch pendant une séan
 exercice en cours démarre l'enregistrement tout seul, aligné sur le démarrage de la bande (jamais
 pour une séance dont l'exercice montre a déjà été terminé).
 
+**Liaison montre → iPhone.** Un miroir HealthKit reçu sans aucun message d'exercice ensuite (FC,
+pas, énergie, état) est périmé au bout de 5 s (20 s après le dernier message) : il est oublié au
+début de la séance suivante, et l'exercice Watch est relancé normalement. Le 25/11, un miroir
+reçu à l'ouverture de Foulée faisait croire à chaque séance que la montre était déjà reliée :
+l'exercice n'était plus lancé et la FC n'arrivait pas. L'iPhone renvoie à la montre l'ancienneté
+de la dernière FC reçue ; si elle mesure une FC que l'iPhone ne reçoit pas (plus de 15 s, après
+20 s d'exercice), la montre envoie aussi ses données par WatchConnectivity jusqu'à la fin de
+l'exercice. Les événements de liaison de la montre (miroir établi, impossible, perdu, rétabli,
+exercice repris, envoi doublé) et la première FC reçue (avec le canal) sont écrits dans le
+journal de l'iPhone.
+
 **Exercice autonome sur la montre (sans tapis ni iPhone).** *Montre › Exercice sans tapis* :
 course ou marche, dehors (GPS, tracé `HKWorkoutRouteBuilder`) ou en salle. La montre enregistre
 seule la séance Santé (FC, énergie, distance, pas, tracé) et affiche temps, FC/zone, distance,

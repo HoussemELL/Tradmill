@@ -168,6 +168,12 @@ Sources publiques, **à confirmer à la première connexion** (journal Foulée) 
   (`49535343-fe7d-4ae5-8fa9-9fafd205e455`) et n'apparaît pas dans la recherche de Foulée.
   Sur le RUN100E, le FTMS doit être activé dans l'app Domyos E-Connected, puis le tapis redémarré.
 
+Observé le 25/11 (firmware 2.6.0, matériel 3.5.0) : Treadmill Data 4 fois par seconde ; distance
+totale par paliers de **10 m** (toutes les 7 à 12 s selon la vitesse), énergie par paliers de
+1 kcal, pas de nombre de pas ni de FC. Le contrôle de rythme des compteurs se fait depuis le
+dernier changement de valeur (et non depuis le dernier paquet), sinon chaque palier de 10 m
+passait pour un saut et la distance du tapis était remplacée par la distance intégrée.
+
 Choix du profil `domyos-run100` : séquence FTMS standard (Request Control → Start), consigne
 du palier dès que la bande tourne, consignes sans réponse vérifiées par la télémétrie, un seul
 renvoi, plage de secours 1–14 km/h sans inclinaison.

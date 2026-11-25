@@ -40,6 +40,12 @@ final class WatchBridge {
     @ObservationIgnored private let healthStore: HKHealthStore
     @ObservationIgnored private let log: DiagnosticLog
     @ObservationIgnored private var mirrored: HKWorkoutSession?
+    /// Réception du miroir actuel (pour reconnaître un miroir périmé, voir `WatchLinkPolicy`).
+    @ObservationIgnored private var mirroredAt: Date?
+    /// Première FC de la montre reçue pendant la séance en cours (journalisée une fois, avec le canal).
+    @ObservationIgnored private var heartRateLoggedForSession = false
+    /// Dernier message d'exercice de la montre (FC, pas, énergie, état), tous canaux confondus.
+    @ObservationIgnored private var lastWorkoutMessageAt: Date?
     @ObservationIgnored private let sessionProxy = MirrorProxy()
     @ObservationIgnored private let wcProxy = ConnectivityProxy()
     @ObservationIgnored private var pendingLink: WatchMessage?
@@ -106,6 +112,8 @@ final class WatchBridge {
     /// (renvoyés dès que le miroir s'établit si la Watch n'est pas encore reliée).
     func beginSession(id: UUID, title: String, metadata: WatchMessage) {
         usedDuringSession = false
+        heartRateLoggedForSession = false
+        dropStaleMirror(reason: "début de séance")
         // État d'une séance précédente : ne doit pas faire croire que l'exercice tourne déjà.
         if mirrored == nil { watchState = .notStarted }
         pendingLink = .linkSession(id: id, title: title)
@@ -154,9 +162,39 @@ final class WatchBridge {
         }
     }
 
-    /// L'exercice de la montre tourne (relié en miroir ou état reçu).
+    /// L'exercice de la montre tourne (relié en miroir vivant ou état reçu).
     var watchWorkoutActive: Bool {
-        mirrored != nil || watchState == .running || watchState == .paused
+        dropStaleMirror(reason: "vérification avant lancement")
+        return mirrored != nil || watchState == .running || watchState == .paused
+    }
+
+    /// Miroir sans aucun message de la montre depuis `WatchLinkPolicy.mirrorSilenceLimit` : c'est
+    /// un reste (exercice d'une séance précédente, réinstallation). On l'oublie pour que l'exercice
+    /// de la montre soit relancé et que son nouveau miroir soit accepté.
+    static func label(_ state: HKWorkoutSessionState) -> String {
+        switch state {
+        case .notStarted: return "non démarré"
+        case .prepared: return "préparé"
+        case .running: return "en cours"
+        case .paused: return "en pause"
+        case .stopped: return "arrêté"
+        case .ended: return "terminé"
+        @unknown default: return "état \(state.rawValue)"
+        }
+    }
+
+    func dropStaleMirror(reason: String) {
+        guard mirrored != nil, let at = mirroredAt,
+              !WatchLinkPolicy.isMirrorLive(attachedAt: at, lastWorkoutMessageAt: lastWorkoutMessageAt, now: Date()) else { return }
+        let since = lastWorkoutMessageAt.map { $0 >= at ? "dernier message d'exercice il y a \(Int(Date().timeIntervalSince($0))) s"
+                                                         : "aucun message d'exercice depuis sa réception" }
+            ?? "aucun message d'exercice depuis sa réception"
+        log.log(.warning, "Miroir Watch périmé (reçu il y a \(Int(Date().timeIntervalSince(at))) s, \(since)) : ignoré (\(reason))")
+        mirrored?.delegate = nil
+        mirrored = nil
+        mirroredAt = nil
+        if linkState == .mirrored { linkState = .idle }
+        if watchState == .running || watchState == .paused { watchState = .notStarted }
     }
 
     /// App Watch ouverte et joignable par WatchConnectivity.
@@ -235,13 +273,17 @@ final class WatchBridge {
     }
 
     fileprivate func attach(_ session: HKWorkoutSession) {
+        if mirrored != nil, mirrored !== session { log.log(.watch, "Nouveau miroir Watch : remplace le précédent") }
         mirrored = session
+        mirroredAt = Date()
         session.delegate = sessionProxy
         linkState = .mirrored
         // Miroir (r)établi pendant une séance : l'exercice de la montre tourne et la suit.
         if pendingLink != nil { usedDuringSession = true }
         if session.state == .running { watchState = .running } else if session.state == .paused { watchState = .paused }
-        log.log(.watch, "Session d'exercice Watch reçue en miroir")
+        let started = session.startDate.map { ", commencé il y a \(Int(Date().timeIntervalSince($0))) s" } ?? ""
+        log.log(.watch, "Session d'exercice Watch reçue en miroir (\(Self.label(session.state))\(started))"
+                + (pendingLink == nil ? " — aucune séance Foulée en cours" : ""))
         if let m = pendingLink { send(m) }
         if let m = pendingMetadata { send(m) }
     }
@@ -254,6 +296,7 @@ final class WatchBridge {
             watchState = .ended
             linkState = .ended
             mirrored = nil
+            mirroredAt = nil
         default: break
         }
     }
@@ -261,6 +304,7 @@ final class WatchBridge {
     fileprivate func mirroredDisconnected(_ error: Error?) {
         log.log(.warning, "Miroir Watch déconnecté" + (error.map { " : \($0.localizedDescription)" } ?? ""))
         mirrored = nil
+        mirroredAt = nil
         linkState = .failed("miroir interrompu")
     }
 
@@ -289,8 +333,16 @@ final class WatchBridge {
         lastWatchMessageAt = lastMessageAt
         if !mirror, linkState != .mirrored, case .heartRate = msg { linkState = .connectivity }
         switch msg {
+        case .heartRate, .steps, .activeEnergy, .workoutState: lastWorkoutMessageAt = lastMessageAt
+        default: break
+        }
+        switch msg {
         case let .heartRate(bpm, sampleDate):
             usedDuringSession = pendingLink != nil || usedDuringSession
+            if pendingLink != nil, !heartRateLoggedForSession {
+                heartRateLoggedForSession = true
+                log.log(.watch, "Première FC de la montre reçue (\(mirror ? "miroir" : "WatchConnectivity"), mesure d'il y a \(Int(Date().timeIntervalSince(sampleDate))) s)")
+            }
             onHeartRate?(bpm, Date().timeIntervalSince(sampleDate))
         case let .steps(total, sampleDate):
             onSteps?(total, Date().timeIntervalSince(sampleDate))
@@ -312,6 +364,8 @@ final class WatchBridge {
         case .requestContext:
             if let c = contextProvider?() ?? lastContext { send(.context(c), quiet: true) }
             onContextRequested?()
+        case let .watchLog(text):
+            log.log(.watch, "Montre : \(text)")
         case .linkSession, .command, .workoutMetadata, .liveStatus, .context, .startResult:
             break
         }
