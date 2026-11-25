@@ -38,7 +38,7 @@ fonctionne hors ligne et les données restent sur l'appareil.
 
 ```
 Foulee.xcodeproj          Projet Xcode (targets Foulee + FouleeWatch, schemes partagés)
-Config/                   Signing.xcconfig (à modifier), Info.plist, entitlements
+Config/                   Signing.xcconfig (+ Signing.local.xcconfig, à vous), Info.plist, entitlements
 TreadCore/                Paquet Swift local, sans dépendance Apple-only :
   FTMS/                     décodage/encodage des caractéristiques (octets)
   Control/                  file de commandes, profils matériels, contrôleur du tapis
@@ -77,15 +77,17 @@ Prérequis : un Mac avec Xcode 16+, un identifiant Apple (compte gratuit
 possible, voir plus bas), un câble pour l'iPhone, une Apple Watch jumelée.
 
 1. **Cloner** le dépôt puis ouvrir `Foulee.xcodeproj`.
-2. **Signature** — modifier une seule fois `Config/Signing.xcconfig` :
+2. **Signature** — créer une seule fois `Config/Signing.local.xcconfig`
+   (ignoré par git, donc jamais de conflit au `git pull`) :
    ```
    BUNDLE_ID_PREFIX = com.votrenom.foulee   // unique pour vous
-   DEVELOPMENT_TEAM = ABCDE12345             // ou laisser vide (étape 3)
+   DEVELOPMENT_TEAM = ABCDE12345             // Xcode › Settings › Accounts
    ```
    L'app Watch prend automatiquement l'identifiant `$(BUNDLE_ID_PREFIX).watchkitapp`.
-3. Dans Xcode, *Settings › Accounts* : ajouter votre identifiant Apple. Si
-   `DEVELOPMENT_TEAM` est vide, sélectionner l'équipe dans l'onglet
-   *Signing & Capabilities* des targets **Foulee** et **FouleeWatch**.
+   Ne modifiez pas `Config/Signing.xcconfig`, qui est suivi par git.
+3. Dans Xcode, *Settings › Accounts* : ajouter votre identifiant Apple. Ne
+   choisissez pas l'équipe dans l'onglet *Signing & Capabilities* : Xcode
+   l'écrirait dans `project.pbxproj` et chaque `git pull` demanderait un stash.
 4. **iPhone** : le brancher, activer *Réglages › Confidentialité et sécurité ›
    Mode développeur* (redémarrage demandé), puis choisir le scheme **Foulee** et
    l'iPhone comme destination, et lancer (⌘R). Au premier lancement, autoriser
@@ -374,7 +376,7 @@ vos observations écrites. Exportez le journal de diagnostic après la
   programmes et l'historique fonctionnent ; Santé et le cardio Apple Watch sont
   alors indisponibles.
 - **Ne modifiez jamais le champ *Bundle Identifier* dans Xcode.** Les deux
-  identifiants sont calculés depuis `BUNDLE_ID_PREFIX` (`Config/Signing.xcconfig`) :
+  identifiants sont calculés depuis `BUNDLE_ID_PREFIX` (`Config/Signing.local.xcconfig`) :
   iPhone = préfixe, Watch = préfixe + `.watchkitapp`. Si l'app Watch reçoit le
   même identifiant que l'app iPhone, la montre refuse l'installation (le bouton
   « Installer » tourne puis revient). Une étape de compilation vérifie ces deux

@@ -1,11 +1,19 @@
-// Réglages de signature — À MODIFIER UNE FOIS avant d'installer sur vos appareils.
+// Réglages de signature.
+//
+// Ne modifiez pas ce fichier : mettez vos valeurs dans Config/Signing.local.xcconfig
+// (ignoré par git, à créer une fois). Il est lu en dernier et remplace les valeurs
+// ci-dessous, donc `git pull` ne rentre jamais en conflit avec votre signature.
+// Exemple de Config/Signing.local.xcconfig :
+//   BUNDLE_ID_PREFIX = com.votrenom.foulee
+//   DEVELOPMENT_TEAM = ABCDE12345
 //
 // BUNDLE_ID_PREFIX : identifiant unique de l'app iPhone (notation DNS inversée).
 //   L'app Watch utilisera automatiquement $(BUNDLE_ID_PREFIX).watchkitapp.
-//   Exemple : com.votrenom.foulee
 // DEVELOPMENT_TEAM : identifiant d'équipe (10 caractères) visible dans Xcode >
-//   Settings > Accounts, ou laissez vide et choisissez l'équipe dans l'onglet
-//   « Signing & Capabilities » de chaque target.
+//   Settings > Accounts. Ne le choisissez pas dans l'onglet « Signing &
+//   Capabilities » : Xcode l'écrirait dans project.pbxproj, suivi par git.
 
 BUNDLE_ID_PREFIX = com.example.foulee
 DEVELOPMENT_TEAM =
+
+#include? "Signing.local.xcconfig"
